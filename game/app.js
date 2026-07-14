@@ -1,11 +1,15 @@
 "use strict";
 
 const topics = {
-  水果: ["苹果", "梨", "香蕉", "葡萄", "橙子", "西瓜", "草莓", "桃子", "芒果", "菠萝"],
-  动物: ["猫", "狗", "兔子", "熊猫", "老虎", "狮子", "长颈鹿", "大象", "猴子", "海豚"],
-  交通工具: ["自行车", "公交车", "地铁", "出租车", "火车", "飞机", "轮船", "摩托车", "电动车", "高铁"],
-  职业: ["医生", "老师", "厨师", "司机", "律师", "警察", "画家", "歌手", "记者", "程序员"],
-  日用品: ["牙刷", "水杯", "雨伞", "钥匙", "书包", "手机", "眼镜", "毛巾", "台灯", "拖鞋"]
+  水果蔬菜: ["西瓜","香蕉","草莓","菠萝","葡萄","芒果","椰子","柠檬","火龙果","猕猴桃","榴莲","桃子","土豆","胡萝卜","西红柿","玉米","南瓜","蘑菇"],
+  食物: ["火锅","汉堡","寿司","披萨","螺蛳粉","臭豆腐","冰淇淋","烤鸭","麻辣烫","蛋炒饭","泡面","粽子","月饼","糖葫芦","榴莲","爆米花","奶茶","薯条"],
+  动物: ["猫", "狗", "兔子", "熊猫", "老虎", "狮子", "长颈鹿", "大象", "猴子", "海豚","企鹅","袋鼠","章鱼","鳄鱼","孔雀","树懒","骆驼","啄木鸟","变色龙","刺猬","河马","猫头鹰","海马","鸭嘴兽"],
+  交通工具: ["自行车", "公交车", "地铁", "出租车", "火车", "飞机", "轮船", "摩托车", "电动车", "高铁","救护车","热气球","滑板","缆车","潜水艇","直升机"],
+  地点场所: ["医院","学校","电影院","游乐园","动物园","图书馆","超市","机场","火车站","健身房","理发店","银行","派出所","网吧","厨房","沙漠","海底","月球"],
+  体育运动: ["篮球","足球","乒乓球","羽毛球","游泳","跑步","跳绳","滑雪","拳击","射箭","举重","体操","跳水","台球","排球","骑马","冲浪","拔河"],
+  职业: ["医生", "老师", "厨师", "司机", "律师", "警察", "画家", "歌手", "记者", "程序员","消防员","宇航员","魔术师","摄影师","理发师","快递员","导游","裁判","侦探","飞行员","主播","保安"],
+  日用品: ["牙刷", "水杯", "雨伞", "钥匙", "书包", "手机", "眼镜", "毛巾", "台灯", "拖鞋","吹风机","遥控器","充电宝","垃圾桶","剪刀","镜子","枕头","闹钟","手电筒","钥匙","行李箱","保温杯","订书机","体重秤"],
+  影视动漫角色:["孙悟空","猪八戒","哪吒","葫芦娃","黑猫警长","柯南","哆啦A梦","蜡笔小新","奥特曼","蜘蛛侠","钢铁侠","蝙蝠侠","灭霸","哈利·波特","白雪公主","灰太狼","海绵宝宝","唐老鸭","范德彪","马大帅"]
 };
 
 let mode = "host";
@@ -16,6 +20,7 @@ let hostTopic = "水果";
 let roomCode = "";
 let hostClientId = "";
 let signalEvents = null;
+let logPlayerFilter = "all";
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,6 +48,7 @@ const elements = {
   turnTitle: $("turnTitle"),
   roundBadge: $("roundBadge"),
   actionArea: $("actionArea"),
+  logPlayerFilter: $("logPlayerFilter"),
   logList: $("logList")
 };
 
@@ -312,6 +318,7 @@ function startGame() {
   state.currentQuestion = null;
   state.log.unshift({
     id: uid("log"),
+    playerId: null,
     text: `游戏开始，主题是「${state.topic}」。`,
     detail: "每个人都能看到别人额头上的词，但看不到自己的词。"
   });
@@ -364,6 +371,7 @@ function applyPlayerAction(playerId, action) {
     };
     state.log.unshift({
       id: uid("log"),
+      playerId,
       text: `${player.name} 提问：${text}`,
       detail: "等待其他仍在游戏中的玩家回答。"
     });
@@ -379,6 +387,8 @@ function applyPlayerAction(playerId, action) {
     const answerText = { yes: "是", no: "否", maybe: "不一定" }[answer];
     state.log.unshift({
       id: uid("log"),
+      playerId,
+      questionOwnerId: state.currentQuestion.askerId,
       text: `${player.name} 回答 ${state.currentQuestion.askerName}：${answerText}`,
       detail: state.currentQuestion.text
     });
@@ -400,12 +410,14 @@ function applyPlayerAction(playerId, action) {
       state.winners.push(player.id);
       state.log.unshift({
         id: uid("log"),
+        playerId,
         text: `${player.name} 猜中了：${player.word}`,
         detail: `名次：第 ${state.winners.length} 名`
       });
     } else {
       state.log.unshift({
         id: uid("log"),
+        playerId,
         text: `${player.name} 猜错了：${guess}`,
         detail: "游戏继续，轮到下一位玩家。"
       });
@@ -420,6 +432,7 @@ function applyPlayerAction(playerId, action) {
     const previousIndex = getActivePlayers().findIndex((item) => item.id === playerId);
     state.log.unshift({
       id: uid("log"),
+      playerId,
       text: `${player.name} 选择跳过`,
       detail: "信息不足，轮到下一位玩家。"
     });
@@ -445,6 +458,7 @@ function advanceTurn(previousIndex, removedCurrent) {
       active[0].status = "left";
       state.log.unshift({
         id: uid("log"),
+        playerId: active[0].id,
         text: `${active[0].name} 留到最后，游戏结束。`,
         detail: "所有其他玩家已经猜中。"
       });
@@ -628,11 +642,23 @@ function renderResult(view) {
 }
 
 function renderLog(view) {
-  if (!view.log.length) {
-    elements.logList.innerHTML = `<p class="muted">还没有记录。</p>`;
+  const availableIds = new Set(view.players.map((player) => player.id));
+  if (logPlayerFilter !== "all" && !availableIds.has(logPlayerFilter)) {
+    logPlayerFilter = "all";
+  }
+  elements.logPlayerFilter.innerHTML = [
+    `<option value="all">全部玩家</option>`,
+    ...view.players.map((player) => `<option value="${escapeHtml(player.id)}">${escapeHtml(player.name)}</option>`)
+  ].join("");
+  elements.logPlayerFilter.value = logPlayerFilter;
+  const records = logPlayerFilter === "all"
+    ? view.log
+    : view.log.filter((item) => item.questionOwnerId === logPlayerFilter || (item.playerId === logPlayerFilter && !item.questionOwnerId));
+  if (!records.length) {
+    elements.logList.innerHTML = `<p class="muted">${logPlayerFilter === "all" ? "还没有记录。" : "该玩家还没有问答记录。"}</p>`;
     return;
   }
-  elements.logList.innerHTML = view.log.slice(0, 24).map((item) => `
+  elements.logList.innerHTML = records.slice(0, 24).map((item) => `
     <div class="log-item">
       <div class="log-line">${escapeHtml(item.text)}</div>
       <div class="muted">${escapeHtml(item.detail || "")}</div>
@@ -664,6 +690,11 @@ async function init() {
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.startGameButton.addEventListener("click", startGame);
   elements.endGameButton.addEventListener("click", endCurrentGame);
+  elements.logPlayerFilter.addEventListener("change", () => {
+    logPlayerFilter = elements.logPlayerFilter.value;
+    const view = currentView();
+    if (view) renderLog(view);
+  });
   setMode("host");
 }
 

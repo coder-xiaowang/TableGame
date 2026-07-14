@@ -231,6 +231,11 @@ textarea:focus {
   min-width: 0;
 }
 
+.sidebar {
+  align-content: start;
+  align-self: start;
+}
+
 .full-width {
   width: 100%;
 }
@@ -378,6 +383,28 @@ textarea:focus {
   gap: 6px;
 }
 
+.log-header {
+  align-items: end;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.log-header h2,
+.log-filter-label {
+  margin-bottom: 0;
+}
+
+.log-filter-label {
+  min-width: 150px;
+}
+
+.log-filter-label select {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
 .log-line {
   overflow-wrap: anywhere;
 }
@@ -397,9 +424,14 @@ textarea:focus {
   }
 
   .topbar,
-  .turn-header {
+  .turn-header,
+  .log-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .log-filter-label {
+    width: 100%;
   }
 
   .mode-grid,
