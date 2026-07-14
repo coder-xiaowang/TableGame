@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>速速破译</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <h1>速速破译</h1>
+        </div>
+        <div class="status-pill" id="connectionStatus">未连接</div>
+      </section>
+
+      <section class="setup-panel" id="setupPanel">
+        <div class="mode-grid">
+          <button class="mode-card active" id="hostModeButton" type="button">
+            <span>创建房间</span>
+          </button>
+          <button class="mode-card" id="guestModeButton" type="button">
+            <span>加入房间</span>
+          </button>
+        </div>
+
+        <div class="setup-grid">
+          <div class="panel" id="hostSetup">
+            <h2>房主设置</h2>
+            <label>
+              你的昵称
+              <input id="hostNameInput" autocomplete="off" value="房主">
+            </label>
+            <label>
+              词库主题
+              <select id="topicSelect"></select>
+            </label>
+            <button class="primary" id="createRoomButton" type="button">创建房间号</button>
+          </div>
+
+          <div class="panel hidden" id="guestSetup">
+            <h2>玩家加入</h2>
+            <label>
+              你的昵称
+              <input id="guestNameInput" autocomplete="off" value="玩家">
+            </label>
+            <label>
+              房间号
+              <input id="roomCodeInput" autocomplete="off" maxlength="4" placeholder="例如 A7K2">
+            </label>
+            <button class="primary" id="joinRoomButton" type="button">加入房间</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="room-panel hidden" id="roomPanel">
+        <aside class="sidebar">
+          <div class="panel host-tools hidden" id="hostTools">
+            <h2>房主管理</h2>
+            <div class="room-code" id="roomCodeDisplay">----</div>
+            <button class="primary full-width" id="startGameButton" type="button">开始游戏</button>
+            <button class="danger-button full-width hidden" id="endGameButton" type="button">结束本局</button>
+          </div>
+
+          <div class="panel">
+            <h2>玩家席位</h2>
+            <div class="player-list" id="playerList"></div>
+          </div>
+        </aside>
+
+        <section class="table-area">
+          <div class="notice" id="gameNotice">等待房主开始游戏。</div>
+          <div class="word-board" id="wordBoard"></div>
+
+          <div class="turn-panel panel">
+            <div class="turn-header">
+              <div>
+                <p class="eyebrow">当前行动</p>
+                <h2 id="turnTitle">未开始</h2>
+              </div>
+              <div class="round-badge" id="roundBadge">第 0 轮</div>
+            </div>
+
+            <div class="action-area" id="actionArea"></div>
+          </div>
+
+          <div class="panel">
+            <h2>问答记录</h2>
+            <div class="log-list" id="logList"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

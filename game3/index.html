@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>快艇骰子</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">YACHT DICE · ONLINE</p>
+          <h1>快艇骰子</h1>
+        </div>
+        <div class="status-pill" id="connectionStatus">准备连接</div>
+      </header>
+
+      <section id="setupPanel">
+        <div class="mode-grid">
+          <button class="mode-card active" id="hostModeButton" type="button">
+            <strong>创建房间</strong><span>担任房主并主持整场比赛</span>
+          </button>
+          <button class="mode-card" id="guestModeButton" type="button">
+            <strong>加入房间</strong><span>使用四位房间号加入好友</span>
+          </button>
+        </div>
+        <div class="panel setup-card" id="hostSetup">
+          <div><p class="eyebrow">HOST A TABLE</p><h2>建立新牌桌</h2></div>
+          <label>你的昵称<input id="hostNameInput" maxlength="12" autocomplete="off" value="房主"></label>
+          <label>参与人数<select id="playerCountSelect">
+            <option value="2">2 人</option><option value="3">3 人</option>
+            <option value="4" selected>4 人</option><option value="5">5 人</option>
+            <option value="6">6 人</option>
+          </select></label>
+          <button class="primary" id="createRoomButton" type="button">创建房间</button>
+        </div>
+        <div class="panel setup-card hidden" id="guestSetup">
+          <div><p class="eyebrow">JOIN A TABLE</p><h2>加入好友房间</h2></div>
+          <label>你的昵称<input id="guestNameInput" maxlength="12" autocomplete="off" value="玩家"></label>
+          <label>四位房间号<input id="roomCodeInput" maxlength="4" autocomplete="off" placeholder="例如 A7K2"></label>
+          <button class="primary" id="joinRoomButton" type="button">加入房间</button>
+        </div>
+      </section>
+
+      <section class="room-layout hidden" id="roomPanel">
+        <aside class="sidebar">
+          <div class="panel room-card">
+            <p class="eyebrow">ROOM CODE</p>
+            <div class="room-code" id="roomCodeDisplay">----</div>
+            <div class="host-controls hidden" id="hostTools">
+              <label>本房人数<select id="roomPlayerCountSelect">
+                <option value="2">2 人</option><option value="3">3 人</option>
+                <option value="4">4 人</option><option value="5">5 人</option>
+                <option value="6">6 人</option>
+              </select></label>
+              <button class="primary full-width" id="startGameButton" type="button">开始比赛</button>
+              <button class="danger full-width hidden" id="endGameButton" type="button">结束当前游戏</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
+            <div class="player-list" id="playerList"></div>
+          </div>
+          <div class="panel rules-note">
+            <p class="eyebrow">本房规则</p>
+            <p>13 轮 · 每回合至多投掷 3 次<br>上半区 63 分奖励 35 分<br>额外快艇奖励 100 分</p>
+          </div>
+        </aside>
+
+        <section class="table-area">
+          <div class="notice" id="gameNotice">等待创建房间。</div>
+          <div class="panel game-panel">
+            <div class="section-head game-heading">
+              <div><p class="eyebrow">CURRENT TURN</p><h2 id="turnTitle">等待开始</h2></div>
+              <div class="badges"><span id="roundBadge">第 0 / 13 轮</span><span id="rollBadge">投掷 0 / 3</span></div>
+            </div>
+            <div class="dice-tray" id="diceTray"></div>
+            <div class="turn-actions" id="turnActions"></div>
+          </div>
+
+          <div class="panel score-panel">
+            <div class="section-head">
+              <div><p class="eyebrow">SCORE SHEET</p><h2>计分表</h2></div>
+              <select class="score-view-select" id="scorePlayerSelect" aria-label="查看玩家计分表"></select>
+            </div>
+            <div class="score-summary" id="scoreSummary"></div>
+            <div class="score-grid" id="scoreGrid"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

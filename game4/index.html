@@ -1,0 +1,18 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>德州扑克</title><link rel="stylesheet" href="styles.css"></head>
+<body><main class="shell">
+<header><div><p class="eyebrow">NO-LIMIT HOLD'EM</p><h1>德州扑克</h1></div><div class="status" id="connectionStatus">准备连接</div></header>
+<section id="setupPanel">
+  <div class="mode-grid"><button class="mode active" id="hostModeButton"><b>创建牌桌</b><span>担任房主与裁判</span></button><button class="mode" id="guestModeButton"><b>加入牌桌</b><span>输入好友的房间号</span></button></div>
+  <div class="panel setup" id="hostSetup"><div><p class="eyebrow">HOST</p><h2>建立单桌锦标赛</h2></div><label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label><label>人数<select id="playerCountSelect"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label><button class="primary" id="createRoomButton">创建房间</button></div>
+  <div class="panel setup hidden" id="guestSetup"><div><p class="eyebrow">JOIN</p><h2>加入好友牌桌</h2></div><label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label><label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 A7K2"></label><button class="primary" id="joinRoomButton">加入房间</button></div>
+</section>
+<section class="game-layout hidden" id="roomPanel">
+  <aside><div class="panel"><p class="eyebrow">ROOM</p><div class="room-code" id="roomCodeDisplay">----</div><div id="hostTools" class="hidden"><label>牌桌人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label><button class="primary wide" id="startGameButton">开始锦标赛</button><button class="danger wide hidden" id="endGameButton">结束当前游戏</button></div></div>
+  <div class="panel"><div class="head"><h2>比赛信息</h2><span id="blindBadge">10 / 20</span></div><div class="stats"><div><span>第几手</span><b id="handNumber">0</b></div><div><span>盲注级别</span><b id="blindLevel">1</b></div><div><span>剩余玩家</span><b id="aliveCount">0</b></div></div></div>
+  <div class="panel rules"><p class="eyebrow">规则</p><p>初始筹码 1,000<br>每 5 手提高盲注<br>行动限时 30 秒<br>超时自动过牌或弃牌</p></div></aside>
+  <section class="main"><div class="notice" id="notice">等待玩家加入。</div>
+    <div class="poker-table panel"><div class="board-head"><span id="streetName">等待开局</span><span>底池 <b id="potValue">0</b></span></div><div class="board" id="board"></div><div class="pot-list" id="potList"></div><div class="seats" id="seats"></div></div>
+    <div class="panel action-panel"><div class="head"><div><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><span id="timerText">--</span><i id="timerBar"></i></div></div><div id="actionArea" class="actions"></div></div>
+    <div class="panel"><div class="head"><h2>牌局记录</h2><button class="compact" id="toggleLogButton">展开 / 收起</button></div><div class="log" id="logList"></div></div>
+  </section>
+</section></main><script src="app.js"></script></body></html>
