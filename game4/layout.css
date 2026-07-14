@@ -1,0 +1,160 @@
+/* Compact desktop layout: table in the center, hand history on the right. */
+.shell {
+  padding: 18px 22px;
+}
+
+header,
+#setupPanel,
+.game-layout {
+  max-width: 1380px;
+}
+
+header {
+  margin-bottom: 13px;
+}
+
+h1 {
+  font-size: clamp(34px, 4.5vw, 50px);
+}
+
+.panel {
+  padding: 14px;
+}
+
+.game-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 11px;
+}
+
+.game-layout aside,
+.main {
+  gap: 10px;
+}
+
+.main {
+  grid-template-columns: minmax(500px, 1fr) minmax(250px, 300px);
+  grid-template-rows: auto minmax(0, auto) auto;
+}
+
+.notice {
+  grid-column: 1 / -1;
+  padding: 9px 13px;
+  font-size: 13px;
+}
+
+.poker-table {
+  grid-column: 1;
+  grid-row: 2;
+  padding: 16px;
+  border-width: 6px;
+}
+
+.board {
+  min-height: 92px;
+  margin: 12px 0 7px;
+}
+
+.board > .card {
+  width: 62px;
+  height: 87px;
+}
+
+.seats {
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.seat {
+  padding: 8px;
+}
+
+.hole {
+  margin-top: 4px;
+}
+
+.action-panel {
+  grid-column: 1;
+  grid-row: 3;
+  min-height: 112px;
+}
+
+.action-panel .head {
+  margin-bottom: 9px;
+}
+
+.log-panel {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.log-panel .head {
+  margin-bottom: 10px;
+}
+
+.log-panel .log {
+  max-height: 500px;
+}
+
+.room-code {
+  margin-bottom: 10px;
+  padding: 9px;
+  font-size: 29px;
+}
+
+.rules p:last-child {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.bet-range {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  .game-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .main {
+    grid-template-columns: 1fr;
+  }
+
+  .notice,
+  .poker-table,
+  .action-panel,
+  .log-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .log-panel .log {
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 850px) {
+  .shell {
+    padding: 14px;
+  }
+
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .board > .card {
+    width: 54px;
+    height: 76px;
+  }
+}
+
+@media (max-width: 520px) {
+  .board > .card {
+    width: 46px;
+    height: 65px;
+  }
+}
