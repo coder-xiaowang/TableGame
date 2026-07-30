@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>马尼拉 · 港口大亨</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><p class="eyebrow">MANILA · 1821</p><h1>马尼拉港口大亨</h1></div>
+    <div id="connectionStatus" class="status">正在检查联机服务…</div>
+  </header>
+
+  <main>
+    <section id="setupPanel" class="setup">
+      <div class="hero">
+        <div class="sun"></div><div class="cloud c1">☁</div><div class="cloud c2">☁</div>
+        <div class="city">▥ ▦ ▥ ▤ ▦</div><div class="water">≈　≈　⛵　≈　≈</div>
+        <h2>风浪、财富与一掷千金</h2>
+        <p>竞拍港务长，派遣助手，让三艘货船驶向马尼拉。</p>
+      </div>
+      <div class="mode-grid">
+        <button id="hostModeButton" class="mode active" type="button"><b>创建航运商会</b><span>担任房主并主持游戏</span></button>
+        <button id="guestModeButton" class="mode" type="button"><b>加入航运商会</b><span>输入好友的四位房间码</span></button>
+      </div>
+      <div class="setup-card" id="hostSetup">
+        <h2>建立新游戏</h2>
+        <label>商人姓名<input id="hostNameInput" maxlength="12" value="港务商人"></label>
+        <label>玩家人数<select id="playerCountSelect"><option value="4">4 人</option><option value="5">5 人</option></select></label>
+        <button id="createRoomButton" class="primary" type="button">创建房间</button>
+      </div>
+      <div class="setup-card hidden" id="guestSetup">
+        <h2>加入好友房间</h2>
+        <label>商人姓名<input id="guestNameInput" maxlength="12" value="远洋商人"></label>
+        <label>房间码<input id="roomCodeInput" maxlength="4" placeholder="A7K2"></label>
+        <button id="joinRoomButton" class="primary" type="button">加入房间</button>
+      </div>
+    </section>
+
+    <section id="roomPanel" class="game-layout hidden">
+      <aside class="sidebar">
+        <div class="panel room-card">
+          <p class="eyebrow">TRADING ROOM</p>
+          <div class="room-code" id="roomCodeDisplay">----</div>
+          <p id="phaseText">等待玩家加入</p>
+          <div id="hostTools" class="host-tools">
+            <label>人数<select id="roomPlayerCountSelect"><option value="4">4 人</option><option value="5">5 人</option></select></label>
+            <button id="startGameButton" class="primary wide">开始游戏</button>
+            <button id="endGameButton" class="danger wide hidden">结束当前游戏</button>
+          </div>
+        </div>
+        <div class="panel wallet">
+          <p class="eyebrow">MY LEDGER</p>
+          <div class="money">₱ <b id="myCash">30</b></div>
+          <div id="myShares" class="shares"></div>
+          <div class="loan-actions">
+            <button id="mortgageButton" class="small">抵押股票 +12</button>
+            <button id="redeemButton" class="small">赎回股票 -15</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="section-head"><h2>商人</h2><span id="playerCountBadge">0 / 4</span></div>
+          <div id="playerList" class="player-list"></div>
+        </div>
+      </aside>
+
+      <section class="board-column">
+        <div class="market panel">
+          <div class="section-head"><div><p class="eyebrow">BLACK MARKET</p><h2>黑市行情</h2></div><span>股票库存公开</span></div>
+          <div id="marketGrid" class="market-grid"></div>
+        </div>
+
+        <div class="play-stage">
+          <div class="sea-board panel">
+            <div class="board-sky"><span class="board-sun">☀</span><span>马尼拉港 MANILA</span><span>☁</span></div>
+            <div class="skyline">▥ ▦ ▤　<b>MANILA</b>　▤ ▦ ▥</div>
+            <div class="board-map">
+              <div class="map-zone pilot-zone"><span class="zone-art">🏝️</span><h3>🧭 领航员岛</h3><div id="pilotSlots" class="special-slots"></div></div>
+              <div class="map-zone pirate-zone"><span class="zone-art">🏴‍☠️</span><h3>海盗船</h3><div id="pirateSlots" class="special-slots"></div></div>
+              <div class="map-zone port-zone"><span class="zone-art">🏯⚓</span><h3>马尼拉港口</h3><div id="portSlots" class="bet-slots"></div></div>
+              <div class="route-zone"><div class="sea-life">🐟　〰️　🐠　〰️　🐚</div><div id="routes" class="routes"></div></div>
+              <div class="map-zone insurance-zone"><span class="zone-art">🏦</span><h3>🛡️ 保险公司</h3><div id="insuranceSlot" class="special-slots"></div></div>
+              <div class="map-zone yard-zone"><span class="zone-art">🏗️🔧</span><h3>修船厂</h3><div id="yardSlots" class="bet-slots"></div></div>
+            </div>
+            <div class="board-legend"><span>🌴 吕宋海岸</span><span>助手费用标记为 ₱</span><span>终点：航线第 13 格</span></div>
+          </div>
+
+          <div class="panel action-panel">
+            <div class="section-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div></div>
+            <p id="notice">玩家到齐后由房主开始游戏。</p>
+            <div id="actionArea" class="action-area"></div>
+          </div>
+        </div>
+
+        <div class="panel log-panel">
+          <div class="section-head"><h2>航海日志</h2><button id="toggleLogButton" class="small">展开 / 收起</button></div>
+          <div id="logList" class="log-list"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
