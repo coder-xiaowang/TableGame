@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>璀璨宝石 · 宝可梦版</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div><p class="eyebrow">POKÉMON SPLENDOR</p><h1>璀璨宝石 <span>宝可梦版</span></h1></div>
+      <div id="connectionStatus" class="status">正在检测联机服务</div>
+    </header>
+
+    <main id="setupPanel" class="setup-wrap">
+      <section class="panel intro">
+        <p class="eyebrow">TRAINER LOBBY</p>
+        <h2>成为最闪耀的训练家</h2>
+        <p>收集精灵球、捕捉宝可梦并完成进化。率先达到 18 枚奖杯，赢得训练家挑战。</p>
+        <div class="mode-grid">
+          <button id="hostModeButton" class="mode active"><b>创建房间</b><span>担任房主并主持游戏</span></button>
+          <button id="guestModeButton" class="mode"><b>加入房间</b><span>输入好友的四位房间号</span></button>
+        </div>
+      </section>
+      <section id="hostSetup" class="panel setup-card">
+        <label>训练家名称<input id="hostNameInput" maxlength="12" value="小智"></label>
+        <label>游戏人数<select id="playerCountSelect"><option>2</option><option>3</option><option selected>4</option></select></label>
+        <button id="createRoomButton" class="primary wide">创建训练家房间</button>
+      </section>
+      <section id="guestSetup" class="panel setup-card hidden">
+        <label>训练家名称<input id="guestNameInput" maxlength="12" value="训练家"></label>
+        <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="ABCD"></label>
+        <button id="joinRoomButton" class="primary wide">加入挑战</button>
+      </section>
+    </main>
+
+    <main id="roomPanel" class="game hidden">
+      <aside>
+        <section class="panel room-card">
+          <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
+          <div id="hostTools">
+            <label>房间人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+            <button id="startGameButton" class="primary wide">开始挑战</button>
+            <button id="endGameButton" class="danger wide">结束本局</button>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
+          <div id="players" class="players"></div>
+        </section>
+        <section class="panel rules">
+          <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
+          <div id="logList" class="log"></div>
+        </section>
+      </aside>
+
+      <div class="table-area">
+        <section class="notice" id="notice">等待其他训练家加入</section>
+        <section class="panel supply">
+          <div class="section-head"><div><p class="eyebrow">POKÉ BALL SUPPLY</p><h2>精灵球供应</h2></div><span class="hint">实体球上限 10</span></div>
+          <div id="tokens" class="tokens"></div>
+        </section>
+        <section class="special-row">
+          <div class="market-group rare"><div class="market-title"><b>稀有宝可梦</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
+          <div class="market-group legendary"><div class="market-title"><b>传说／幻之宝可梦</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
+        </section>
+        <section id="markets" class="markets"></section>
+        <section class="panel action-panel">
+          <div class="section-head"><div><p class="eyebrow">YOUR TURN</p><h2 id="actionTitle">等待开始</h2></div><span id="phaseBadge" class="badge">准备阶段</span></div>
+          <div id="selectionSummary" class="selection"></div>
+          <div id="actionArea" class="actions"></div>
+        </section>
+        <section class="panel trainer-board">
+          <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
+          <div id="myResources" class="resource-strip"></div>
+          <h3>已捕捉的宝可梦</h3><div id="myPokemon" class="collection"></div>
+          <h3>保留区 <span id="reserveCount">0 / 3</span></h3><div id="myReserved" class="collection"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden"><div class="modal-card"><h2 id="modalTitle"></h2><div id="modalBody"></div><div id="modalActions" class="actions"></div></div></div>
+  <script src="app.js"></script>
+</body>
+</html>
