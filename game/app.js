@@ -17,6 +17,7 @@ let selfId = "";
 let state = null;
 let guestView = null;
 let hostTopic = "水果";
+let hostGameMode = "library";
 let roomCode = "";
 let hostClientId = "";
 let signalEvents = null;
@@ -34,6 +35,8 @@ const elements = {
   guestSetup: $("guestSetup"),
   hostNameInput: $("hostNameInput"),
   guestNameInput: $("guestNameInput"),
+  gameModeSelect: $("gameModeSelect"),
+  topicSelectLabel: $("topicSelectLabel"),
   topicSelect: $("topicSelect"),
   createRoomButton: $("createRoomButton"),
   roomCodeInput: $("roomCodeInput"),
@@ -67,6 +70,14 @@ function shuffle(items) {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
+}
+
+function createDerangement(size) {
+  let order = Array.from({ length: size }, (_, index) => index);
+  do {
+    order = shuffle(order);
+  } while (order.some((sourceIndex, targetIndex) => sourceIndex === targetIndex));
+  return order;
 }
 
 async function postJson(path, body) {
@@ -155,6 +166,7 @@ function buildView(viewerId) {
   return {
     selfId: viewerId,
     phase: state.phase,
+    gameMode: state.gameMode,
     topic: state.topic,
     round: state.round,
     turnQuestionAsked: state.turnQuestionAsked,
@@ -165,6 +177,7 @@ function buildView(viewerId) {
       connected: player.connected,
       isCurrent: current?.id === player.id
     })),
+    submittedPlayerIds: Object.keys(state.submittedWords || {}),
     words: state.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -196,7 +209,15 @@ function getCurrentPlayer() {
 
 function getNotice() {
   if (!state) return "还没有创建房间。";
-  if (state.phase === "lobby") return "等待玩家落座，房主开始后会自动分配同主题词语。";
+  if (state.phase === "lobby") {
+    return state.gameMode === "playerWords"
+      ? "等待玩家落座，房主开始后每位玩家提交一个词语。"
+      : "等待玩家落座，房主开始后会自动分配同主题词语。";
+  }
+  if (state.phase === "collectingWords") {
+    const submittedCount = Object.keys(state.submittedWords).length;
+    return `正在收集词语：${submittedCount}/${state.players.length} 名玩家已提交。`;
+  }
   if (state.phase === "ended") return "游戏结束。";
   const current = getCurrentPlayer();
   if (!current) return "等待下一轮。";
@@ -223,9 +244,12 @@ function enterRoom() {
 async function createRoom() {
   selfId = uid("host");
   hostTopic = elements.topicSelect.value;
+  hostGameMode = elements.gameModeSelect.value;
   state = {
     phase: "lobby",
+    gameMode: hostGameMode,
     topic: hostTopic,
+    submittedWords: {},
     players: [{
       id: selfId,
       name: elements.hostNameInput.value.trim() || "房主",
@@ -302,6 +326,12 @@ function startGame() {
     alert("至少需要 2 名玩家。");
     return;
   }
+  if (state.gameMode === "playerWords") {
+    state.phase = "collectingWords";
+    state.submittedWords = {};
+    renderAndBroadcast();
+    return;
+  }
   const words = shuffle(topics[state.topic]);
   if (words.length < state.players.length) {
     alert("当前词库不够分配所有玩家。");
@@ -325,6 +355,26 @@ function startGame() {
   renderAndBroadcast();
 }
 
+function startPlayerWordGame() {
+  const players = state.players;
+  const sourceOrder = createDerangement(players.length);
+  players.forEach((player, targetIndex) => {
+    player.word = state.submittedWords[players[sourceOrder[targetIndex]].id];
+    player.status = "playing";
+  });
+  state.phase = "playing";
+  state.round = 1;
+  state.turnIndex = 0;
+  state.turnQuestionAsked = false;
+  state.currentQuestion = null;
+  state.log.unshift({
+    id: uid("log"),
+    playerId: null,
+    text: "词语已分配，游戏开始。",
+    detail: "每位玩家拿到的都不是自己提交的词。"
+  });
+}
+
 function endCurrentGame() {
   if (mode !== "host" || !state || state.phase === "lobby") return;
   state.phase = "lobby";
@@ -336,6 +386,7 @@ function endCurrentGame() {
   state.round = 0;
   state.turnQuestionAsked = false;
   state.currentQuestion = null;
+  state.submittedWords = {};
   state.log = [];
   state.winners = [];
   renderAndBroadcast();
@@ -352,10 +403,25 @@ function submitAction(action) {
 }
 
 function applyPlayerAction(playerId, action) {
-  if (!state || state.phase !== "playing") return;
+  if (!state) return;
   const player = state.players.find((item) => item.id === playerId);
+  if (!player) return;
+
+  if (action.type === "submitWord") {
+    if (state.phase !== "collectingWords") return;
+    const word = String(action.text || "").trim().replace(/\s+/g, " ");
+    if (!word || word.length > 30) return;
+    state.submittedWords[playerId] = word;
+    if (state.players.every((item) => state.submittedWords[item.id])) {
+      startPlayerWordGame();
+    }
+    renderAndBroadcast();
+    return;
+  }
+
+  if (state.phase !== "playing") return;
   const current = getCurrentPlayer();
-  if (!player || !current) return;
+  if (!current) return;
 
   if (action.type === "question") {
     if (current.id !== playerId || state.currentQuestion || state.turnQuestionAsked) return;
@@ -496,7 +562,7 @@ function render() {
   elements.gameNotice.textContent = view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
   const current = view.players.find((player) => player.isCurrent);
-  elements.turnTitle.textContent = current ? current.name : "未开始";
+  elements.turnTitle.textContent = current ? current.name : view.phase === "collectingWords" ? "提交词语" : "未开始";
   renderPlayers(view);
   renderWords(view);
   renderActions(view);
@@ -505,7 +571,8 @@ function render() {
 
 function renderPlayers(view) {
   elements.playerList.innerHTML = view.players.map((player) => {
-    const statusText = player.status === "won" ? "已猜中" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : "游戏中";
+    const submitted = view.submittedPlayerIds?.includes(player.id);
+    const statusText = player.status === "won" ? "已猜中" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : view.phase === "collectingWords" ? (submitted ? "已提交词语" : "等待提交") : "游戏中";
     const tagClass = player.status === "won" ? "won" : player.status === "left" ? "out" : player.isCurrent ? "active" : "";
     const tag = player.isCurrent ? "行动" : statusText;
     return `
@@ -547,6 +614,10 @@ function renderActions(view) {
     elements.actionArea.innerHTML = renderResult(view);
     return;
   }
+  if (view.phase === "collectingWords") {
+    renderWordSubmission(view);
+    return;
+  }
   if (view.currentQuestion) {
     renderQuestionActions(view);
     return;
@@ -584,6 +655,22 @@ function renderActions(view) {
   });
   $("skipTurnButton").addEventListener("click", () => {
     submitAction({ type: "skip" });
+  });
+}
+
+function renderWordSubmission(view) {
+  const hasSubmitted = view.submittedPlayerIds?.includes(view.selfId);
+  elements.actionArea.innerHTML = `
+    <p class="muted">请提交一个词语。所有玩家完成提交后，系统会随机分配，且不会把你自己的词发给你。</p>
+    <label>
+      你提供的词
+      <input id="submittedWordInput" autocomplete="off" maxlength="30" placeholder="例如：长颈鹿">
+    </label>
+    <button class="primary" id="submitWordButton" type="button">${hasSubmitted ? "更新词语" : "提交词语"}</button>
+    ${hasSubmitted ? '<p class="muted">你已提交；在其他玩家完成前仍可更新。</p>' : ""}
+  `;
+  $("submitWordButton").addEventListener("click", () => {
+    submitAction({ type: "submitWord", text: $("submittedWordInput").value });
   });
 }
 
@@ -687,6 +774,9 @@ async function init() {
   elements.hostModeButton.addEventListener("click", () => setMode("host"));
   elements.guestModeButton.addEventListener("click", () => setMode("guest"));
   elements.createRoomButton.addEventListener("click", createRoom);
+  elements.gameModeSelect.addEventListener("change", () => {
+    elements.topicSelectLabel.classList.toggle("hidden", elements.gameModeSelect.value !== "library");
+  });
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.startGameButton.addEventListener("click", startGame);
   elements.endGameButton.addEventListener("click", endCurrentGame);
