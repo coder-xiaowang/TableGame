@@ -14,6 +14,7 @@ let mode = "host";
 let selfId = "";
 let roomCode = "";
 let hostClientId = "";
+let resumeToken = "";
 let signalEvents = null;
 let state = null;
 let guestView = null;
@@ -53,6 +54,11 @@ const elements = {
 function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
+
+function sessionStorageKey(code) { return `tablegame:idiom:${code}`; }
+function loadSavedSession(code) { try { return JSON.parse(localStorage.getItem(sessionStorageKey(code)) || "null"); } catch { return null; } }
+function saveSession(name) { localStorage.setItem(sessionStorageKey(roomCode), JSON.stringify({ playerId: selfId, resumeToken, name })); }
+function clearSavedSession() { if (roomCode) localStorage.removeItem(sessionStorageKey(roomCode)); }
 
 function normalizeText(value) {
   return String(value).trim().replace(/\s+/g, "").replace(/[，。！？、,.!?]/g, "");
@@ -108,7 +114,7 @@ async function loadConfig() {
 
 function openSignalEvents(clientId) {
   if (signalEvents) signalEvents.close();
-  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}`);
+  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);
   signalEvents.addEventListener("signal", (event) => {
     handleSignal(JSON.parse(event.data));
   });
@@ -128,6 +134,7 @@ async function sendSignal(to, payload) {
   await postJson("/api/signal", {
     roomCode,
     from: selfId,
+    resumeToken,
     to,
     payload
   });
@@ -142,6 +149,17 @@ async function handleSignal(message) {
   }
   if (mode === "host" && payload?.kind === "action") {
     applyAction(message.from, payload.action);
+    return;
+  }
+  if (mode === "host" && payload?.kind === "presence") {
+    updatePlayerPresence(payload.playerId, payload.connected);
+    return;
+  }
+  if (payload?.kind === "kicked") {
+    clearSavedSession();
+    signalEvents?.close();
+    alert("你已被房主移出房间。");
+    location.reload();
     return;
   }
   if (mode === "guest" && payload?.kind === "view") {
@@ -208,8 +226,9 @@ async function createRoom() {
   state = createHostState(Number(elements.playerCountSelect.value));
   elements.roomPlayerCountSelect.value = String(state.playerCount);
   try {
-    const result = await postJson("/api/rooms", { hostId: selfId });
+    const result = await postJson("/api/rooms", { hostId: selfId, name: state.players[0].name });
     roomCode = result.roomCode;
+    resumeToken = result.resumeToken;
     elements.roomCodeDisplay.textContent = roomCode;
     openSignalEvents(selfId);
     enterRoom();
@@ -229,27 +248,32 @@ function changeRoomPlayerCount() {
 }
 
 async function joinRoom() {
-  selfId = uid("guest");
   roomCode = elements.roomCodeInput.value.trim().toUpperCase();
   if (!/^[A-Z0-9]{4}$/.test(roomCode)) {
     alert("请输入 4 位房间号。");
     return;
   }
+  const savedSession = loadSavedSession(roomCode);
+  selfId = savedSession?.playerId || uid("guest");
   let room;
   try {
-    room = await postJson("/api/join", { roomCode, clientId: selfId });
+    room = await postJson("/api/join", { roomCode, clientId: selfId, resumeToken: savedSession?.resumeToken, name: savedSession ? "" : (elements.guestNameInput.value.trim() || "玩家") });
   } catch {
     alert("没有找到这个房间号，或信令服务未启动。");
     return;
   }
 
+  selfId = room.clientId;
+  resumeToken = room.resumeToken;
   hostClientId = room.hostId;
   openSignalEvents(selfId);
   await sendSignal(hostClientId, {
     kind: "hello",
     playerId: selfId,
-    name: elements.guestNameInput.value.trim() || "玩家"
+    name: savedSession?.name || elements.guestNameInput.value.trim() || "玩家",
+    resumed: room.resumed
   });
+  saveSession(savedSession?.name || elements.guestNameInput.value.trim() || "玩家");
   elements.connectionStatus.textContent = `已加入 ${roomCode}`;
   enterRoom();
   render();
@@ -257,6 +281,7 @@ async function joinRoom() {
 
 function upsertPlayer(playerId, name) {
   let player = state.players.find((item) => item.id === playerId);
+  if (!player && state.phase !== "lobby") return;
   if (!player) {
     player = {
       id: playerId,
@@ -268,6 +293,37 @@ function upsertPlayer(playerId, name) {
   }
   player.name = name || player.name;
   player.connected = true;
+}
+
+function teamIsReady(team) {
+  return Boolean(team?.captainId && team.memberId && state.players.find((player) => player.id === team.captainId)?.connected && state.players.find((player) => player.id === team.memberId)?.connected);
+}
+
+function updatePlayerPresence(playerId, connected) {
+  if (!state || playerId === selfId) return;
+  const player = state.players.find((item) => item.id === playerId);
+  if (!player || player.connected === connected) return;
+  player.connected = connected;
+  if (!connected && state.phase === "playing") {
+    const team = currentTeam();
+    if (!teamIsReady(team)) advanceTeam();
+  }
+  renderAndBroadcast();
+}
+
+async function kickPlayer(playerId) {
+  const player = state?.players.find((item) => item.id === playerId);
+  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？`)) return;
+  try {
+    await postJson("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId });
+    const wasPlaying = state.phase === "playing";
+    state.players = state.players.filter((item) => item.id !== playerId);
+    state.seats.forEach((seat) => { if (seat.playerId === playerId) seat.playerId = null; });
+    if (wasPlaying) endCurrentGame();
+    else renderAndBroadcast();
+  } catch {
+    alert("无法移出该玩家，请检查服务器连接。");
+  }
 }
 
 function submitAction(action) {
@@ -431,6 +487,10 @@ function startGame() {
     alert("还有座位为空，所有人落座后才能开始。");
     return;
   }
+  if (state.seats.some((seat) => !state.players.find((player) => player.id === seat.playerId)?.connected)) {
+    alert("所有已落座玩家在线后才能开始。");
+    return;
+  }
   state.phase = "playing";
   state.idiom = randomIdiom();
   state.turnTeamIndex = 0;
@@ -497,8 +557,22 @@ function submitGuess(playerId, text) {
 
 function advanceTeam() {
   const teamCount = state.playerCount / 2;
-  state.turnTeamIndex = (state.turnTeamIndex + 1) % teamCount;
-  if (state.turnTeamIndex === 0) state.round += 1;
+  let next = state.turnTeamIndex;
+  let found = false;
+  for (let attempt = 0; attempt < teamCount; attempt += 1) {
+    next = (next + 1) % teamCount;
+    if (next === 0) state.round += 1;
+    if (teamIsReady(teams()[next])) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    state.phase = "ended";
+    state.winnerTeamIndex = null;
+    return;
+  }
+  state.turnTeamIndex = next;
   state.turnPhase = "describe";
   state.currentDescription = "";
 }
@@ -531,9 +605,10 @@ function renderPlayers(view) {
         <div class="player-name">${escapeHtml(player.name)}</div>
         <div class="player-meta">${player.isHost ? "房主" : "玩家"}</div>
       </div>
-      <span class="tag ${player.connected ? "online" : "offline"}">${player.connected ? "在线" : "离线"}</span>
+      <div class="player-actions"><span class="tag ${player.connected ? "online" : "offline"}">${player.connected ? "在线" : "离线"}</span>${mode === "host" && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}</div>
     </div>
   `).join("");
+  if (mode === "host") elements.playerList.querySelectorAll(".kick-player-button").forEach((button) => button.addEventListener("click", () => kickPlayer(button.dataset.playerId)));
 }
 
 function renderSeats(view) {

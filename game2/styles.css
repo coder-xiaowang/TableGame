@@ -277,6 +277,9 @@ textarea:focus {
   justify-content: space-between;
 }
 
+.player-actions { align-items: center; display: flex; gap: 8px; }
+.kick-player-button { border-color: #f0afa8; color: #b42318; min-height: 30px; padding: 0 8px; }
+
 .player-name,
 .seat-name {
   font-weight: 900;

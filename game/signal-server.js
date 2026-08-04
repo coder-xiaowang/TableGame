@@ -51,6 +51,36 @@ function createRoomCode() {
   throw new Error("cannot allocate room code");
 }
 
+function createResumeToken() {
+  return `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
+function getRoomMember(room, clientId) {
+  return room?.members.get(clientId);
+}
+
+function findRoomByMember(clientId) {
+  for (const [roomCode, room] of rooms) {
+    const member = room.members.get(clientId);
+    if (member) return { roomCode, room, member };
+  }
+  return null;
+}
+
+function notifyHost(roomCode, room, payload) {
+  if (room.hostId && payload.playerId !== room.hostId) {
+    pushEvent(room.hostId, "signal", { roomCode, from: "server", payload });
+  }
+}
+
+function updatePresence(clientId, connected) {
+  const match = findRoomByMember(clientId);
+  if (!match || match.member.connected === connected) return;
+  match.member.connected = connected;
+  match.member.lastSeenAt = Date.now();
+  notifyHost(match.roomCode, match.room, { kind: "presence", playerId: clientId, connected });
+}
+
 function pushEvent(clientId, event, payload) {
   const client = clients.get(clientId);
   if (!client) {
@@ -113,8 +143,12 @@ async function handleApi(request, response, url) {
 
   if (request.method === "GET" && url.pathname === "/api/events") {
     const clientId = url.searchParams.get("clientId");
-    if (!clientId) {
-      sendJson(response, 400, { error: "clientId required" });
+    const roomCode = String(url.searchParams.get("roomCode") || "").toUpperCase();
+    const resumeToken = url.searchParams.get("resumeToken") || "";
+    const room = rooms.get(roomCode);
+    const member = getRoomMember(room, clientId);
+    if (!clientId || !room || !member || member.kicked || member.resumeToken !== resumeToken) {
+      sendJson(response, 403, { error: "valid room session required" });
       return;
     }
     response.writeHead(200, {
@@ -127,12 +161,14 @@ async function handleApi(request, response, url) {
       response.write(": heartbeat\n\n");
     }, 15000);
     clients.set(clientId, { response, heartbeat });
+    updatePresence(clientId, true);
     flushPending(clientId);
     request.on("close", () => {
       const client = clients.get(clientId);
       if (client?.response === response) {
         clearInterval(client.heartbeat);
         clients.delete(clientId);
+        updatePresence(clientId, false);
       }
     });
     return;
@@ -145,11 +181,19 @@ async function handleApi(request, response, url) {
       return;
     }
     const roomCode = createRoomCode();
+    const resumeToken = createResumeToken();
     rooms.set(roomCode, {
       hostId: body.hostId,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      members: new Map([[body.hostId, {
+        name: String(body.name || "房主"),
+        resumeToken,
+        connected: false,
+        kicked: false,
+        lastSeenAt: Date.now()
+      }]])
     });
-    sendJson(response, 200, { roomCode });
+    sendJson(response, 200, { roomCode, resumeToken });
     return;
   }
 
@@ -161,15 +205,47 @@ async function handleApi(request, response, url) {
       sendJson(response, 404, { error: "room not found" });
       return;
     }
-    sendJson(response, 200, { roomCode: code, hostId: room.hostId });
+    const requestedId = String(body.clientId || "");
+    const requestedToken = String(body.resumeToken || "");
+    let member = getRoomMember(room, requestedId);
+    let resumed = false;
+    let clientId = requestedId;
+    if (member && requestedToken && member.resumeToken === requestedToken && !member.kicked) {
+      resumed = true;
+      if (body.name) member.name = String(body.name);
+    } else {
+      if (!requestedId) {
+        sendJson(response, 400, { error: "clientId required" });
+        return;
+      }
+      if (member || room.hostId === requestedId) {
+        sendJson(response, 409, { error: "player identity unavailable" });
+        return;
+      }
+      member = {
+        name: String(body.name || "玩家"),
+        resumeToken: createResumeToken(),
+        connected: false,
+        kicked: false,
+        lastSeenAt: Date.now()
+      };
+      room.members.set(requestedId, member);
+    }
+    sendJson(response, 200, { roomCode: code, hostId: room.hostId, clientId, resumeToken: member.resumeToken, resumed });
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/signal") {
     const body = await readBody(request);
     const code = String(body.roomCode || "").toUpperCase();
-    if (!rooms.has(code)) {
+    const room = rooms.get(code);
+    const member = getRoomMember(room, body.from);
+    if (!room) {
       sendJson(response, 404, { error: "room not found" });
+      return;
+    }
+    if (!member || member.kicked || member.resumeToken !== body.resumeToken) {
+      sendJson(response, 403, { error: "invalid player session" });
       return;
     }
     const delivered = pushEvent(body.to, "signal", {
@@ -178,6 +254,28 @@ async function handleApi(request, response, url) {
       payload: body.payload
     });
     sendJson(response, 200, { delivered });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/kick") {
+    const body = await readBody(request);
+    const code = String(body.roomCode || "").toUpperCase();
+    const room = rooms.get(code);
+    const host = getRoomMember(room, body.hostId);
+    const target = getRoomMember(room, body.playerId);
+    if (!room || room.hostId !== body.hostId || !host || host.resumeToken !== body.resumeToken) {
+      sendJson(response, 403, { error: "host session required" });
+      return;
+    }
+    if (!target || body.playerId === room.hostId) {
+      sendJson(response, 400, { error: "invalid kick target" });
+      return;
+    }
+    target.kicked = true;
+    target.connected = false;
+    pendingSignals.delete(body.playerId);
+    pushEvent(body.playerId, "signal", { roomCode: code, from: "server", payload: { kind: "kicked" } });
+    sendJson(response, 200, { ok: true });
     return;
   }
 

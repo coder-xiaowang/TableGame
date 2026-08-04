@@ -20,6 +20,7 @@ let mode = "host";
 let selfId = "";
 let roomCode = "";
 let hostClientId = "";
+let resumeToken = "";
 let signalEvents = null;
 let state = null;
 let guestView = null;
@@ -38,6 +39,10 @@ const elements = {
 };
 
 function uid(prefix) { return `${prefix}_${Math.random().toString(36).slice(2, 10)}`; }
+function sessionStorageKey(code) { return `tablegame:yahtzee:${code}`; }
+function loadSavedSession(code) { try { return JSON.parse(localStorage.getItem(sessionStorageKey(code)) || "null"); } catch { return null; } }
+function saveSession(name) { localStorage.setItem(sessionStorageKey(roomCode), JSON.stringify({ playerId: selfId, resumeToken, name })); }
+function clearSavedSession() { if (roomCode) localStorage.removeItem(sessionStorageKey(roomCode)); }
 function newScorecard() { return Object.fromEntries(CATEGORIES.map((category) => [category.id, null])); }
 function cleanName(value, fallback) { return String(value || "").trim().slice(0, 12) || fallback; }
 function escapeHtml(value) { return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
@@ -57,24 +62,26 @@ async function loadConfig() {
 
 function openSignalEvents(clientId) {
   if (signalEvents) signalEvents.close();
-  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}`);
+  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);
   signalEvents.addEventListener("signal", (event) => handleSignal(JSON.parse(event.data)));
   signalEvents.addEventListener("open", () => { elements.connectionStatus.textContent = roomCode ? `已连接房间 ${roomCode}` : "联机服务已连接"; });
   signalEvents.addEventListener("error", () => { elements.connectionStatus.textContent = "联机服务正在重连"; });
 }
 
-async function sendSignal(to, payload) { await postJson("/api/signal", { roomCode, from: selfId, to, payload }); }
+async function sendSignal(to, payload) { return postJson("/api/signal", { roomCode, from: selfId, resumeToken, to, payload }); }
 
 function handleSignal(message) {
   const payload = message.payload;
   if (mode === "host" && payload?.kind === "hello") { admitPlayer(message.from, payload.name); return; }
   if (mode === "host" && payload?.kind === "action") { applyAction(message.from, payload.action); return; }
+  if (mode === "host" && payload?.kind === "presence") { updatePlayerPresence(payload.playerId, payload.connected); return; }
   if (mode === "guest" && payload?.kind === "view") { guestView = payload.view; selectedScorePlayerId ||= selfId; enterRoom(); render(); return; }
   if (mode === "guest" && payload?.kind === "rejected") {
     if (signalEvents) signalEvents.close();
     alert(payload.message || "无法加入房间。");
     elements.connectionStatus.textContent = "加入失败";
   }
+  if (payload?.kind === "kicked") { clearSavedSession(); signalEvents?.close(); alert("你已被房主移出房间。"); location.reload(); }
 }
 
 function setMode(nextMode) {
@@ -104,8 +111,9 @@ async function createRoom() {
     currentPlayerIndex: 0, completedTurns: 0, dice: [null, null, null, null, null], held: [false, false, false, false, false], rolls: 0
   };
   try {
-    const result = await postJson("/api/rooms", { hostId: selfId });
+    const result = await postJson("/api/rooms", { hostId: selfId, name: state.players[0].name });
     roomCode = result.roomCode;
+    resumeToken = result.resumeToken;
     selectedScorePlayerId = selfId;
     elements.roomPlayerCountSelect.value = String(playerCount);
     openSignalEvents(selfId); enterRoom(); render();
@@ -115,13 +123,17 @@ async function createRoom() {
 async function joinRoom() {
   const code = elements.roomCodeInput.value.trim().toUpperCase();
   if (!/^[A-Z0-9]{4}$/.test(code)) { alert("请输入 4 位房间号。"); return; }
-  selfId = uid("guest"); roomCode = code;
+  const savedSession = loadSavedSession(code);
+  selfId = savedSession?.playerId || uid("guest"); roomCode = code;
   try {
-    const room = await postJson("/api/join", { roomCode });
+    const room = await postJson("/api/join", { roomCode, clientId: selfId, resumeToken: savedSession?.resumeToken, name: savedSession ? "" : cleanName(elements.guestNameInput.value, "玩家") });
+    selfId = room.clientId; resumeToken = room.resumeToken;
     hostClientId = room.hostId;
     selectedScorePlayerId = selfId;
     openSignalEvents(selfId);
-    await sendSignal(hostClientId, { kind: "hello", name: cleanName(elements.guestNameInput.value, "玩家") });
+    const name = savedSession?.name || cleanName(elements.guestNameInput.value, "玩家");
+    await sendSignal(hostClientId, { kind: "hello", name, resumed: room.resumed });
+    saveSession(name);
     elements.connectionStatus.textContent = `正在加入 ${roomCode}`;
   } catch { alert("没有找到该房间，或联机服务未启动。"); }
 }
@@ -135,6 +147,39 @@ function admitPlayer(playerId, name) {
   renderAndBroadcast();
 }
 
+function nextConnectedPlayerIndex(from) {
+  for (let step = 1; step <= state.players.length; step += 1) {
+    const index = (from + step) % state.players.length;
+    if (state.players[index].connected) return index;
+  }
+  return null;
+}
+
+function updatePlayerPresence(playerId, connected) {
+  if (!state || playerId === selfId) return;
+  const player = state.players.find((item) => item.id === playerId);
+  if (!player || player.connected === connected) return;
+  player.connected = connected;
+  if (!connected && state.phase === "playing" && currentPlayer()?.id === playerId) {
+    const nextIndex = nextConnectedPlayerIndex(state.currentPlayerIndex);
+    if (nextIndex === null) { state.phase = "ended"; }
+    else { state.currentPlayerIndex = nextIndex; resetTurn(); }
+  }
+  renderAndBroadcast();
+}
+
+async function kickPlayer(playerId) {
+  const player = state?.players.find((item) => item.id === playerId);
+  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？`)) return;
+  try {
+    await postJson("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId });
+    const wasPlaying = state.phase === "playing";
+    state.players = state.players.filter((item) => item.id !== playerId);
+    if (wasPlaying) { state.phase = "lobby"; state.currentPlayerIndex = 0; state.completedTurns = 0; resetTurn(); state.players.forEach((item) => { item.scorecard = newScorecard(); item.yahtzeeBonus = 0; }); }
+    renderAndBroadcast();
+  } catch { alert("无法移出该玩家，请检查服务器连接。"); }
+}
+
 function changePlayerCount() {
   if (!state || state.phase !== "lobby") return;
   const count = Number(elements.roomPlayerCountSelect.value);
@@ -145,6 +190,7 @@ function changePlayerCount() {
 function startGame() {
   if (mode !== "host" || state.phase !== "lobby") return;
   if (state.players.length !== state.playerCount) { alert(`需要 ${state.playerCount} 名玩家到齐后才能开始。`); return; }
+  if (state.players.some((player) => !player.connected)) { alert("所有玩家在线后才能开始。"); return; }
   state.players.forEach((player) => { player.scorecard = newScorecard(); player.yahtzeeBonus = 0; });
   state.phase = "playing"; state.currentPlayerIndex = 0; state.completedTurns = 0; resetTurn(); renderAndBroadcast();
 }
@@ -249,7 +295,7 @@ function currentView() { return mode === "host" ? (state ? buildView(selfId) : n
 function broadcastViews() {
   if (mode !== "host" || !state) return;
   state.players.filter((player) => player.id !== selfId).forEach((player) => {
-    sendSignal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => { player.connected = false; render(); });
+    sendSignal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => updatePlayerPresence(player.id, false));
   });
 }
 function renderAndBroadcast() { render(); broadcastViews(); }
@@ -269,7 +315,8 @@ function render() {
   const myTurn = view.phase === "playing" && view.currentPlayerId === view.selfId;
   elements.roomCodeDisplay.textContent = roomCode;
   elements.playerCountBadge.textContent = `${view.players.length} / ${view.playerCount}`;
-  elements.playerList.innerHTML = view.players.map((player, index) => `<div class="player-item ${player.id === view.currentPlayerId && view.phase === "playing" ? "current" : ""}"><div><div class="player-name">${escapeHtml(player.name)}</div><div class="player-meta">${player.isHost ? "房主 · " : ""}${view.phase === "lobby" ? `玩家 ${index + 1}` : `${player.totals.total} 分`}</div></div><i class="online-dot"></i></div>`).join("");
+  elements.playerList.innerHTML = view.players.map((player, index) => `<div class="player-item ${player.id === view.currentPlayerId && view.phase === "playing" ? "current" : ""}"><div><div class="player-name">${escapeHtml(player.name)}</div><div class="player-meta">${player.isHost ? "房主 · " : ""}${view.phase === "lobby" ? `玩家 ${index + 1}` : `${player.totals.total} 分`} · ${player.connected ? "在线" : "离线"}</div></div><div class="player-actions"><i class="online-dot ${player.connected ? "" : "offline"}"></i>${mode === "host" && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}</div></div>`).join("");
+  if (mode === "host") elements.playerList.querySelectorAll(".kick-player-button").forEach((button) => button.addEventListener("click", () => kickPlayer(button.dataset.playerId)));
 
   elements.hostTools.classList.toggle("hidden", mode !== "host");
   elements.roomPlayerCountSelect.value = String(view.playerCount);
