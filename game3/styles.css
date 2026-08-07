@@ -38,6 +38,9 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .player-item { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
 .player-item.current { border-color: var(--gold); background: #fff7e8; }.player-name { font-weight: 900; overflow-wrap: anywhere; }.player-meta { color: var(--muted); font-size: 12px; }
 .online-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--green); }
+.online-dot.offline { background: var(--red); }
+.player-actions { display: flex; align-items: center; gap: 8px; }
+.kick-player-button { min-height: 30px; padding: 0 8px; color: var(--red); border-color: #e8b6af; }
 .rules-note p:last-child { color: var(--muted); font-size: 13px; line-height: 1.8; }
 .notice { padding: 13px 16px; border: 1px solid #e4c278; border-radius: 12px; color: #66470e; background: #fff8e6; font-weight: 800; }
 .game-heading { margin-bottom: 22px; }.badges { display: flex; gap: 7px; flex-wrap: wrap; }

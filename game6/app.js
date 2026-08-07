@@ -7,6 +7,7 @@ let mode = "host";
 let selfId = "";
 let roomCode = "";
 let hostId = "";
+let resumeToken = "";
 let events = null;
 let state = null;
 let guestView = null;
@@ -31,6 +32,10 @@ const E = {
 };
 
 const uid = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+const sessionKey = (code) => `tablegame:bullheads:${code}`;
+const loadSession = (code) => { try { return JSON.parse(localStorage.getItem(sessionKey(code)) || "null"); } catch { return null; } };
+const saveSession = (name) => localStorage.setItem(sessionKey(roomCode), JSON.stringify({ playerId: selfId, resumeToken, name }));
+const clearSession = () => roomCode && localStorage.removeItem(sessionKey(roomCode));
 const cleanName = (value, fallback) => String(value || "").trim().slice(0, 12) || fallback;
 const escapeHtml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;")
   .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -70,7 +75,7 @@ function requireProtocol(result) {
 }
 
 async function signal(to, payload) {
-  return post("/api/signal", { roomCode, from: selfId, to, payload });
+  return post("/api/signal", { roomCode, from: selfId, resumeToken, to, payload });
 }
 
 function openEvents(clientId) {
@@ -80,7 +85,7 @@ function openEvents(clientId) {
     const timeout = setTimeout(() => {
       if (!opened) reject(new Error("事件通道连接超时"));
     }, 5000);
-    events = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}`);
+    events = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);
     events.addEventListener("signal", (event) => receive(JSON.parse(event.data)));
     events.onopen = () => {
       opened = true;
@@ -101,6 +106,7 @@ function openEvents(clientId) {
 function receive(message) {
   const payload = message.payload;
   if (mode === "host" && payload?.kind === "hello") return admit(message.from, payload.name);
+  if (mode === "host" && payload?.kind === "presence") return updatePresence(payload.playerId, payload.connected);
   if (mode === "host" && payload?.kind === "action") return applyAction(message.from, payload.action);
   if (mode === "guest" && payload?.kind === "view") {
     guestView = payload.view;
@@ -113,6 +119,7 @@ function receive(message) {
     E.connectionStatus.textContent = "加入失败";
     alert(payload.message || "无法加入房间");
   }
+  if (payload?.kind === "kicked") { clearSession(); events?.close(); alert("你已被房主移出房间。"); location.reload(); }
 }
 
 function setMode(nextMode) {
@@ -151,8 +158,9 @@ async function createRoom() {
     winners: []
   };
   try {
-    const result = requireProtocol(await post("/api/rooms", { hostId: selfId }));
+    const result = requireProtocol(await post("/api/rooms", { hostId: selfId, name: state.players[0].name }));
     roomCode = result.roomCode;
+    resumeToken = result.resumeToken;
     await openEvents(selfId);
   } catch (error) {
     return alert(`无法创建房间：${error.message}\n请先运行 node game6/signal-server.js`);
@@ -165,14 +173,19 @@ async function createRoom() {
 async function joinRoom() {
   roomCode = E.roomCodeInput.value.trim().toUpperCase();
   if (!/^[A-Z0-9]{4}$/.test(roomCode)) return alert("请输入四位房间号。");
-  selfId = uid("guest");
+  const saved = loadSession(roomCode);
+  selfId = saved?.playerId || uid("guest");
   guestView = null;
   E.joinRoomButton.disabled = true;
   try {
-    const result = requireProtocol(await post("/api/join", { roomCode }));
+    const name = saved?.name || cleanName(E.guestNameInput.value, "玩家");
+    const result = requireProtocol(await post("/api/join", { roomCode, clientId: selfId, resumeToken: saved?.resumeToken, name: saved ? "" : name }));
+    selfId = result.clientId;
+    resumeToken = result.resumeToken;
     hostId = result.hostId;
     await openEvents(selfId);
-    await signal(hostId, { kind: "hello", name: cleanName(E.guestNameInput.value, "玩家") });
+    await signal(hostId, { kind: "hello", name, resumed: result.resumed });
+    saveSession(name);
   } catch (error) {
     events?.close();
     E.connectionStatus.textContent = "加入失败";
@@ -199,6 +212,30 @@ function admit(id, name) {
   sync();
 }
 
+function updatePresence(id, connected) {
+  const player = state?.players.find((item) => item.id === id);
+  if (!player || player.connected === connected) return;
+  player.connected = connected;
+  if (!connected && state.phase === "selecting" && player.selectedCard == null && player.hand.length) {
+    player.selectedCard = player.hand[Math.floor(Math.random() * player.hand.length)];
+    log(`${player.name} 离线，系统已代为选牌`);
+    if (state.players.every((item) => item.selectedCard != null)) return resolveSelections();
+  }
+  if (!connected && state.phase === "choosingRow" && state.pendingPlayerId === id) return rowChoiceTimeout();
+  sync();
+}
+
+async function kickPlayer(id) {
+  const player = state?.players.find((item) => item.id === id);
+  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？`)) return;
+  try {
+    await post("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId: id });
+    state.players = state.players.filter((item) => item.id !== id);
+    if (state.phase !== "lobby") { clearTimeout(hostTimer); state.phase = "lobby"; state.deadline = 0; state.playQueue = []; state.pendingPlayerId = null; state.pendingCard = null; }
+    sync();
+  } catch { alert("无法移出该玩家，请检查服务器连接。"); }
+}
+
 function changeCapacity() {
   if (!state || state.phase !== "lobby") return;
   const capacity = Number(E.roomPlayerCountSelect.value);
@@ -220,6 +257,7 @@ function startGame() {
   if (state.phase === "roundEnd") return startRound();
   if (state.phase !== "lobby") return;
   if (state.players.length !== state.capacity) return alert(`需要 ${state.capacity} 人到齐。`);
+  if (state.players.some((player) => !player.connected)) return alert("所有玩家在线后才能开始。");
   state.players.forEach((player) => {
     player.score = 0;
     player.captured = [];
@@ -454,9 +492,7 @@ function currentView() {
 function broadcast() {
   if (mode !== "host" || !state) return;
   state.players.filter((player) => player.id !== selfId).forEach((player) => {
-    signal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => {
-      player.connected = false;
-    });
+    signal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => updatePresence(player.id, false));
   });
 }
 
@@ -497,9 +533,10 @@ function render() {
     return `<div class="player ${view.pendingPlayerId === player.id ? "current" : ""}">
       <div class="player-top"><span>${escapeHtml(player.name)}${player.isHost ? " 👑" : ""}</span><b>🐂 ${player.score}</b></div>
       <div class="player-meta">${selected}${winner}${player.connected ? "" : " · 已离线"}</div>
-      <div class="captured">${player.captured.map((card) => `<span class="mini">${card} · ${bullheads(card)}🐂</span>`).join("")}</div>
+      <div class="captured">${player.captured.map((card) => `<span class="mini">${card} · ${bullheads(card)}🐂</span>`).join("")}</div>${mode === "host" && !player.isHost ? `<button data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}
     </div>`;
   }).join("");
+  if (mode === "host") E.playerList.querySelectorAll("[data-player-id]").forEach((button) => button.onclick = () => kickPlayer(button.dataset.playerId));
 
   const canChooseRow = view.phase === "choosingRow" && view.pendingPlayerId === view.selfId;
   E.rows.innerHTML = view.rows.map((row, index) => `

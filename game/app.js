@@ -17,8 +17,10 @@ let selfId = "";
 let state = null;
 let guestView = null;
 let hostTopic = "水果";
+let hostGameMode = "library";
 let roomCode = "";
 let hostClientId = "";
+let resumeToken = "";
 let signalEvents = null;
 let logPlayerFilter = "all";
 
@@ -34,6 +36,8 @@ const elements = {
   guestSetup: $("guestSetup"),
   hostNameInput: $("hostNameInput"),
   guestNameInput: $("guestNameInput"),
+  gameModeSelect: $("gameModeSelect"),
+  topicSelectLabel: $("topicSelectLabel"),
   topicSelect: $("topicSelect"),
   createRoomButton: $("createRoomButton"),
   roomCodeInput: $("roomCodeInput"),
@@ -56,6 +60,26 @@ function uid(prefix) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function sessionStorageKey(code) {
+  return `tablegame:guess-word:${code}`;
+}
+
+function loadSavedSession(code) {
+  try {
+    return JSON.parse(localStorage.getItem(sessionStorageKey(code)) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(name) {
+  localStorage.setItem(sessionStorageKey(roomCode), JSON.stringify({ playerId: selfId, resumeToken, name }));
+}
+
+function clearSavedSession() {
+  if (roomCode) localStorage.removeItem(sessionStorageKey(roomCode));
+}
+
 function normalizeWord(value) {
   return value.trim().replace(/\s+/g, "").toLowerCase();
 }
@@ -67,6 +91,14 @@ function shuffle(items) {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
+}
+
+function createDerangement(size) {
+  let order = Array.from({ length: size }, (_, index) => index);
+  do {
+    order = shuffle(order);
+  } while (order.some((sourceIndex, targetIndex) => sourceIndex === targetIndex));
+  return order;
 }
 
 async function postJson(path, body) {
@@ -94,7 +126,7 @@ async function loadConfig() {
 
 function openSignalEvents(clientId) {
   if (signalEvents) signalEvents.close();
-  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}`);
+  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);
   signalEvents.addEventListener("signal", (event) => {
     handleSignal(JSON.parse(event.data));
   });
@@ -116,6 +148,7 @@ async function sendSignal(to, payload) {
   await postJson("/api/signal", {
     roomCode,
     from: selfId,
+    resumeToken,
     to,
     payload
   });
@@ -132,6 +165,17 @@ async function handleSignal(message) {
     applyPlayerAction(message.from, payload.action);
     return;
   }
+  if (mode === "host" && payload?.kind === "presence") {
+    updatePlayerPresence(payload.playerId, payload.connected);
+    return;
+  }
+  if (payload?.kind === "kicked") {
+    clearSavedSession();
+    signalEvents?.close();
+    alert("你已被房主移出房间。");
+    location.reload();
+    return;
+  }
   if (mode === "guest" && payload?.kind === "view") {
     guestView = payload.view;
     render();
@@ -144,8 +188,7 @@ function broadcastViews() {
     if (player.id === selfId) continue;
     sendSignal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => {
       const remote = state.players.find((item) => item.id === player.id);
-      if (remote) remote.connected = false;
-      render();
+      if (remote) updatePlayerPresence(player.id, false);
     });
   }
 }
@@ -155,6 +198,7 @@ function buildView(viewerId) {
   return {
     selfId: viewerId,
     phase: state.phase,
+    gameMode: state.gameMode,
     topic: state.topic,
     round: state.round,
     turnQuestionAsked: state.turnQuestionAsked,
@@ -163,8 +207,10 @@ function buildView(viewerId) {
       name: player.name,
       status: player.status,
       connected: player.connected,
+      isHost: player.isHost,
       isCurrent: current?.id === player.id
     })),
+    submittedPlayerIds: Object.keys(state.submittedWords || {}),
     words: state.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -184,7 +230,54 @@ function currentView() {
 }
 
 function getActivePlayers() {
-  return state.players.filter((player) => player.status === "playing");
+  return state.players.filter((player) => player.status === "playing" && player.connected);
+}
+
+function finishIfInsufficientPlayers() {
+  if (state.phase !== "playing" || getActivePlayers().length > 1) return false;
+  state.phase = "ended";
+  state.currentQuestion = null;
+  return true;
+}
+
+function keepCurrentPlayer(currentId) {
+  const index = getActivePlayers().findIndex((player) => player.id === currentId);
+  if (index >= 0) state.turnIndex = index;
+}
+
+function moveTurnPast(playerId) {
+  const active = getActivePlayers();
+  const playerIndex = state.players.findIndex((player) => player.id === playerId);
+  for (let offset = 1; active.length && offset <= state.players.length; offset += 1) {
+    const candidate = state.players[(playerIndex + offset) % state.players.length];
+    const activeIndex = active.findIndex((player) => player.id === candidate?.id);
+    if (activeIndex >= 0) {
+      state.turnIndex = activeIndex;
+      return;
+    }
+  }
+}
+
+function updatePlayerPresence(playerId, connected) {
+  if (!state || playerId === selfId) return;
+  const player = state.players.find((item) => item.id === playerId);
+  if (!player || player.connected === connected) return;
+  const currentId = getCurrentPlayer()?.id;
+  player.connected = connected;
+  if (!connected && state.phase === "playing") {
+    if (state.currentQuestion?.askerId === playerId) {
+      state.currentQuestion = null;
+      state.turnQuestionAsked = false;
+    } else if (isQuestionComplete()) {
+      state.currentQuestion = null;
+    }
+    if (currentId === playerId) moveTurnPast(playerId);
+    else keepCurrentPlayer(currentId);
+    finishIfInsufficientPlayers();
+  } else if (connected) {
+    keepCurrentPlayer(currentId);
+  }
+  renderAndBroadcast();
 }
 
 function getCurrentPlayer() {
@@ -196,7 +289,15 @@ function getCurrentPlayer() {
 
 function getNotice() {
   if (!state) return "还没有创建房间。";
-  if (state.phase === "lobby") return "等待玩家落座，房主开始后会自动分配同主题词语。";
+  if (state.phase === "lobby") {
+    return state.gameMode === "playerWords"
+      ? "等待玩家落座，房主开始后每位玩家提交一个词语。"
+      : "等待玩家落座，房主开始后会自动分配同主题词语。";
+  }
+  if (state.phase === "collectingWords") {
+    const submittedCount = Object.keys(state.submittedWords).length;
+    return `正在收集词语：${submittedCount}/${state.players.length} 名玩家已提交。`;
+  }
   if (state.phase === "ended") return "游戏结束。";
   const current = getCurrentPlayer();
   if (!current) return "等待下一轮。";
@@ -223,9 +324,12 @@ function enterRoom() {
 async function createRoom() {
   selfId = uid("host");
   hostTopic = elements.topicSelect.value;
+  hostGameMode = elements.gameModeSelect.value;
   state = {
     phase: "lobby",
+    gameMode: hostGameMode,
     topic: hostTopic,
+    submittedWords: {},
     players: [{
       id: selfId,
       name: elements.hostNameInput.value.trim() || "房主",
@@ -242,8 +346,9 @@ async function createRoom() {
     winners: []
   };
   try {
-    const result = await postJson("/api/rooms", { hostId: selfId });
+    const result = await postJson("/api/rooms", { hostId: selfId, name: state.players[0].name });
     roomCode = result.roomCode;
+    resumeToken = result.resumeToken;
     elements.roomCodeDisplay.textContent = roomCode;
     openSignalEvents(selfId);
     elements.connectionStatus.textContent = `房间 ${roomCode} 已创建`;
@@ -255,33 +360,45 @@ async function createRoom() {
 }
 
 async function joinRoom() {
-  selfId = uid("guest");
   roomCode = elements.roomCodeInput.value.trim().toUpperCase();
   if (!/^[A-Z0-9]{4}$/.test(roomCode)) {
     alert("请输入 4 位字母数字房间号。");
     return;
   }
+  const savedSession = loadSavedSession(roomCode);
+  selfId = savedSession?.playerId || uid("guest");
   let room;
   try {
-    room = await postJson("/api/join", { roomCode, clientId: selfId });
+    room = await postJson("/api/join", {
+      roomCode,
+      clientId: selfId,
+      resumeToken: savedSession?.resumeToken,
+      name: savedSession ? "" : (elements.guestNameInput.value.trim() || "玩家")
+    });
   } catch {
     alert("没有找到这个房间号，或信令服务未启动。");
     return;
   }
+  selfId = room.clientId;
+  resumeToken = room.resumeToken;
   hostClientId = room.hostId;
   openSignalEvents(selfId);
   await sendSignal(hostClientId, {
     kind: "hello",
     playerId: selfId,
-    name: elements.guestNameInput.value.trim() || "玩家"
+    name: savedSession?.name || elements.guestNameInput.value.trim() || "玩家",
+    resumed: room.resumed
   });
+  saveSession(savedSession?.name || elements.guestNameInput.value.trim() || "玩家");
   elements.connectionStatus.textContent = `已加入 ${roomCode}`;
   enterRoom();
   render();
 }
 
 function upsertRemotePlayer(playerId, name) {
+  const currentId = getCurrentPlayer()?.id;
   let player = state.players.find((item) => item.id === playerId);
+  if (!player && state.phase !== "lobby") return;
   if (!player) {
     player = {
       id: playerId,
@@ -294,12 +411,58 @@ function upsertRemotePlayer(playerId, name) {
     state.players.push(player);
   }
   player.connected = true;
+  if (name) player.name = name;
+  keepCurrentPlayer(currentId);
+}
+
+async function kickPlayer(playerId) {
+  const player = state?.players.find((item) => item.id === playerId);
+  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？`)) return;
+  try {
+    await postJson("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId });
+    removePlayer(playerId);
+  } catch {
+    alert("无法移出该玩家，请检查服务器连接。");
+  }
+}
+
+function removePlayer(playerId) {
+  const currentId = getCurrentPlayer()?.id;
+  const playerIndex = state.players.findIndex((player) => player.id === playerId);
+  if (playerIndex < 0) return;
+  const nextCandidateId = state.players.slice(playerIndex + 1).concat(state.players.slice(0, playerIndex))
+    .find((player) => player.status === "playing" && player.connected)?.id;
+  const wasQuestionAsker = state.currentQuestion?.askerId === playerId;
+  state.players.splice(playerIndex, 1);
+  if (state.submittedWords) delete state.submittedWords[playerId];
+  state.winners = state.winners.filter((id) => id !== playerId);
+  if (state.phase === "collectingWords" && state.players.length >= 2 && state.players.every((player) => state.submittedWords[player.id])) {
+    startPlayerWordGame();
+  }
+  if (state.phase === "playing") {
+    if (wasQuestionAsker) {
+      state.currentQuestion = null;
+      state.turnQuestionAsked = false;
+    } else if (isQuestionComplete()) {
+      state.currentQuestion = null;
+    }
+    if (currentId === playerId) keepCurrentPlayer(nextCandidateId);
+    else keepCurrentPlayer(currentId);
+    finishIfInsufficientPlayers();
+  }
+  renderAndBroadcast();
 }
 
 function startGame() {
   if (!state || state.phase !== "lobby") return;
   if (state.players.length < 2) {
     alert("至少需要 2 名玩家。");
+    return;
+  }
+  if (state.gameMode === "playerWords") {
+    state.phase = "collectingWords";
+    state.submittedWords = {};
+    renderAndBroadcast();
     return;
   }
   const words = shuffle(topics[state.topic]);
@@ -325,6 +488,26 @@ function startGame() {
   renderAndBroadcast();
 }
 
+function startPlayerWordGame() {
+  const players = state.players;
+  const sourceOrder = createDerangement(players.length);
+  players.forEach((player, targetIndex) => {
+    player.word = state.submittedWords[players[sourceOrder[targetIndex]].id];
+    player.status = "playing";
+  });
+  state.phase = "playing";
+  state.round = 1;
+  state.turnIndex = 0;
+  state.turnQuestionAsked = false;
+  state.currentQuestion = null;
+  state.log.unshift({
+    id: uid("log"),
+    playerId: null,
+    text: "词语已分配，游戏开始。",
+    detail: "每位玩家拿到的都不是自己提交的词。"
+  });
+}
+
 function endCurrentGame() {
   if (mode !== "host" || !state || state.phase === "lobby") return;
   state.phase = "lobby";
@@ -336,6 +519,7 @@ function endCurrentGame() {
   state.round = 0;
   state.turnQuestionAsked = false;
   state.currentQuestion = null;
+  state.submittedWords = {};
   state.log = [];
   state.winners = [];
   renderAndBroadcast();
@@ -352,10 +536,25 @@ function submitAction(action) {
 }
 
 function applyPlayerAction(playerId, action) {
-  if (!state || state.phase !== "playing") return;
+  if (!state) return;
   const player = state.players.find((item) => item.id === playerId);
+  if (!player || !player.connected) return;
+
+  if (action.type === "submitWord") {
+    if (state.phase !== "collectingWords") return;
+    const word = String(action.text || "").trim().replace(/\s+/g, " ");
+    if (!word || word.length > 30) return;
+    state.submittedWords[playerId] = word;
+    if (state.players.every((item) => state.submittedWords[item.id])) {
+      startPlayerWordGame();
+    }
+    renderAndBroadcast();
+    return;
+  }
+
+  if (state.phase !== "playing") return;
   const current = getCurrentPlayer();
-  if (!player || !current) return;
+  if (!current) return;
 
   if (action.type === "question") {
     if (current.id !== playerId || state.currentQuestion || state.turnQuestionAsked) return;
@@ -496,7 +695,7 @@ function render() {
   elements.gameNotice.textContent = view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
   const current = view.players.find((player) => player.isCurrent);
-  elements.turnTitle.textContent = current ? current.name : "未开始";
+  elements.turnTitle.textContent = current ? current.name : view.phase === "collectingWords" ? "提交词语" : "未开始";
   renderPlayers(view);
   renderWords(view);
   renderActions(view);
@@ -505,7 +704,8 @@ function render() {
 
 function renderPlayers(view) {
   elements.playerList.innerHTML = view.players.map((player) => {
-    const statusText = player.status === "won" ? "已猜中" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : "游戏中";
+    const submitted = view.submittedPlayerIds?.includes(player.id);
+    const statusText = player.status === "won" ? "已猜中" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : view.phase === "collectingWords" ? (submitted ? "已提交词语" : "等待提交") : "游戏中";
     const tagClass = player.status === "won" ? "won" : player.status === "left" ? "out" : player.isCurrent ? "active" : "";
     const tag = player.isCurrent ? "行动" : statusText;
     return `
@@ -514,10 +714,18 @@ function renderPlayers(view) {
           <div class="player-name">${escapeHtml(player.name)}</div>
           <div class="player-meta">${player.connected ? "在线" : "离线"} · ${statusText}</div>
         </div>
-        <span class="tag ${tagClass}">${tag}</span>
+        <div class="player-actions">
+          <span class="tag ${tagClass}">${tag}</span>
+          ${mode === "host" && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}
+        </div>
       </div>
     `;
   }).join("");
+  if (mode === "host") {
+    elements.playerList.querySelectorAll(".kick-player-button").forEach((button) => {
+      button.addEventListener("click", () => kickPlayer(button.dataset.playerId));
+    });
+  }
 }
 
 function renderWords(view) {
@@ -545,6 +753,10 @@ function renderActions(view) {
   }
   if (view.phase === "ended") {
     elements.actionArea.innerHTML = renderResult(view);
+    return;
+  }
+  if (view.phase === "collectingWords") {
+    renderWordSubmission(view);
     return;
   }
   if (view.currentQuestion) {
@@ -584,6 +796,22 @@ function renderActions(view) {
   });
   $("skipTurnButton").addEventListener("click", () => {
     submitAction({ type: "skip" });
+  });
+}
+
+function renderWordSubmission(view) {
+  const hasSubmitted = view.submittedPlayerIds?.includes(view.selfId);
+  elements.actionArea.innerHTML = `
+    <p class="muted">请提交一个词语。所有玩家完成提交后，系统会随机分配，且不会把你自己的词发给你。</p>
+    <label>
+      你提供的词
+      <input id="submittedWordInput" autocomplete="off" maxlength="30" placeholder="例如：长颈鹿">
+    </label>
+    <button class="primary" id="submitWordButton" type="button">${hasSubmitted ? "更新词语" : "提交词语"}</button>
+    ${hasSubmitted ? '<p class="muted">你已提交；在其他玩家完成前仍可更新。</p>' : ""}
+  `;
+  $("submitWordButton").addEventListener("click", () => {
+    submitAction({ type: "submitWord", text: $("submittedWordInput").value });
   });
 }
 
@@ -687,6 +915,9 @@ async function init() {
   elements.hostModeButton.addEventListener("click", () => setMode("host"));
   elements.guestModeButton.addEventListener("click", () => setMode("guest"));
   elements.createRoomButton.addEventListener("click", createRoom);
+  elements.gameModeSelect.addEventListener("change", () => {
+    elements.topicSelectLabel.classList.toggle("hidden", elements.gameModeSelect.value !== "library");
+  });
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.startGameButton.addEventListener("click", startGame);
   elements.endGameButton.addEventListener("click", endCurrentGame);
