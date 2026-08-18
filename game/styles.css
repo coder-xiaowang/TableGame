@@ -326,6 +326,10 @@ textarea:focus {
   background: var(--gold);
 }
 
+.tag.eliminated {
+  background: var(--red);
+}
+
 .word-board {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
@@ -351,6 +355,21 @@ textarea:focus {
 .word-value.mine {
   color: var(--muted);
   font-size: 20px;
+}
+
+.trap-word {
+  background: #fff0ee;
+  border: 1px solid #edc3bd;
+  border-radius: 8px;
+  color: #8d291f;
+  line-height: 1.4;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+}
+
+.trap-word.mine {
+  color: var(--muted);
 }
 
 .word-extra,

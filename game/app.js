@@ -19,6 +19,7 @@ let guestView = null;
 let hostTopic = "水果";
 let hostGameMode = "library";
 let hostWordExtraMode = "none";
+let hostPlayerWordMode = "single";
 let roomCode = "";
 let hostClientId = "";
 let resumeToken = "";
@@ -42,6 +43,8 @@ const elements = {
   topicSelect: $("topicSelect"),
   wordExtraModeLabel: $("wordExtraModeLabel"),
   wordExtraModeSelect: $("wordExtraModeSelect"),
+  playerWordModeLabel: $("playerWordModeLabel"),
+  playerWordModeSelect: $("playerWordModeSelect"),
   createRoomButton: $("createRoomButton"),
   roomCodeInput: $("roomCodeInput"),
   joinRoomButton: $("joinRoomButton"),
@@ -203,6 +206,7 @@ function buildView(viewerId) {
     phase: state.phase,
     gameMode: state.gameMode,
     wordExtraMode: state.wordExtraMode,
+    playerWordMode: state.playerWordMode,
     topic: state.topic,
     round: state.round,
     turnQuestionAsked: state.turnQuestionAsked,
@@ -219,6 +223,7 @@ function buildView(viewerId) {
       id: player.id,
       name: player.name,
       word: player.id === viewerId ? null : player.word,
+      trapWord: player.id === viewerId ? null : player.trapWord,
       extra: player.wordExtra,
       status: player.status
     })),
@@ -296,7 +301,9 @@ function getNotice() {
   if (!state) return "还没有创建房间。";
   if (state.phase === "lobby") {
     return state.gameMode === "playerWords"
-      ? "等待玩家落座，房主开始后每位玩家提交一个词语。"
+      ? state.playerWordMode === "trap"
+        ? "等待玩家落座，房主开始后每位玩家提交一个正确答案和一个陷阱词。"
+        : "等待玩家落座，房主开始后每位玩家提交一个词语。"
       : "等待玩家落座，房主开始后会自动分配同主题词语。";
   }
   if (state.phase === "collectingWords") {
@@ -331,16 +338,22 @@ async function createRoom() {
   hostTopic = elements.topicSelect.value;
   hostGameMode = elements.gameModeSelect.value;
   hostWordExtraMode = hostGameMode === "playerWords" ? elements.wordExtraModeSelect.value : "none";
+  hostPlayerWordMode = hostGameMode === "playerWords" ? elements.playerWordModeSelect.value : "single";
+  if (hostPlayerWordMode === "trap" && hostWordExtraMode === "hint") {
+    hostWordExtraMode = "none";
+  }
   state = {
     phase: "lobby",
     gameMode: hostGameMode,
     wordExtraMode: hostWordExtraMode,
+    playerWordMode: hostPlayerWordMode,
     topic: hostTopic,
     submittedEntries: {},
     players: [{
       id: selfId,
       name: elements.hostNameInput.value.trim() || "房主",
       word: "",
+      trapWord: "",
       wordExtra: "",
       status: "waiting",
       connected: true,
@@ -412,6 +425,7 @@ function upsertRemotePlayer(playerId, name) {
       id: playerId,
       name: name || "玩家",
       word: "",
+      trapWord: "",
       wordExtra: "",
       status: "waiting",
       connected: true,
@@ -503,6 +517,7 @@ function startPlayerWordGame() {
   players.forEach((player, targetIndex) => {
     const entry = state.submittedEntries[players[sourceOrder[targetIndex]].id];
     player.word = entry.word;
+    player.trapWord = entry.trapWord;
     player.wordExtra = entry.extra;
     player.status = "playing";
   });
@@ -515,7 +530,9 @@ function startPlayerWordGame() {
     id: uid("log"),
     playerId: null,
     text: "词语已分配，游戏开始。",
-    detail: "每位玩家拿到的都不是自己提交的词。"
+    detail: state.playerWordMode === "trap"
+      ? "每位玩家拿到的答案和陷阱词都不是自己提交的；猜中陷阱词会立即出局。"
+      : "每位玩家拿到的都不是自己提交的词。"
   });
 }
 
@@ -524,6 +541,7 @@ function endCurrentGame() {
   state.phase = "lobby";
   state.players.forEach((player) => {
     player.word = "";
+    player.trapWord = "";
     player.wordExtra = "";
     player.status = "waiting";
   });
@@ -555,11 +573,14 @@ function applyPlayerAction(playerId, action) {
   if (action.type === "submitWord") {
     if (state.phase !== "collectingWords") return;
     const word = String(action.word || "").trim().replace(/\s+/g, " ");
+    const trapWord = String(action.trapWord || "").trim().replace(/\s+/g, " ");
     const extra = String(action.extra || "").trim().replace(/\s+/g, " ");
     if (!word || word.length > 30) return;
+    if (state.playerWordMode === "trap" && (!trapWord || trapWord.length > 30 || normalizeWord(trapWord) === normalizeWord(word))) return;
     if (state.wordExtraMode !== "none" && (!extra || extra.length > 100)) return;
     state.submittedEntries[playerId] = {
       word,
+      trapWord: state.playerWordMode === "trap" ? trapWord : "",
       extra: state.wordExtraMode === "none" ? "" : extra
     };
     if (state.players.every((item) => state.submittedEntries[item.id])) {
@@ -625,6 +646,7 @@ function applyPlayerAction(playerId, action) {
     if (!guess) return;
     const previousIndex = getActivePlayers().findIndex((item) => item.id === playerId);
     const correct = normalizeWord(guess) === normalizeWord(player.word);
+    const hitTrap = state.playerWordMode === "trap" && normalizeWord(guess) === normalizeWord(player.trapWord);
     if (correct) {
       player.status = "won";
       state.winners.push(player.id);
@@ -634,6 +656,14 @@ function applyPlayerAction(playerId, action) {
         text: `${player.name} 猜中了：${player.word}`,
         detail: `名次：第 ${state.winners.length} 名`
       });
+    } else if (hitTrap) {
+      player.status = "eliminated";
+      state.log.unshift({
+        id: uid("log"),
+        playerId,
+        text: `${player.name} 猜中了陷阱词：${player.trapWord}`,
+        detail: "触发陷阱，立即出局。"
+      });
     } else {
       state.log.unshift({
         id: uid("log"),
@@ -642,7 +672,7 @@ function applyPlayerAction(playerId, action) {
         detail: "游戏继续，轮到下一位玩家。"
       });
     }
-    advanceTurn(previousIndex, correct);
+    advanceTurn(previousIndex, correct || hitTrap);
     renderAndBroadcast();
     return;
   }
@@ -726,8 +756,8 @@ function render() {
 function renderPlayers(view) {
   elements.playerList.innerHTML = view.players.map((player) => {
     const submitted = view.submittedPlayerIds?.includes(player.id);
-    const statusText = player.status === "won" ? "已猜中" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : view.phase === "collectingWords" ? (submitted ? "已提交词语" : "等待提交") : "游戏中";
-    const tagClass = player.status === "won" ? "won" : player.status === "left" ? "out" : player.isCurrent ? "active" : "";
+    const statusText = player.status === "won" ? "已猜中" : player.status === "eliminated" ? "已出局" : player.status === "left" ? "最后留场" : view.phase === "lobby" ? "已落座" : view.phase === "collectingWords" ? (submitted ? "已提交词语" : "等待提交") : "游戏中";
+    const tagClass = player.status === "won" ? "won" : player.status === "eliminated" ? "eliminated" : player.status === "left" ? "out" : player.isCurrent ? "active" : "";
     const tag = player.isCurrent ? "行动" : statusText;
     return `
       <div class="player-item">
@@ -760,10 +790,14 @@ function renderWords(view) {
     const extra = item.extra && ["playing", "ended"].includes(view.phase)
       ? `<div class="word-extra word-extra-${escapeHtml(view.wordExtraMode)}"><strong>${view.wordExtraMode === "forbidden" ? "禁问" : "提示"}：</strong>${escapeHtml(item.extra)}</div>`
       : "";
+    const trap = view.playerWordMode === "trap" && item.status !== "waiting"
+      ? `<div class="trap-word ${mine ? "mine" : ""}"><strong>陷阱：</strong>${mine ? "你的陷阱词被遮住" : escapeHtml(item.trapWord || "未分配")}</div>`
+      : "";
     return `
       <div class="word-card">
         <div class="word-owner">${escapeHtml(item.name)}</div>
         <div class="word-value ${mine ? "mine" : ""}">${escapeHtml(value)}</div>
+        ${trap}
         ${extra}
       </div>
     `;
@@ -831,6 +865,13 @@ function renderActions(view) {
 
 function renderWordSubmission(view) {
   const hasSubmitted = view.submittedPlayerIds?.includes(view.selfId);
+  const trapField = view.playerWordMode === "trap" ? `
+    <label>
+      陷阱词
+      <input id="submittedTrapWordInput" autocomplete="off" maxlength="30" placeholder="例如：如懿">
+    </label>
+    <p class="muted">陷阱词应与答案有一定关联，但必须能通过合理问题进行区分。猜中陷阱词的玩家会立即出局。</p>
+  ` : "";
   const extraField = view.wordExtraMode === "none" ? "" : `
     <label>
       ${view.wordExtraMode === "forbidden" ? "这个词的禁问信息" : "提供给猜词者的开局提示"}
@@ -839,27 +880,37 @@ function renderWordSubmission(view) {
     <p class="muted">${view.wordExtraMode === "forbidden" ? "请填写一条清晰、可执行的禁问规则。" : "请勿在提示中直接包含答案。"}</p>
   `;
   elements.actionArea.innerHTML = `
-    <p class="muted">请提交一个词语。所有玩家完成提交后，系统会随机分配，且不会把你自己的词发给你。</p>
+    <p class="muted">${view.playerWordMode === "trap" ? "请提交一个正确答案和一个陷阱词。" : "请提交一个词语。"}所有玩家完成提交后，系统会随机分配，且不会把你自己提交的词发给你。</p>
     <label>
-      你提供的词
+      ${view.playerWordMode === "trap" ? "正确答案" : "你提供的词"}
       <input id="submittedWordInput" autocomplete="off" maxlength="30" placeholder="例如：长颈鹿">
     </label>
+    ${trapField}
     ${extraField}
     <button class="primary" id="submitWordButton" type="button">${hasSubmitted ? "更新词语" : "提交词语"}</button>
     ${hasSubmitted ? '<p class="muted">你已提交；在其他玩家完成前仍可更新。</p>' : ""}
   `;
   $("submitWordButton").addEventListener("click", () => {
     const word = $("submittedWordInput").value.trim();
+    const trapWord = $("submittedTrapWordInput")?.value.trim() || "";
     const extra = $("submittedWordExtraInput")?.value.trim() || "";
     if (!word) {
-      alert("请输入你提供的词。");
+      alert(view.playerWordMode === "trap" ? "请输入正确答案。" : "请输入你提供的词。");
+      return;
+    }
+    if (view.playerWordMode === "trap" && !trapWord) {
+      alert("请输入陷阱词。");
+      return;
+    }
+    if (view.playerWordMode === "trap" && normalizeWord(word) === normalizeWord(trapWord)) {
+      alert("正确答案和陷阱词不能相同。");
       return;
     }
     if (view.wordExtraMode !== "none" && !extra) {
       alert(view.wordExtraMode === "forbidden" ? "请输入这个词的禁问信息。" : "请输入这个词的开局提示。");
       return;
     }
-    submitAction({ type: "submitWord", word, extra });
+    submitAction({ type: "submitWord", word, trapWord, extra });
   });
 }
 
@@ -896,6 +947,7 @@ function renderQuestionActions(view, extraNotice = "") {
       <div class="current-question notice">
         <strong>${escapeHtml(question.askerName)} 问：</strong>${escapeHtml(question.text)}
       </div>
+      ${view.playerWordMode === "trap" ? '<p class="muted">回答始终以正确答案为准，不要根据陷阱词回答。</p>' : ""}
       <p class="muted">你已回答：${escapeHtml({ yes: "是", no: "否", maybe: "不一定" }[myAnswer])}</p>
     `;
     return;
@@ -905,6 +957,7 @@ function renderQuestionActions(view, extraNotice = "") {
     <div class="current-question notice">
       <strong>${escapeHtml(question.askerName)} 问：</strong>${escapeHtml(question.text)}
     </div>
+    ${view.playerWordMode === "trap" ? '<p class="muted">请根据正确答案作答，不要根据陷阱词作答。</p>' : ""}
     <div class="answer-grid">
       <button class="answer-yes" id="answerYesButton" type="button">是</button>
       <button class="answer-no" id="answerNoButton" type="button">否</button>
@@ -923,7 +976,14 @@ function renderResult(view) {
       return `第 ${index + 1} 名：${escapeHtml(player?.name || "玩家")}`;
     })
     .join("<br>");
-  return `<p>${winnerNames || "没有玩家猜中。"}</p>`;
+  const eliminatedNames = view.players
+    .filter((player) => player.status === "eliminated")
+    .map((player) => escapeHtml(player.name))
+    .join("、");
+  return `
+    <p>${winnerNames || "没有玩家猜中。"}</p>
+    ${eliminatedNames ? `<p class="danger">陷阱出局：${eliminatedNames}</p>` : ""}
+  `;
 }
 
 function renderLog(view) {
@@ -988,7 +1048,10 @@ async function init() {
     const usesPlayerWords = elements.gameModeSelect.value === "playerWords";
     elements.topicSelectLabel.classList.toggle("hidden", usesPlayerWords);
     elements.wordExtraModeLabel.classList.toggle("hidden", !usesPlayerWords);
+    elements.playerWordModeLabel.classList.toggle("hidden", !usesPlayerWords);
   });
+  elements.playerWordModeSelect.addEventListener("change", syncPlayerWordSettings);
+  elements.wordExtraModeSelect.addEventListener("change", syncPlayerWordSettings);
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.startGameButton.addEventListener("click", startGame);
   elements.endGameButton.addEventListener("click", endCurrentGame);
@@ -997,7 +1060,17 @@ async function init() {
     const view = currentView();
     if (view) renderLog(view);
   });
+  syncPlayerWordSettings();
   setMode("host");
+}
+
+function syncPlayerWordSettings() {
+  const trapMode = elements.playerWordModeSelect.value === "trap";
+  const hintOption = elements.wordExtraModeSelect.querySelector('option[value="hint"]');
+  hintOption.disabled = trapMode;
+  if (trapMode && elements.wordExtraModeSelect.value === "hint") {
+    elements.wordExtraModeSelect.value = "none";
+  }
 }
 
 init();
