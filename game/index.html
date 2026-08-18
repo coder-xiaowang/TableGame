@@ -43,6 +43,14 @@
               词库主题
               <select id="topicSelect"></select>
             </label>
+            <label class="hidden" id="wordExtraModeLabel">
+              出词附加规则
+              <select id="wordExtraModeSelect">
+                <option value="none">无附加信息</option>
+                <option value="forbidden">每个词附带禁问信息</option>
+                <option value="hint">每个词附带开局提示</option>
+              </select>
+            </label>
             <button class="primary" id="createRoomButton" type="button">创建房间号</button>
           </div>
 

@@ -18,6 +18,7 @@ let state = null;
 let guestView = null;
 let hostTopic = "水果";
 let hostGameMode = "library";
+let hostWordExtraMode = "none";
 let roomCode = "";
 let hostClientId = "";
 let resumeToken = "";
@@ -39,6 +40,8 @@ const elements = {
   gameModeSelect: $("gameModeSelect"),
   topicSelectLabel: $("topicSelectLabel"),
   topicSelect: $("topicSelect"),
+  wordExtraModeLabel: $("wordExtraModeLabel"),
+  wordExtraModeSelect: $("wordExtraModeSelect"),
   createRoomButton: $("createRoomButton"),
   roomCodeInput: $("roomCodeInput"),
   joinRoomButton: $("joinRoomButton"),
@@ -199,6 +202,7 @@ function buildView(viewerId) {
     selfId: viewerId,
     phase: state.phase,
     gameMode: state.gameMode,
+    wordExtraMode: state.wordExtraMode,
     topic: state.topic,
     round: state.round,
     turnQuestionAsked: state.turnQuestionAsked,
@@ -210,11 +214,12 @@ function buildView(viewerId) {
       isHost: player.isHost,
       isCurrent: current?.id === player.id
     })),
-    submittedPlayerIds: Object.keys(state.submittedWords || {}),
+    submittedPlayerIds: Object.keys(state.submittedEntries || {}),
     words: state.players.map((player) => ({
       id: player.id,
       name: player.name,
       word: player.id === viewerId ? null : player.word,
+      extra: player.wordExtra,
       status: player.status
     })),
     currentQuestion: state.currentQuestion,
@@ -295,7 +300,7 @@ function getNotice() {
       : "等待玩家落座，房主开始后会自动分配同主题词语。";
   }
   if (state.phase === "collectingWords") {
-    const submittedCount = Object.keys(state.submittedWords).length;
+    const submittedCount = Object.keys(state.submittedEntries).length;
     return `正在收集词语：${submittedCount}/${state.players.length} 名玩家已提交。`;
   }
   if (state.phase === "ended") return "游戏结束。";
@@ -325,15 +330,18 @@ async function createRoom() {
   selfId = uid("host");
   hostTopic = elements.topicSelect.value;
   hostGameMode = elements.gameModeSelect.value;
+  hostWordExtraMode = hostGameMode === "playerWords" ? elements.wordExtraModeSelect.value : "none";
   state = {
     phase: "lobby",
     gameMode: hostGameMode,
+    wordExtraMode: hostWordExtraMode,
     topic: hostTopic,
-    submittedWords: {},
+    submittedEntries: {},
     players: [{
       id: selfId,
       name: elements.hostNameInput.value.trim() || "房主",
       word: "",
+      wordExtra: "",
       status: "waiting",
       connected: true,
       isHost: true
@@ -404,6 +412,7 @@ function upsertRemotePlayer(playerId, name) {
       id: playerId,
       name: name || "玩家",
       word: "",
+      wordExtra: "",
       status: "waiting",
       connected: true,
       isHost: false
@@ -434,9 +443,9 @@ function removePlayer(playerId) {
     .find((player) => player.status === "playing" && player.connected)?.id;
   const wasQuestionAsker = state.currentQuestion?.askerId === playerId;
   state.players.splice(playerIndex, 1);
-  if (state.submittedWords) delete state.submittedWords[playerId];
+  if (state.submittedEntries) delete state.submittedEntries[playerId];
   state.winners = state.winners.filter((id) => id !== playerId);
-  if (state.phase === "collectingWords" && state.players.length >= 2 && state.players.every((player) => state.submittedWords[player.id])) {
+  if (state.phase === "collectingWords" && state.players.length >= 2 && state.players.every((player) => state.submittedEntries[player.id])) {
     startPlayerWordGame();
   }
   if (state.phase === "playing") {
@@ -461,7 +470,7 @@ function startGame() {
   }
   if (state.gameMode === "playerWords") {
     state.phase = "collectingWords";
-    state.submittedWords = {};
+    state.submittedEntries = {};
     renderAndBroadcast();
     return;
   }
@@ -492,7 +501,9 @@ function startPlayerWordGame() {
   const players = state.players;
   const sourceOrder = createDerangement(players.length);
   players.forEach((player, targetIndex) => {
-    player.word = state.submittedWords[players[sourceOrder[targetIndex]].id];
+    const entry = state.submittedEntries[players[sourceOrder[targetIndex]].id];
+    player.word = entry.word;
+    player.wordExtra = entry.extra;
     player.status = "playing";
   });
   state.phase = "playing";
@@ -513,13 +524,14 @@ function endCurrentGame() {
   state.phase = "lobby";
   state.players.forEach((player) => {
     player.word = "";
+    player.wordExtra = "";
     player.status = "waiting";
   });
   state.turnIndex = 0;
   state.round = 0;
   state.turnQuestionAsked = false;
   state.currentQuestion = null;
-  state.submittedWords = {};
+  state.submittedEntries = {};
   state.log = [];
   state.winners = [];
   renderAndBroadcast();
@@ -542,10 +554,15 @@ function applyPlayerAction(playerId, action) {
 
   if (action.type === "submitWord") {
     if (state.phase !== "collectingWords") return;
-    const word = String(action.text || "").trim().replace(/\s+/g, " ");
+    const word = String(action.word || "").trim().replace(/\s+/g, " ");
+    const extra = String(action.extra || "").trim().replace(/\s+/g, " ");
     if (!word || word.length > 30) return;
-    state.submittedWords[playerId] = word;
-    if (state.players.every((item) => state.submittedWords[item.id])) {
+    if (state.wordExtraMode !== "none" && (!extra || extra.length > 100)) return;
+    state.submittedEntries[playerId] = {
+      word,
+      extra: state.wordExtraMode === "none" ? "" : extra
+    };
+    if (state.players.every((item) => state.submittedEntries[item.id])) {
       startPlayerWordGame();
     }
     renderAndBroadcast();
@@ -560,9 +577,10 @@ function applyPlayerAction(playerId, action) {
     if (current.id !== playerId || state.currentQuestion || state.turnQuestionAsked) return;
     const text = action.text.trim();
     if (!text) return;
+    const questionId = uid("question");
     state.turnQuestionAsked = true;
     state.currentQuestion = {
-      id: uid("question"),
+      id: questionId,
       askerId: playerId,
       askerName: player.name,
       text,
@@ -570,9 +588,13 @@ function applyPlayerAction(playerId, action) {
     };
     state.log.unshift({
       id: uid("log"),
+      type: "question",
+      questionId,
       playerId,
       text: `${player.name} 提问：${text}`,
-      detail: "等待其他仍在游戏中的玩家回答。"
+      wordExtraMode: state.wordExtraMode,
+      wordExtra: player.wordExtra,
+      answers: {}
     });
     renderAndBroadcast();
     return;
@@ -583,14 +605,13 @@ function applyPlayerAction(playerId, action) {
     if (player.status !== "playing") return;
     const answer = ["yes", "no", "maybe"].includes(action.answer) ? action.answer : "maybe";
     state.currentQuestion.answers[playerId] = answer;
-    const answerText = { yes: "是", no: "否", maybe: "不一定" }[answer];
-    state.log.unshift({
-      id: uid("log"),
-      playerId,
-      questionOwnerId: state.currentQuestion.askerId,
-      text: `${player.name} 回答 ${state.currentQuestion.askerName}：${answerText}`,
-      detail: state.currentQuestion.text
-    });
+    const questionLog = state.log.find((item) => item.questionId === state.currentQuestion.id);
+    if (questionLog) {
+      questionLog.answers[playerId] = {
+        playerName: player.name,
+        answer
+      };
+    }
     if (isQuestionComplete()) {
       state.currentQuestion = null;
     }
@@ -736,10 +757,14 @@ function renderWords(view) {
       : mine
         ? "你的词被遮住"
         : item.word || "未分配";
+    const extra = item.extra && ["playing", "ended"].includes(view.phase)
+      ? `<div class="word-extra word-extra-${escapeHtml(view.wordExtraMode)}"><strong>${view.wordExtraMode === "forbidden" ? "禁问" : "提示"}：</strong>${escapeHtml(item.extra)}</div>`
+      : "";
     return `
       <div class="word-card">
         <div class="word-owner">${escapeHtml(item.name)}</div>
         <div class="word-value ${mine ? "mine" : ""}">${escapeHtml(value)}</div>
+        ${extra}
       </div>
     `;
   }).join("");
@@ -747,6 +772,10 @@ function renderWords(view) {
 
 function renderActions(view) {
   const current = view.players.find((player) => player.isCurrent);
+  const myWord = view.words.find((item) => item.id === view.selfId);
+  const extraNotice = current?.id === view.selfId && myWord?.extra
+    ? renderWordExtraNotice(view.wordExtraMode, myWord.extra)
+    : "";
   if (view.phase === "lobby") {
     elements.actionArea.innerHTML = `<p class="muted">玩家落座后，由房主开始游戏。</p>`;
     return;
@@ -760,7 +789,7 @@ function renderActions(view) {
     return;
   }
   if (view.currentQuestion) {
-    renderQuestionActions(view);
+    renderQuestionActions(view, extraNotice);
     return;
   }
   const isMyTurn = current?.id === view.selfId;
@@ -778,6 +807,7 @@ function renderActions(view) {
       <button class="primary" id="submitQuestionButton" type="button">提交问题</button>
     `;
   elements.actionArea.innerHTML = `
+    ${extraNotice}
     ${questionControls}
     <label>
       猜词
@@ -801,21 +831,47 @@ function renderActions(view) {
 
 function renderWordSubmission(view) {
   const hasSubmitted = view.submittedPlayerIds?.includes(view.selfId);
+  const extraField = view.wordExtraMode === "none" ? "" : `
+    <label>
+      ${view.wordExtraMode === "forbidden" ? "这个词的禁问信息" : "提供给猜词者的开局提示"}
+      <textarea id="submittedWordExtraInput" maxlength="100" placeholder="${view.wordExtraMode === "forbidden" ? "例如：不能询问演员、导演或参演作品" : "例如：大陆电视剧中的男性角色"}"></textarea>
+    </label>
+    <p class="muted">${view.wordExtraMode === "forbidden" ? "请填写一条清晰、可执行的禁问规则。" : "请勿在提示中直接包含答案。"}</p>
+  `;
   elements.actionArea.innerHTML = `
     <p class="muted">请提交一个词语。所有玩家完成提交后，系统会随机分配，且不会把你自己的词发给你。</p>
     <label>
       你提供的词
       <input id="submittedWordInput" autocomplete="off" maxlength="30" placeholder="例如：长颈鹿">
     </label>
+    ${extraField}
     <button class="primary" id="submitWordButton" type="button">${hasSubmitted ? "更新词语" : "提交词语"}</button>
     ${hasSubmitted ? '<p class="muted">你已提交；在其他玩家完成前仍可更新。</p>' : ""}
   `;
   $("submitWordButton").addEventListener("click", () => {
-    submitAction({ type: "submitWord", text: $("submittedWordInput").value });
+    const word = $("submittedWordInput").value.trim();
+    const extra = $("submittedWordExtraInput")?.value.trim() || "";
+    if (!word) {
+      alert("请输入你提供的词。");
+      return;
+    }
+    if (view.wordExtraMode !== "none" && !extra) {
+      alert(view.wordExtraMode === "forbidden" ? "请输入这个词的禁问信息。" : "请输入这个词的开局提示。");
+      return;
+    }
+    submitAction({ type: "submitWord", word, extra });
   });
 }
 
-function renderQuestionActions(view) {
+function renderWordExtraNotice(extraMode, extra, inLog = false) {
+  if (!extra || extraMode === "none") return "";
+  const label = extraMode === "forbidden"
+    ? (inLog ? "本题禁问规则" : "你的禁问规则")
+    : (inLog ? "本题开局提示" : "你的开局提示");
+  return `<div class="word-extra-notice word-extra-${escapeHtml(extraMode)}"><strong>${label}：</strong>${escapeHtml(extra)}</div>`;
+}
+
+function renderQuestionActions(view, extraNotice = "") {
   const question = view.currentQuestion;
   const isAsker = question.askerId === view.selfId;
   const myAnswer = question.answers[view.selfId];
@@ -826,6 +882,7 @@ function renderQuestionActions(view) {
 
   if (isAsker) {
     elements.actionArea.innerHTML = `
+      ${extraNotice}
       <div class="current-question notice">
         <strong>你的问题：</strong>${escapeHtml(question.text)}
       </div>
@@ -881,17 +938,29 @@ function renderLog(view) {
   elements.logPlayerFilter.value = logPlayerFilter;
   const records = logPlayerFilter === "all"
     ? view.log
-    : view.log.filter((item) => item.questionOwnerId === logPlayerFilter || (item.playerId === logPlayerFilter && !item.questionOwnerId));
+    : view.log.filter((item) => item.playerId === logPlayerFilter);
   if (!records.length) {
     elements.logList.innerHTML = `<p class="muted">${logPlayerFilter === "all" ? "还没有记录。" : "该玩家还没有问答记录。"}</p>`;
     return;
   }
-  elements.logList.innerHTML = records.slice(0, 24).map((item) => `
-    <div class="log-item">
-      <div class="log-line">${escapeHtml(item.text)}</div>
-      <div class="muted">${escapeHtml(item.detail || "")}</div>
-    </div>
-  `).join("");
+  elements.logList.innerHTML = records.slice(0, 24).map((item) => {
+    const answerTags = item.type === "question"
+      ? Object.values(item.answers || {}).map(({ playerName, answer }) => `
+          <span class="log-answer-tag log-answer-${escapeHtml(answer)}">
+            ${escapeHtml(playerName)}：${escapeHtml({ yes: "是", no: "否", maybe: "不一定" }[answer] || "不一定")}
+          </span>
+        `).join("")
+      : "";
+    const detail = item.type === "question"
+      ? `${item.wordExtra ? renderWordExtraNotice(item.wordExtraMode, item.wordExtra, true) : ""}<div class="log-answer-list">${answerTags || '<span class="muted">等待其他玩家回答。</span>'}</div>`
+      : `<div class="muted">${escapeHtml(item.detail || "")}</div>`;
+    return `
+      <div class="log-item">
+        <div class="log-line">${escapeHtml(item.text)}</div>
+        ${detail}
+      </div>
+    `;
+  }).join("");
 }
 
 function escapeHtml(value) {
@@ -916,7 +985,9 @@ async function init() {
   elements.guestModeButton.addEventListener("click", () => setMode("guest"));
   elements.createRoomButton.addEventListener("click", createRoom);
   elements.gameModeSelect.addEventListener("change", () => {
-    elements.topicSelectLabel.classList.toggle("hidden", elements.gameModeSelect.value !== "library");
+    const usesPlayerWords = elements.gameModeSelect.value === "playerWords";
+    elements.topicSelectLabel.classList.toggle("hidden", usesPlayerWords);
+    elements.wordExtraModeLabel.classList.toggle("hidden", !usesPlayerWords);
   });
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.startGameButton.addEventListener("click", startGame);
