@@ -315,6 +315,33 @@ textarea:focus {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
+.score-board {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.score-card {
+  align-items: center;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.score-card.leader {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.score-value {
+  color: var(--accent);
+  font-size: 24px;
+  font-weight: 900;
+}
+
 .seat-card {
   display: grid;
   gap: 10px;

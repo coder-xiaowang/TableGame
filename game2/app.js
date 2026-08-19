@@ -40,9 +40,12 @@ const elements = {
   roomPlayerCountSelect: $("roomPlayerCountSelect"),
   startGameButton: $("startGameButton"),
   endGameButton: $("endGameButton"),
+  returnLobbyButton: $("returnLobbyButton"),
   playerList: $("playerList"),
   gameNotice: $("gameNotice"),
   roundBadge: $("roundBadge"),
+  wordBadge: $("wordBadge"),
+  scoreBoard: $("scoreBoard"),
   seatBoard: $("seatBoard"),
   idiomValue: $("idiomValue"),
   turnTitle: $("turnTitle"),
@@ -73,8 +76,23 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function randomIdiom() {
-  return idioms[Math.floor(Math.random() * idioms.length)];
+function shuffledIdioms() {
+  const result = [...idioms];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1));
+    [result[index], result[target]] = [result[target], result[index]];
+  }
+  return result;
+}
+
+function drawNextIdiom() {
+  if (!state.idiomDeck.length) {
+    state.idiomDeck = shuffledIdioms();
+    if (state.idiomDeck.length > 1 && state.idiomDeck[state.idiomDeck.length - 1] === state.idiom) {
+      [state.idiomDeck[0], state.idiomDeck[state.idiomDeck.length - 1]] = [state.idiomDeck[state.idiomDeck.length - 1], state.idiomDeck[0]];
+    }
+  }
+  return state.idiomDeck.pop();
 }
 
 function roleForSeat(index) {
@@ -197,6 +215,7 @@ function resizeSeats(count) {
   });
   state.playerCount = count;
   state.seats = seats;
+  state.scores = Array(count / 2).fill(0);
 }
 
 function createHostState(playerCount) {
@@ -217,6 +236,10 @@ function createHostState(playerCount) {
     round: 0,
     winnerTeamIndex: null,
     winnerGuess: "",
+    scores: Array(playerCount / 2).fill(0),
+    wordNumber: 0,
+    wordStartTeamIndex: 0,
+    idiomDeck: [],
     log: []
   };
 }
@@ -319,7 +342,7 @@ async function kickPlayer(playerId) {
     const wasPlaying = state.phase === "playing";
     state.players = state.players.filter((item) => item.id !== playerId);
     state.seats.forEach((seat) => { if (seat.playerId === playerId) seat.playerId = null; });
-    if (wasPlaying) endCurrentGame();
+    if (wasPlaying) finishGame();
     else renderAndBroadcast();
   } catch {
     alert("无法移出该玩家，请检查服务器连接。");
@@ -392,6 +415,8 @@ function buildView(viewerId) {
     round: state.round,
     winnerTeamIndex: state.winnerTeamIndex,
     winnerGuess: state.winnerGuess,
+    scores: state.scores,
+    wordNumber: state.wordNumber,
     log: state.log,
     notice: getNotice(),
     turnLabel: getTurnLabel(team, actorId)
@@ -405,7 +430,9 @@ function getNotice() {
     return `房主选择了 ${state.playerCount} 人局，当前 ${seated}/${state.playerCount} 人落座。相邻两席为一队，前席队长，后席队员。`;
   }
   if (state.phase === "ended") {
-    return `游戏结束，答案是「${state.idiom}」。`;
+    const highest = Math.max(...state.scores);
+    const leaders = state.scores.map((score, index) => score === highest ? `第 ${index + 1} 队` : "").filter(Boolean);
+    return `大局结束，${leaders.join("、")}${leaders.length > 1 ? "并列第一" : "获胜"}，最高 ${highest} 分。最后一题答案是「${state.idiom}」。`;
   }
   const actor = nameOf(currentActorId());
   return state.turnPhase === "describe"
@@ -492,21 +519,38 @@ function startGame() {
     return;
   }
   state.phase = "playing";
-  state.idiom = randomIdiom();
+  state.scores = Array(state.playerCount / 2).fill(0);
+  state.idiomDeck = shuffledIdioms();
+  state.idiom = drawNextIdiom();
   state.turnTeamIndex = 0;
+  state.wordStartTeamIndex = 0;
   state.turnPhase = "describe";
   state.currentDescription = "";
   state.round = 1;
+  state.wordNumber = 1;
+  state.winnerTeamIndex = null;
+  state.winnerGuess = "";
   state.log = [{
     id: uid("log"),
-    text: "游戏开始",
-    detail: `本局共有 ${state.playerCount / 2} 队，按座位顺序依次行动。`
+    text: "大局开始",
+    detail: `本局共有 ${state.playerCount / 2} 队，每猜中一题得 1 分，积分持续到房主手动结束。`
   }];
   renderAndBroadcast();
 }
 
-function endCurrentGame() {
-  if (mode !== "host" || !state || state.phase === "lobby") return;
+function finishGame() {
+  if (mode !== "host" || !state || state.phase !== "playing") return;
+  state.phase = "ended";
+  state.log.unshift({
+    id: uid("log"),
+    text: "房主结束了大局",
+    detail: `最终比分：${state.scores.map((score, index) => `第 ${index + 1} 队 ${score} 分`).join("，")}`
+  });
+  renderAndBroadcast();
+}
+
+function returnToLobby() {
+  if (mode !== "host" || !state || state.phase !== "ended") return;
   state.phase = "lobby";
   state.idiom = "";
   state.turnTeamIndex = 0;
@@ -515,6 +559,10 @@ function endCurrentGame() {
   state.round = 0;
   state.winnerTeamIndex = null;
   state.winnerGuess = "";
+  state.scores = Array(state.playerCount / 2).fill(0);
+  state.wordNumber = 0;
+  state.wordStartTeamIndex = 0;
+  state.idiomDeck = [];
   state.log = [];
   renderAndBroadcast();
 }
@@ -543,16 +591,43 @@ function submitGuess(playerId, text) {
   state.log.unshift({
     id: uid("log"),
     text: `${nameOf(playerId)} 猜：${guess}`,
-    detail: correct ? "回答正确，游戏结束。" : "回答错误，轮到下一队。"
+    detail: correct ? `回答正确，第 ${state.turnTeamIndex + 1} 队获得 1 分。` : "回答错误，轮到下一队。"
   });
   if (correct) {
-    state.phase = "ended";
+    state.scores[state.turnTeamIndex] += 1;
     state.winnerTeamIndex = state.turnTeamIndex;
     state.winnerGuess = guess;
+    startNextWord();
   } else {
     advanceTeam();
   }
   renderAndBroadcast();
+}
+
+function startNextWord() {
+  const previousTeamIndex = state.turnTeamIndex;
+  const nextTeamIndex = nextReadyTeamIndex(previousTeamIndex);
+  state.idiom = drawNextIdiom();
+  state.wordNumber += 1;
+  state.turnTeamIndex = nextTeamIndex;
+  state.wordStartTeamIndex = nextTeamIndex;
+  state.turnPhase = "describe";
+  state.currentDescription = "";
+  state.round = 1;
+  state.log.unshift({
+    id: uid("log"),
+    text: `第 ${previousTeamIndex + 1} 队获得 1 分，开始第 ${state.wordNumber} 题`,
+    detail: `当前比分：${state.scores.map((score, index) => `第 ${index + 1} 队 ${score} 分`).join("，")}；由第 ${nextTeamIndex + 1} 队先行动。`
+  });
+}
+
+function nextReadyTeamIndex(fromIndex) {
+  const teamCount = state.playerCount / 2;
+  for (let offset = 1; offset <= teamCount; offset += 1) {
+    const index = (fromIndex + offset) % teamCount;
+    if (teamIsReady(teams()[index])) return index;
+  }
+  return fromIndex;
 }
 
 function advanceTeam() {
@@ -561,15 +636,15 @@ function advanceTeam() {
   let found = false;
   for (let attempt = 0; attempt < teamCount; attempt += 1) {
     next = (next + 1) % teamCount;
-    if (next === 0) state.round += 1;
+    if (next === state.wordStartTeamIndex) state.round += 1;
     if (teamIsReady(teams()[next])) {
       found = true;
       break;
     }
   }
   if (!found) {
-    state.phase = "ended";
-    state.winnerTeamIndex = null;
+    state.turnPhase = "describe";
+    state.currentDescription = "";
     return;
   }
   state.turnTeamIndex = next;
@@ -585,17 +660,30 @@ function render() {
     elements.roomPlayerCountSelect.value = String(view.playerCount);
     elements.roomPlayerCountSelect.disabled = view.phase !== "lobby";
     elements.startGameButton.classList.toggle("hidden", view.phase !== "lobby");
-    elements.endGameButton.classList.toggle("hidden", view.phase === "lobby");
+    elements.endGameButton.classList.toggle("hidden", view.phase !== "playing");
+    elements.returnLobbyButton.classList.toggle("hidden", view.phase !== "ended");
   }
   elements.gameNotice.textContent = view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
+  elements.wordBadge.textContent = `第 ${view.wordNumber} 题`;
   elements.turnTitle.textContent = view.turnLabel;
   elements.teamBadge.textContent = view.phase === "playing" ? `第 ${view.turnTeamIndex + 1} 队` : "--";
   renderPlayers(view);
+  renderScores(view);
   renderSeats(view);
   renderIdiom(view);
   renderActions(view);
   renderLog(view);
+}
+
+function renderScores(view) {
+  const highest = view.scores.length ? Math.max(...view.scores) : 0;
+  elements.scoreBoard.innerHTML = view.scores.map((score, index) => `
+    <div class="score-card ${view.phase !== "lobby" && score === highest ? "leader" : ""}">
+      <strong>第 ${index + 1} 队</strong>
+      <span class="score-value">${score}</span>
+    </div>
+  `).join("");
 }
 
 function renderPlayers(view) {
@@ -670,10 +758,13 @@ function renderActions(view) {
     return;
   }
   if (view.phase === "ended") {
-    const winner = view.winnerTeamIndex === null ? "无人猜中" : `第 ${view.winnerTeamIndex + 1} 队获胜`;
+    const highest = Math.max(...view.scores);
+    const leaders = view.scores.map((score, index) => score === highest ? `第 ${index + 1} 队` : "").filter(Boolean);
+    const winner = `${leaders.join("、")}${leaders.length > 1 ? "并列第一" : "获胜"}`;
     elements.actionArea.innerHTML = `
       <div class="result-title">${escapeHtml(winner)}</div>
-      <p>本局成语：${escapeHtml(view.idiom)}</p>
+      <p>最高分：${highest} 分</p>
+      <p>最后一题成语：${escapeHtml(view.idiom)}</p>
     `;
     return;
   }
@@ -731,7 +822,8 @@ async function init() {
   elements.joinRoomButton.addEventListener("click", joinRoom);
   elements.roomPlayerCountSelect.addEventListener("change", changeRoomPlayerCount);
   elements.startGameButton.addEventListener("click", startGame);
-  elements.endGameButton.addEventListener("click", endCurrentGame);
+  elements.endGameButton.addEventListener("click", finishGame);
+  elements.returnLobbyButton.addEventListener("click", returnToLobby);
   setMode("host");
 }
 

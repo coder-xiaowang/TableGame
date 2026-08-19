@@ -76,7 +76,8 @@
               </select>
             </label>
             <button class="primary full-width" id="startGameButton" type="button">开始游戏</button>
-            <button class="danger-button full-width hidden" id="endGameButton" type="button">结束本局</button>
+            <button class="danger-button full-width hidden" id="endGameButton" type="button">结束大局</button>
+            <button class="primary full-width hidden" id="returnLobbyButton" type="button">返回大厅</button>
           </div>
 
           <div class="panel">
@@ -91,6 +92,17 @@
           <div class="panel">
             <div class="section-header">
               <div>
+                <p class="eyebrow">大局累计</p>
+                <h2>积分榜</h2>
+              </div>
+              <div class="round-badge" id="wordBadge">第 0 题</div>
+            </div>
+            <div class="score-board" id="scoreBoard"></div>
+          </div>
+
+          <div class="panel">
+            <div class="section-header">
+              <div>
                 <p class="eyebrow">座位决定队伍</p>
                 <h2>席位</h2>
               </div>
@@ -101,7 +113,7 @@
 
           <div class="play-grid">
             <div class="panel word-panel">
-              <p class="eyebrow">本局成语</p>
+              <p class="eyebrow">本题成语</p>
               <div class="idiom-value" id="idiomValue">尚未开始</div>
             </div>
 
