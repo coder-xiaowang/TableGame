@@ -56,7 +56,10 @@
         <section class="board-panel panel">
           <div class="round-meta"><span id="phaseBadge" class="phase-badge">准备阶段</span><span id="turnLabel">等待开始</span></div>
           <p id="notice" class="notice">等待玩家加入房间</p>
-          <div id="board" class="mountain-board"></div>
+          <div class="board-stage">
+            <div id="board" class="mountain-board"></div>
+            <canvas id="diceCanvas" class="dice-canvas" aria-label="三维物理骰子投掷区域"></canvas>
+          </div>
           <div class="timer-box"><div><span>行动时间</span><b id="timerText">--</b></div><div class="shared-timer-track"><div id="timerBar" class="shared-timer-bar"></div></div></div>
         </section>
 

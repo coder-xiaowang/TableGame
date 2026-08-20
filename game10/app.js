@@ -6,16 +6,21 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { COLUMN_LENGTHS, applyMoves, commitTurn, completedColumns, rollOptions } from "./rules.js";
+import { createDicePhysics, simulateDiceRoll } from "./dice-physics.js";
 
 const PROTOCOL_VERSION = 2;
 const ACTION_SECONDS = 30;
 const COLORS = ["#ef5b4c", "#2589bd", "#f5b82e", "#7557a8"];
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let state = null;
 let guestView = null;
+let dicePhysics = null;
+let dicePhysicsPromise = null;
+let activePhysicsRollId = 0;
+const simulationCache = new Map();
 const sessions = createSessionStore({ gameId: "cant-stop" });
 const hostTimer = createHostTimer();
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -35,7 +40,7 @@ function makePlayer(id, name, isHost = false, index = 0) {
   return { id, name, isHost, connected: true, color: COLORS[index], progress: {}, claimed: [] };
 }
 function makeLobby(capacity, host) {
-  return { phase: "lobby", turnStage: "", capacity, players: [host], currentIndex: 0, turnProgress: {}, dice: [], options: [], closed: {}, deadline: 0, winnerId: null, logs: [] };
+  return { phase: "lobby", turnStage: "", capacity, players: [host], currentIndex: 0, turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, deadline: 0, revealAt: 0, rollId: 0, physicsSeed: 0, rollFromTimeout: false, winnerId: null, logs: [] };
 }
 function log(text) { prependLimited(state.logs, createLogEntry(text), 100); }
 function currentPlayer() { return state?.players[state.currentIndex] || null; }
@@ -91,12 +96,12 @@ function startGame() {
   if (state.players.length !== state.capacity) return alert(`需要 ${state.capacity} 位玩家到齐。`);
   if (state.players.some((player) => !player.connected)) return alert("请等待所有玩家恢复连接后再开始。");
   state.players.forEach((player) => { player.progress = {}; player.claimed = []; });
-  Object.assign(state, { phase: "playing", currentIndex: Math.floor(Math.random() * state.players.length), turnProgress: {}, dice: [], options: [], closed: {}, winnerId: null, logs: [] });
+  Object.assign(state, { phase: "playing", currentIndex: Math.floor(Math.random() * state.players.length), turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, revealAt: 0, rollId: 0, physicsSeed: 0, winnerId: null, logs: [] });
   log(`游戏开始，${currentPlayer().name} 首先攀登`); beginStage("roll");
 }
 function endGameEarly() {
   if (state?.phase !== "playing" || !confirm("确定结束当前游戏并返回大厅吗？")) return;
-  hostTimer.clear(); Object.assign(state, { phase: "lobby", turnStage: "", turnProgress: {}, dice: [], options: [], closed: {}, deadline: 0, winnerId: null, logs: [] }); sync();
+  hostTimer.clear(); Object.assign(state, { phase: "lobby", turnStage: "", turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, deadline: 0, revealAt: 0, physicsSeed: 0, winnerId: null, logs: [] }); dicePhysics?.hide(); sync();
 }
 function beginStage(stage) {
   hostTimer.clear(); state.turnStage = stage;
@@ -108,11 +113,53 @@ function beginStage(stage) {
   });
   sync();
 }
-function rollDice(fromTimeout = false) {
+async function rollDice(fromTimeout = false) {
   if (state.phase !== "playing" || !["roll", "decision"].includes(state.turnStage)) return;
-  hostTimer.clear(); state.dice = Array.from({ length: 4 }, () => Math.floor(Math.random() * 6) + 1);
+  hostTimer.clear();
+  state.turnStage = "preparing";
+  state.rollId += 1;
+  state.rollFromTimeout = fromTimeout;
+  state.physicsSeed = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+  state.dice = [];
+  state.pendingDice = [];
+  state.options = [];
+  state.deadline = 0;
+  state.revealAt = 0;
+  const rollId = state.rollId;
+  sync();
+  try {
+    const simulation = await getSimulation(state.physicsSeed);
+    if (state.phase !== "playing" || state.turnStage !== "preparing" || state.rollId !== rollId) return;
+    state.pendingDice = [...simulation.results];
+    state.turnStage = "rolling";
+    state.revealAt = Date.now() + simulation.durationMs;
+    hostTimer.scheduleAt(state.revealAt, revealRoll);
+    sync();
+  } catch (error) {
+    if (state.rollId !== rollId) return;
+    state.pendingDice = Array.from({ length:4 }, () => Math.floor(Math.random() * 6) + 1);
+    state.turnStage = "rolling";
+    state.revealAt = Date.now() + 900;
+    E.connectionStatus.title = `物理骰子降级：${error.message}`;
+    hostTimer.scheduleAt(state.revealAt, revealRoll);
+    sync();
+  }
+}
+function revealRoll() {
+  if (state.phase !== "playing" || state.turnStage !== "rolling") return;
+  state.dice = [...state.pendingDice];
+  state.pendingDice = [];
   state.options = rollOptions(state.dice, state.turnProgress, Object.keys(state.closed).map(Number));
-  log(`${currentPlayer().name}${fromTimeout ? "超时，自动" : ""}掷出了 ${state.dice.join("、")}`);
+  log(`${currentPlayer().name}${state.rollFromTimeout ? "超时，自动" : ""}掷出了 ${state.dice.join("、")}`);
+  state.rollFromTimeout = false;
+  state.turnStage = "settled";
+  state.revealAt = Date.now() + 700;
+  hostTimer.scheduleAt(state.revealAt, finishRollReveal);
+  sync();
+}
+function finishRollReveal() {
+  if (state.phase !== "playing" || state.turnStage !== "settled") return;
+  state.revealAt = 0;
   if (!state.options.length) return bustTurn();
   beginStage("choose");
 }
@@ -133,14 +180,14 @@ function stopTurn(fromTimeout = false) {
   nextTurn();
 }
 function bustTurn() { log(`${currentPlayer().name} 无路可走，本回合攀登成果全部丢失`); nextTurn(); }
-function nextTurn() { hostTimer.clear(); state.turnProgress = {}; state.dice = []; state.options = []; state.currentIndex = (state.currentIndex + 1) % state.players.length; beginStage("roll"); }
+function nextTurn() { hostTimer.clear(); state.turnProgress = {}; state.dice = []; state.pendingDice = []; state.options = []; state.revealAt = 0; state.physicsSeed = 0; activePhysicsRollId = 0; dicePhysics?.hide(); state.currentIndex = (state.currentIndex + 1) % state.players.length; beginStage("roll"); }
 function applyAction(playerId, action) {
   if (state?.phase !== "playing" || currentPlayer()?.id !== playerId) return;
   if (action?.type === "roll") rollDice();
   else if (action?.type === "choose") chooseOption(String(action.key));
   else if (action?.type === "stop") stopTurn();
 }
-function buildView(viewerId) { return { ...state, selfId: viewerId, players: state.players.map((player) => ({ ...player, progress: { ...player.progress }, claimed: [...player.claimed] })), turnProgress: { ...state.turnProgress }, closed: { ...state.closed }, options: state.options.map((option) => ({ ...option, pair: [...option.pair], moves: [...option.moves] })), logs: [...state.logs] }; }
+function buildView(viewerId) { const { pendingDice, ...publicState } = state; return { ...publicState, selfId: viewerId, players: state.players.map((player) => ({ ...player, progress: { ...player.progress }, claimed: [...player.claimed] })), turnProgress: { ...state.turnProgress }, closed: { ...state.closed }, options: state.options.map((option) => ({ ...option, pair: [...option.pair], moves: [...option.moves] })), logs: [...state.logs] }; }
 function broadcast() { if (mode !== "host" || !state) return; for (const player of state.players) if (!player.isHost) room.sendView(player.id, buildView(player.id)).catch(() => {}); }
 function sync() { render(); broadcast(); }
 function submit(action) { Promise.resolve(room.submitAction(action)).catch((error) => { E.connectionStatus.textContent = `操作发送失败：${error.message}`; }); }
@@ -183,6 +230,33 @@ function renderBoard(view) {
     return `<div class="route ${owner ? "claimed" : ""}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
   }).join("");
 }
+function getSimulation(seed) {
+  const key = String(Number(seed) >>> 0);
+  if (!simulationCache.has(key)) simulationCache.set(key, simulateDiceRoll(Number(seed)));
+  return simulationCache.get(key);
+}
+function getDicePhysics() {
+  if (dicePhysics) return Promise.resolve(dicePhysics);
+  if (!dicePhysicsPromise) dicePhysicsPromise = createDicePhysics({ canvas:E.diceCanvas }).then((value) => (dicePhysics = value));
+  return dicePhysicsPromise;
+}
+function renderPhysicsDice(view) {
+  const visible = view.phase === "playing" && ["rolling", "settled"].includes(view.turnStage) && view.physicsSeed;
+  if (!visible) { activePhysicsRollId = 0; dicePhysics?.hide(); return; }
+  if (activePhysicsRollId === view.rollId) return;
+  activePhysicsRollId = view.rollId;
+  Promise.all([getDicePhysics(), getSimulation(view.physicsSeed)]).then(([physics, simulation]) => {
+    if (activePhysicsRollId !== view.rollId) return;
+    const elapsedMs = view.turnStage === "rolling"
+      ? Math.max(0, simulation.durationMs - Math.max(0, view.revealAt - Date.now()))
+      : simulation.durationMs;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) physics.renderFinal(simulation);
+    else physics.play(simulation, { elapsedMs });
+  }).catch((error) => {
+    E.diceCanvas.classList.remove("visible");
+    E.connectionStatus.title = `WebGL 骰子不可用：${error.message}`;
+  });
+}
 function render() {
   const view = currentView(); if (!view) return;
   const current = view.players[view.currentIndex]; const myTurn = view.phase === "playing" && current?.id === view.selfId;
@@ -194,10 +268,15 @@ function render() {
   E.playerList.querySelectorAll("[data-kick]").forEach((button) => { button.onclick = () => kickPlayer(button.dataset.kick); });
   if (view.phase === "lobby") E.notice.textContent = `等待 ${view.capacity} 位玩家到齐后，由房主开始游戏`;
   else if (view.phase === "ended") E.notice.textContent = "三座峰顶已经被同一位玩家占领";
+  else if (view.turnStage === "preparing") E.notice.textContent = `${current.name} 正在将骰子撒入投掷盘……`;
+  else if (view.turnStage === "rolling") E.notice.textContent = `${current.name} 的骰子正在投掷盘中碰撞翻滚……`;
+  else if (view.turnStage === "settled") E.notice.textContent = `骰子已经停稳：${view.dice.join("、")}`;
   else if (!myTurn) E.notice.textContent = `等待 ${current.name} ${view.turnStage === "choose" ? "选择骰子组合" : view.turnStage === "decision" ? "继续攀登或扎营" : "掷骰子"}`;
   else E.notice.textContent = { roll: "轮到你了，掷出四颗骰子开始攀登", choose: "选择一种可用的骰子组合", decision: "继续掷骰冒险，或扎营保住进度" }[view.turnStage];
   renderBoard(view);
-  E.diceArea.innerHTML = (view.dice.length ? view.dice : ["?", "?", "?", "?"]).map((die) => `<span class="die ${die === "?" ? "empty" : ""}">${die}</span>`).join(""); E.diceTotal.textContent = view.dice.length ? `总和 ${view.dice.reduce((a, b) => a + b, 0)}` : "";
+  renderPhysicsDice(view);
+  const publicDice = ["preparing", "rolling"].includes(view.turnStage) ? ["?", "?", "?", "?"] : (view.dice.length ? view.dice : ["?", "?", "?", "?"]);
+  E.diceArea.innerHTML = publicDice.map((die) => `<span class="die ${die === "?" ? "empty" : ""}">${die}</span>`).join(""); E.diceTotal.textContent = view.dice.length && view.turnStage !== "rolling" ? `总和 ${view.dice.reduce((a, b) => a + b, 0)}` : "";
   E.actionArea.innerHTML = "";
   if (myTurn && view.turnStage === "roll") E.actionArea.innerHTML = '<button class="primary big-action" data-action="roll">掷骰子</button>';
   if (myTurn && view.turnStage === "choose") E.actionArea.innerHTML = view.options.map((option) => `<button class="choice-action" data-choice="${option.key}"><span>${option.pair.join(" + ")}</span><small>推进 ${option.moves.join("、")}</small></button>`).join("");
@@ -212,6 +291,17 @@ async function init() {
   bindRoomCodeInput(E.roomCodeInput); E.hostModeButton.onclick = () => { mode = "host"; renderEntryMode(); }; E.guestModeButton.onclick = () => { mode = "guest"; renderEntryMode(); };
   E.createRoomButton.onclick = createGameRoom; E.joinRoomButton.onclick = joinGameRoom; E.roomPlayerCountSelect.onchange = changeCapacity; E.startGameButton.onclick = startGame; E.endGameButton.onclick = endGameEarly;
   E.toggleLogButton.onclick = () => { E.logList.classList.toggle("collapsed"); E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起"; };
-  renderEntryMode(); try { await room.checkServer(); } catch { E.connectionStatus.title = "请运行 node game10/signal-server.js"; }
+  renderEntryMode();
+  const previewSeed = Number(new URLSearchParams(location.search).get("physicsTest"));
+  if (Number.isInteger(previewSeed) && previewSeed > 0) {
+    mode = "host";
+    state = makeLobby(2, makePlayer("preview-host", "物理预览", true));
+    const simulation = await getSimulation(previewSeed);
+    Object.assign(state, { phase:"playing", turnStage:"rolling", rollId:1, physicsSeed:previewSeed, pendingDice:[...simulation.results], revealAt:Date.now() + simulation.durationMs, currentIndex:0 });
+    enterRoom(); render(); E.roomCodeDisplay.textContent = "PHYSICS";
+    hostTimer.scheduleAt(state.revealAt, revealRoll);
+    return;
+  }
+  try { await room.checkServer(); } catch { E.connectionStatus.title = "请运行 node game10/signal-server.js"; }
 }
 init();

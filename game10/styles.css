@@ -53,6 +53,9 @@ button.danger { color:#a13931; border-color:#dca49e; }
 .legend i { display:inline-block; width:10px; height:10px; margin-right:3px; border-radius:50%; }
 .tent-dot { background:#2589bd; }.runner-dot { background:#f5b82e; clip-path:polygon(50% 0,100% 100%,0 100%); }
 .board-panel { padding:14px; overflow:hidden; }
+.board-stage { position:relative; }
+.dice-canvas { position:absolute; z-index:20; left:20%; top:20%; width:60%; height:60%; border-radius:50%; opacity:0; filter:drop-shadow(0 14px 18px #17332c52); pointer-events:none; transition:opacity .18s ease; }
+.dice-canvas.visible { opacity:1; }
 .round-meta { gap:10px; color:var(--muted); font-size:13px; }
 .phase-badge { padding:5px 10px; border-radius:999px; color:white; background:var(--green); font-size:11px; font-weight:800; }
 .notice { min-height:22px; margin:10px 0; text-align:center; font-weight:800; }
