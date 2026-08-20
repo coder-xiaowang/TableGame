@@ -71,12 +71,12 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .host-tools label { display: flex; align-items: center; gap: 7px; color: #d8e5df; }
 .host-tools select { min-height: 40px; width: 70px; }
 
-.game-grid { display: grid; grid-template-columns: minmax(210px, 0.75fr) minmax(430px, 1.8fr) minmax(210px, 0.75fr); gap: 18px; align-items: stretch; }
+.game-grid { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(430px, 1.75fr) minmax(210px, 0.7fr); gap: 18px; align-items: stretch; }
 .panel { padding: 18px; }
 .panel-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
 .panel-title button { min-height: 30px; padding: 3px 9px; font-size: .72rem; }
 .player-list { display: grid; gap: 9px; margin-top: 12px; }
-.player-item { position: relative; padding: 11px; border: 1px solid #ded6c7; border-radius: 11px; background: white; transition: .2s; }
+.player-item { position: relative; padding: 11px; overflow: hidden; border: 1px solid #ded6c7; border-radius: 11px; background: white; transition: .2s; }
 .player-item.player-current { outline-color: var(--coral); background: #fff4ef; }
 .player-item > div:first-child { display: flex; align-items: center; gap: 7px; }
 .player-item em { padding: 2px 5px; border-radius: 4px; color: white; background: var(--green); font-size: .6rem; font-style: normal; }
@@ -84,6 +84,11 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .player-offline .status-dot { background: #aaa; }
 .player-stats { display: flex; flex-wrap: wrap; gap: 5px 9px; margin-top: 7px; color: #726c61; font-size: .68rem; }
 .player-item > button { position: absolute; top: 7px; right: 7px; min-height: 27px; padding: 2px 7px; color: #a52a1d; font-size: .65rem; }
+.public-card-runs { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-height: 38px; margin-top: 9px; padding-top: 8px; border-top: 1px dashed #dfd7c9; }
+.public-card-runs .card-run { padding-right: 2px; }
+.public-card-runs .small-number-card { width: 28px; height: 38px; border-width: 2px; border-radius: 5px; font-size: .68rem; box-shadow: 0 2px 5px rgb(0 0 0 / 13%); }
+.public-card-runs .small-number-card.linked { margin-left: -10px; }
+.public-card-runs > .muted { margin: 0; font-size: .68rem; }
 
 .table-panel { min-height: 520px; display: flex; flex-direction: column; background: linear-gradient(145deg, #fffaf0, #f8f1e3); }
 .round-meta { display: flex; justify-content: space-between; color: #777267; font-size: .78rem; }
@@ -109,9 +114,9 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .log-list { max-height: 440px; overflow: auto; }.log-list.collapsed { display: none; }
 .log-list p { margin: 0; padding: 10px 2px; border-bottom: 1px solid #e5ddcf; font-size: .75rem; line-height: 1.35; }
 .my-area { display: grid; grid-template-columns: 240px 1fr; gap: 22px; }
-.my-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-content: start; }
+.my-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-content: start; }
 .my-summary div { display: grid; padding: 10px; border-radius: 10px; background: #ebe4d6; }
-.my-summary span { color: #777267; font-size: .65rem; }.my-summary b { font: 900 1.3rem "Arial Black"; }
+.my-summary span { overflow-wrap: anywhere; color: #777267; font-size: .65rem; }.my-summary b { font: 900 1.3rem "Arial Black"; }
 .my-area h2 { margin: 0 0 10px; font-size: 1rem; }
 .card-runs { display: flex; flex-wrap: wrap; gap: 10px; }
 .card-run { display: flex; padding-right: 6px; }
@@ -131,10 +136,12 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
   .my-area { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .site-header { min-height: 92px; } h1 { font-size: 2rem; }.connection-pill { max-width: 145px; text-align: center; }
+  .site-header { min-height: 92px; align-items: flex-start; flex-direction: column; gap: 12px; }
+  h1 { font-size: 2rem; }
+  .connection-pill { max-width: 100%; padding-block: 6px; text-align: left; }
   main { padding: 14px; }.setup-shell { grid-template-columns: 1fr; }.intro-card { min-height: 300px; }.mini-card { width: 105px; font-size: 2.8rem; }
   .room-toolbar { align-items: stretch; flex-direction: column; }.host-tools { flex-wrap: wrap; }.game-grid { grid-template-columns: 1fr; }
   .players-panel { order: 2; }.table-panel { min-height: 490px; }.log-panel { grid-column: auto; order: 3; }
-  .table-center { gap: 14px; padding-inline: 0; }.deck-visual, .number-card { width: 96px; }.pot-area { min-width: 65px; flex-direction: column; gap: 3px; text-align: center; }
-  .action-area { grid-template-columns: 1fr; }.my-summary { grid-template-columns: repeat(3, 1fr); }.score-row { grid-template-columns: 25px 1fr auto; gap: 7px; }.score-row span:nth-of-type(2), .score-row span:nth-of-type(3) { display: none; }
+  .table-center { gap: 14px; padding-inline: 0; }.deck-visual, .number-card { width: 96px; }.deck-visual { font-size: 1.05rem; }.pot-area { min-width: 65px; flex-direction: column; gap: 3px; text-align: center; }
+  .action-area { grid-template-columns: 1fr; }.my-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }.score-row { grid-template-columns: 25px 1fr auto; gap: 7px; }.score-row span:nth-of-type(2), .score-row span:nth-of-type(3) { display: none; }
 }

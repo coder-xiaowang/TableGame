@@ -324,6 +324,46 @@ function cardRunsHtml(cards) {
     `<span class="small-number-card ${index ? "linked" : "scoring"}">${card}</span>`).join("")}</div>`).join("");
 }
 
+function createVisualTestView(playerCount) {
+  const distributions = playerCount === 7
+    ? [8, 4, 3, 3, 2, 2, 2]
+    : [9, 4, 3, 3, 3, 2];
+  const cardPool = [3, 4, 5, 8, 9, 10, 14, 18, 19, 22, 23, 24, 27, 29, 30, 31, 33, 35, 6, 12, 16, 20, 25, 28];
+  let offset = 0;
+  const players = distributions.map((count, index) => {
+    const cards = cardPool.slice(offset, offset + count).sort((a, b) => a - b);
+    offset += count;
+    return {
+      id: `visual_${index}`,
+      name: ["长名字玩家测试", "薄荷汽水", "橘子船长", "不拿二十五", "连接大师", "筹码收藏家", "最后一位玩家"][index],
+      isHost: index === 0,
+      connected: index !== playerCount - 2,
+      cards,
+      cardScore: cardScore(cards),
+      chips: index === 0 ? 7 : null,
+      finalScore: null
+    };
+  });
+  return {
+    selfId: players[0].id,
+    phase: "playing",
+    capacity: playerCount,
+    currentIndex: 2,
+    activeCard: 26,
+    pot: 6,
+    deckCount: 7,
+    deadline: Date.now() + ACTION_SECONDS * 1000,
+    winners: [],
+    removed: [],
+    logs: [
+      createLogEntry("橘子船长说了“不，谢谢”，牌上增加 1 枚筹码"),
+      createLogEntry("薄荷汽水拿下 21，并获得 4 枚筹码"),
+      createLogEntry("这是一组用于检查 6–7 人布局的模拟数据")
+    ],
+    players
+  };
+}
+
 function render() {
   const view = currentView();
   if (!view) return;
@@ -349,6 +389,7 @@ function render() {
     <article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${!player.connected ? "player-offline" : ""} ${view.phase === "playing" && index === view.currentIndex ? "player-current" : ""}">
       <div><span class="status-dot"></span><b>${escapeHtml(player.name)}</b>${player.isHost ? '<em>房主</em>' : ""}</div>
       <div class="player-stats"><span>${player.cards.length} 张牌</span><span>牌面 ${player.cardScore}</span><span>${player.chips == null ? "筹码 ?" : `筹码 ${player.chips}`}</span></div>
+      <div class="public-card-runs" aria-label="${escapeHtml(player.name)}的公开数字牌">${cardRunsHtml(player.cards)}</div>
       ${mode === "host" && view.phase === "lobby" && !player.isHost ? `<button type="button" data-kick="${player.id}">移出</button>` : ""}
     </article>`).join("");
   E.playerList.querySelectorAll("[data-kick]").forEach((button) => {
@@ -420,6 +461,16 @@ async function init() {
     E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起";
   };
   setModeVisibility(mode, E);
+  const visualPlayers = Number(new URLSearchParams(location.search).get("visualTest"));
+  if (visualPlayers === 6 || visualPlayers === 7) {
+    mode = "guest";
+    guestView = createVisualTestView(visualPlayers);
+    enterRoom();
+    E.roomCodeDisplay.textContent = `TEST-${visualPlayers}`;
+    render();
+    E.roomCodeDisplay.textContent = `TEST-${visualPlayers}`;
+    return;
+  }
   try { await room.checkServer(); }
   catch { E.connectionStatus.title = "请运行 node game9/signal-server.js"; }
 }
