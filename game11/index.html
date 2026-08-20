@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>截码战 · 联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div><p class="eyebrow">SIGNAL INTELLIGENCE / 1984</p><h1>截码战</h1><p class="subtitle">让队友听懂，让对手永远差一步。</p></div>
+      <div class="status-box"><span id="connectionStatus">尚未连接</span><strong id="roomCodeDisplay">----</strong></div>
+    </header>
+
+    <section id="setupPanel" class="panel setup-panel">
+      <div class="mode-tabs"><button id="hostModeButton" class="active">创建行动室</button><button id="guestModeButton">加入行动室</button></div>
+      <div id="hostSetup" class="setup-form"><label>代号<input id="hostNameInput" maxlength="12" value="情报主管"></label><label>总人数<select id="playerCountSelect"><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label><button id="createRoomButton" class="primary">建立加密频道</button></div>
+      <div id="guestSetup" class="setup-form hidden"><label>代号<input id="guestNameInput" maxlength="12" value="译码员"></label><label>房间号<input id="roomCodeInput" maxlength="4" autocomplete="off"></label><button id="joinRoomButton" class="primary">接入频道</button></div>
+      <aside class="brief"><b>任务目标</b><p>保护己方四个秘密关键词，同时从公开提示中截获对方密码。两次截获即胜；两次传讯失败即败。</p></aside>
+    </section>
+
+    <section id="roomPanel" class="hidden">
+      <div class="command-bar panel"><div><span id="phaseBadge" class="badge">等待部署</span><b id="roundText">第 0 / 8 轮</b></div><div id="timerWrap" class="timer"><span id="timerText">--</span><i><em id="timerBar"></em></i></div><div id="hostTools" class="actions"><button id="startGameButton" class="primary">开始行动</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button></div></div>
+
+      <div id="notice" class="notice">请选择队伍入座。</div>
+      <section id="lobbyArea" class="team-grid"></section>
+
+      <section id="gameArea" class="game-layout hidden">
+        <div class="panel intel-panel">
+          <div class="section-title"><div><p class="eyebrow">YOUR CIPHER KEY</p><h2>己方关键词</h2></div><span id="myTeamBadge" class="team-badge"></span></div>
+          <div id="keywordRack" class="keyword-rack"></div>
+          <div id="secretCode" class="secret-code hidden"></div>
+        </div>
+
+        <div class="panel operation-panel">
+          <div class="section-title"><div><p class="eyebrow">CURRENT TRANSMISSION</p><h2 id="operationTitle">当前传讯</h2></div><span id="encryptorName"></span></div>
+          <div id="clueComposer" class="composer hidden"><label>提示一<input id="clue1" maxlength="60"></label><label>提示二<input id="clue2" maxlength="60"></label><label>提示三<input id="clue3" maxlength="60"></label><button id="submitCluesButton" class="primary">发送三条提示</button></div>
+          <div id="clueDisplay" class="clue-display"></div>
+          <div id="guessComposer" class="guess-composer hidden"><p id="guessRoleText"></p><div class="code-inputs"><select id="guess1"></select><select id="guess2"></select><select id="guess3"></select></div><button id="submitGuessButton" class="primary">锁定团队答案</button></div>
+          <div id="waitingText" class="waiting"></div>
+        </div>
+
+        <div class="panel scoreboard"><div id="whiteScore"></div><div class="versus">VS</div><div id="blackScore"></div></div>
+        <div class="panel history-panel"><div class="section-title"><div><p class="eyebrow">INTERCEPT LOG</p><h2>公开推理记录</h2></div></div><div id="historyList" class="history-list"></div></div>
+      </section>
+
+      <section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">OPERATION COMPLETE</p><h2 id="winnerText"></h2><div id="finalKeywords" class="final-keywords"></div><div id="finalRecords"></div></section>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
