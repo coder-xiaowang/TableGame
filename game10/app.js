@@ -147,15 +147,40 @@ function submit(action) { Promise.resolve(room.submitAction(action)).catch((erro
 
 function markerHtml(view, column, step) {
   const markers = [];
-  for (const player of view.players) if ((player.progress[column] || 0) === step && !view.closed[column]) markers.push(`<i class="camp" style="--color:${player.color}" title="${escapeHtml(player.name)}"></i>`);
-  if (view.phase === "playing" && (view.turnProgress[column] || 0) === step) markers.push(`<i class="runner" style="--color:${view.players[view.currentIndex].color}">▲</i>`);
+  const campers = view.players.filter((player) => (player.progress[column] || 0) === step && !view.closed[column]);
+  campers.forEach((player, index) => markers.push(`<i class="camp" style="--color:${player.color};--camp-x:${campers.length === 1 ? 9 : index * (34 / Math.max(1, campers.length - 1))}%" title="${escapeHtml(player.name)}"><span></span></i>`));
+  if (view.phase === "playing" && (view.turnProgress[column] || 0) === step) markers.push(`<i class="runner" style="--color:${view.players[view.currentIndex].color}" title="${escapeHtml(view.players[view.currentIndex].name)}的临时登山者"><span class="runner-head"></span><span class="runner-body"></span><span class="runner-pack"></span></i>`);
   return markers.join("");
 }
 function renderBoard(view) {
-  E.board.innerHTML = Object.entries(COLUMN_LENGTHS).map(([key, length]) => {
+  const scenery = `<div class="mountain-scenery" aria-hidden="true">
+    <svg viewBox="0 0 1200 650" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="farMountain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8ced0"/><stop offset="1" stop-color="#76958b"/></linearGradient>
+        <linearGradient id="nearMountain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#829a83"/><stop offset="1" stop-color="#486b58"/></linearGradient>
+      </defs>
+      <path class="cloud cloud-a" d="M55 126c30-46 78-38 91 2 31-19 70 2 66 37H22c-5-25 10-38 33-39z"/>
+      <path class="cloud cloud-b" d="M914 98c24-38 70-33 85 0 33-18 72 4 68 36H884c-2-21 10-34 30-36z"/>
+      <path fill="url(#farMountain)" d="M0 385 145 206l73 82 126-177 115 159 82-104 92 121 139-205 146 210 78-105 204 220v243H0z"/>
+      <path class="snow snow-far" d="m292 183 52-72 54 75-27-18-18 22-14-31-20 27zM700 188l72-106 78 112-40-29-25 25-20-43-28 43z"/>
+      <path fill="url(#nearMountain)" d="M0 512 182 319l109 103 163-251 147 214 93-124 93 126 111-174 302 298v139H0z"/>
+      <path class="snow" d="m356 321 98-150 87 126-42-29-30 30-25-54-37 64-22-25zM825 327l73-114 96 95-49-21-26 31-28-51-31 54z"/>
+      <path class="ridge" d="M0 512 182 319l109 103 163-251 147 214 93-124 93 126 111-174 302 298"/>
+      <g class="trees"><path d="m44 503 18-49 18 49h-11l15 35H40l15-35zm976-30 20-56 20 56h-12l17 39h-49l17-39zm91 57 15-43 15 43h-9l13 30h-38l12-30z"/></g>
+    </svg>
+    <div class="mist mist-one"></div><div class="mist mist-two"></div>
+  </div>`;
+  E.board.innerHTML = scenery + Object.entries(COLUMN_LENGTHS).map(([key, length]) => {
     const column = Number(key); const owner = view.players.find((player) => player.id === view.closed[column]);
-    const cells = Array.from({ length }, (_, index) => `<div class="route-cell">${markerHtml(view, column, length - index)}</div>`).join("");
-    return `<div class="route ${owner ? "claimed" : ""}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${owner ? "★" : "▲"}</div>${cells}<b>${column}</b></div>`;
+    const cells = Array.from({ length }, (_, index) => {
+      const step = length - index;
+      const drift = Math.round(Math.sin((column * 1.7 + step) * 1.35) * 7);
+      return `<div class="route-cell" style="--drift:${drift}px;--tilt:${(drift / 2).toFixed(1)}deg;--step:${index}">${markerHtml(view, column, step)}</div>`;
+    }).join("");
+    const summit = owner
+      ? `<span class="claim-flag" style="--flag:${owner.color}" title="${escapeHtml(owner.name)}占领"><i></i></span>`
+      : '<span class="summit-peak">◆</span>';
+    return `<div class="route ${owner ? "claimed" : ""}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
   }).join("");
 }
 function render() {
