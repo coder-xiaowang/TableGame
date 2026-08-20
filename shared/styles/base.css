@@ -1,0 +1,40 @@
+:root {
+  --shared-danger: #b42318;
+  --shared-muted: #667085;
+}
+
+.hidden { display: none !important; }
+
+[data-status="open"] { color: #067647; }
+[data-status="connecting"],
+[data-status="checking"],
+[data-status="reconnecting"] { color: #b54708; }
+[data-status="error"] { color: var(--shared-danger); }
+
+.player-offline { opacity: 0.55; }
+.player-current { outline: 2px solid currentColor; }
+.player-self { font-weight: 700; }
+
+.shared-timer-track {
+  overflow: hidden;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgb(127 127 127 / 20%);
+}
+
+.shared-timer-bar {
+  width: 0;
+  height: 100%;
+  transition: width 0.2s linear;
+  background: currentColor;
+}
+
+.shared-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 55%);
+  z-index: 1000;
+}
