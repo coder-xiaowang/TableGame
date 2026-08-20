@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>No Thanks! · 联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">A GAME OF CALCULATED REFUSAL</p>
+      <h1>NO <span>THANKS!</span></h1>
+    </div>
+    <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
+  </header>
+
+  <main>
+    <section id="setupPanel" class="setup-shell">
+      <article class="intro-card">
+        <div class="mini-card c17">17</div>
+        <div class="mini-card c23">23</div>
+        <div class="token-stack"><i></i><i></i><i></i></div>
+        <p>牌是负担，筹码是拒绝的底气。让连续数字替你消掉高分。</p>
+      </article>
+
+      <article class="setup-card">
+        <div class="mode-switch" role="tablist" aria-label="进入方式">
+          <button id="hostModeButton" class="active" type="button">创建房间</button>
+          <button id="guestModeButton" type="button">加入房间</button>
+        </div>
+
+        <div id="hostSetup" class="setup-form">
+          <label>你的名字<input id="hostNameInput" maxlength="12" placeholder="房主"></label>
+          <label>游戏人数
+            <select id="playerCountSelect">
+              <option value="3">3 人</option><option value="4" selected>4 人</option>
+              <option value="5">5 人</option><option value="6">6 人</option><option value="7">7 人</option>
+            </select>
+          </label>
+          <button id="createRoomButton" class="primary" type="button">创建游戏</button>
+        </div>
+
+        <div id="guestSetup" class="setup-form hidden">
+          <label>你的名字<input id="guestNameInput" maxlength="12" placeholder="玩家"></label>
+          <label>四位房间号<input id="roomCodeInput" maxlength="4" autocomplete="off" placeholder="ABCD"></label>
+          <button id="joinRoomButton" class="primary" type="button">加入游戏</button>
+        </div>
+        <p class="setup-note">3–7 人 · 单局制 · 最低分获胜</p>
+      </article>
+    </section>
+
+    <section id="roomPanel" class="room-shell hidden">
+      <div class="room-toolbar">
+        <div><span class="muted">房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools">
+          <label>人数<select id="roomPlayerCountSelect">
+            <option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            <option value="6">6</option><option value="7">7</option>
+          </select></label>
+          <button id="startGameButton" class="primary" type="button">开始游戏</button>
+          <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
+        </div>
+      </div>
+
+      <div class="game-grid">
+        <aside class="players-panel panel">
+          <div class="panel-title"><span>玩家</span><b id="playerCountBadge">0 / 4</b></div>
+          <div id="playerList" class="player-list"></div>
+        </aside>
+
+        <section class="table-panel panel">
+          <div class="round-meta">
+            <span id="phaseBadge" class="phase-badge">准备阶段</span>
+            <span>牌堆 <b id="deckCount">24</b></span>
+          </div>
+          <p id="notice" class="notice">等待玩家加入房间</p>
+
+          <div class="table-center">
+            <div class="deck-visual" aria-label="牌堆"><span>NO</span><span>THANKS!</span></div>
+            <div id="activeCard" class="number-card empty">?</div>
+            <div class="pot-area">
+              <div class="token large"></div>
+              <div><b id="potCount">0</b><span>牌上筹码</span></div>
+            </div>
+          </div>
+
+          <div class="timer-box">
+            <div><span>行动时间</span><b id="timerText">--</b></div>
+            <div class="shared-timer-track"><div id="timerBar" class="shared-timer-bar"></div></div>
+          </div>
+
+          <div id="actionArea" class="action-area"></div>
+        </section>
+
+        <aside class="log-panel panel">
+          <div class="panel-title"><span>游戏记录</span><button id="toggleLogButton" type="button">收起</button></div>
+          <div id="logList" class="log-list"></div>
+        </aside>
+      </div>
+
+      <section class="my-area panel">
+        <div class="my-summary">
+          <div><span>我的筹码</span><b id="myChips">—</b></div>
+          <div><span>当前牌面分</span><b id="myCardScore">0</b></div>
+          <div><span>预计净分</span><b id="myNetScore">—</b></div>
+        </div>
+        <div>
+          <h2>我的数字牌</h2>
+          <div id="myCards" class="card-runs"><p class="muted">还没有拿牌</p></div>
+        </div>
+      </section>
+
+      <section id="resultPanel" class="result-panel panel hidden">
+        <p class="eyebrow">FINAL SCORE</p>
+        <h2 id="winnerText">本局结束</h2>
+        <div id="scoreTable" class="score-table"></div>
+        <div><span class="muted">本局未出现的九张牌</span><div id="removedCards" class="removed-cards"></div></div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
