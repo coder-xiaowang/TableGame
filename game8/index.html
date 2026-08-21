@@ -46,14 +46,16 @@
             <button id="endGameButton" class="danger wide">结束本局</button>
           </div>
         </section>
-        <section class="panel">
-          <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
-          <div id="players" class="players"></div>
-        </section>
-        <section class="panel rules">
-          <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
-          <div id="logList" class="log"></div>
-        </section>
+        <div class="observer-panels">
+          <section class="panel">
+            <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
+            <div id="players" class="players"></div>
+          </section>
+          <section class="panel rules">
+            <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
+            <div id="logList" class="log"></div>
+          </section>
+        </div>
       </aside>
 
       <div class="table-area">
@@ -63,8 +65,8 @@
           <div id="tokens" class="tokens"></div>
         </section>
         <section class="special-row">
-          <div class="market-group rare"><div class="market-title"><b>稀有宝可梦</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
-          <div class="market-group legendary"><div class="market-title"><b>传说／幻之宝可梦</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
+          <div class="market-group rare"><div class="special-deck"><b>稀有</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
+          <div class="market-group legendary"><div class="special-deck"><b>传说／幻之</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
         </section>
         <section id="markets" class="markets"></section>
         <section class="panel action-panel">
@@ -82,7 +84,6 @@
     </main>
   </div>
 
-  <div id="modal" class="modal hidden"><div class="modal-card"><h2 id="modalTitle"></h2><div id="modalBody"></div><div id="modalActions" class="actions"></div></div></div>
   <script src="rules.js"></script>
   <script type="module" src="app.js"></script>
 </body>

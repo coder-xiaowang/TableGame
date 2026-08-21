@@ -6,8 +6,8 @@ const Engine=window.Engine, PROTOCOL_VERSION=2, COLORS=Engine.COLORS, TIER_KEYS=
 const BALL_FILES={red:"red.png",blue:"blue.png",black:"black.png",pink:"pink.png",yellow:"yellow.png",purple:"master.png"};
 const BALL_NAMES={red:"精灵球",blue:"超级球",black:"高级球",pink:"治愈球",yellow:"先机球",purple:"大师球"};
 const $=(id)=>document.getElementById(id);
-const E=Object.fromEntries(["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","roomCodeDisplay","hostTools","roomPlayerCountSelect","startGameButton","endGameButton","playerBadge","players","logList","toggleLogButton","notice","tokens","rareMarket","legendMarket","rareCount","legendCount","markets","actionTitle","phaseBadge","selectionSummary","actionArea","myScore","myResources","myPokemon","myReserved","reserveCount","modal","modalTitle","modalBody","modalActions"].map((id)=>[id,$(id)]));
-let mode="host",state=null,guestView=null,cards=[],byId={},selection=[];
+const E=Object.fromEntries(["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","roomCodeDisplay","hostTools","roomPlayerCountSelect","startGameButton","endGameButton","playerBadge","players","logList","toggleLogButton","notice","tokens","rareMarket","legendMarket","rareCount","legendCount","markets","actionTitle","phaseBadge","selectionSummary","actionArea","myScore","myResources","myPokemon","myReserved","reserveCount"].map((id)=>[id,$(id)]));
+let mode="host",state=null,guestView=null,cards=[],byId={},selection=[],selectedCardId=null;
 
 const sessions=createSessionStore({gameId:"pokemon-splendor"});
 const room=createRoomClient({protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
@@ -23,7 +23,7 @@ function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);s
 function sync(){render();broadcast();}
 function broadcast(){if(mode!=="host"||!state)return;for(const p of state.players)if(!p.isHost)room.sendView(p.id,buildView(p.id)).catch(()=>{});}
 function buildView(viewerId){const seat=viewerSeat(viewerId);return{phase:state.phase,capacity:state.capacity,players:state.players,viewerId,game:state.game?Engine.redactFor(state.game,seat):null};}
-function submit(action){selection=[];if(mode==="host")receiveAction(roomInfo().playerId,action);else room.submitAction(action).catch((error)=>alert(`操作发送失败：${error.message}`));}
+function submit(action){selection=[];selectedCardId=null;if(mode==="host")receiveAction(roomInfo().playerId,action);else room.submitAction(action).catch((error)=>alert(`操作发送失败：${error.message}`));}
 
 async function createGameRoom(){try{const name=cleanPlayerName(E.hostNameInput.value,"房主"),result=await room.createRoom({name});state=makeLobby(Number(E.playerCountSelect.value),makePlayer(result.playerId,name,true));E.roomPlayerCountSelect.value=state.capacity;enterRoom();render();}catch(error){alert(`创建失败：${error.message}\n请运行 node game8/signal-server.js`);}}
 async function joinGameRoom(){try{await room.joinRoom({code:E.roomCodeInput.value,name:E.guestNameInput.value});E.connectionStatus.textContent="已连接，等待房主同步";}catch(error){alert(`加入失败：${error.message}`);}}
@@ -31,7 +31,7 @@ function admitPlayer(id,payload){if(!state||mode!=="host")return;const old=state
 function updatePresence(id,connected){const p=state?.players.find((x)=>x.id===id);if(p&&p.connected!==connected){p.connected=connected;sync();}}
 function changeCapacity(){const n=Number(E.roomPlayerCountSelect.value);if(n<state.players.length){E.roomPlayerCountSelect.value=state.capacity;return alert("人数不能少于已加入玩家。");}state.capacity=n;sync();}
 function startGame(){if(state.players.length!==state.capacity)return alert(`需要 ${state.capacity} 位训练家到齐。`);if(state.players.some((p)=>!p.connected))return alert("请等待所有训练家恢复连接。");state.game=Engine.createGame(cards,{numPlayers:state.capacity,names:state.players.map((p)=>p.name)});state.phase="playing";sync();}
-function resetLobby(){state.phase="lobby";state.game=null;selection=[];sync();}
+function resetLobby(){state.phase="lobby";state.game=null;selection=[];selectedCardId=null;sync();}
 function endGame(){if(state.phase==="ended"||confirm("确定结束本局并返回大厅吗？"))resetLobby();}
 function receiveAction(playerId,action){if(mode!=="host"||state?.phase!=="playing")return;const seat=viewerSeat(playerId);if(seat<0)return;const result=Engine.applyAction(state.game,action,seat);if(!result.ok){if(playerId===roomInfo().playerId)alert(result.error);else room.reject(playerId,result.error);return;}if(state.game.phase==="gameover")state.phase="ended";sync();}
 
@@ -42,7 +42,10 @@ function cardHtml(value,ctx="market"){
   if(typeof value==="object"&&value.hidden)return '<article class="poke-card"><div class="art">?</div><div class="name">秘密保留卡</div></article>';
   const c=typeof value==="string"?card(value):value;if(!c)return"";
   const costs=Engine.ALL_TOKENS.filter((x)=>c.cost[x]>0).map((x)=>orbHtml(x,c.cost[x])).join("")||"免费";
-  return `<article class="poke-card" data-card="${c.id}" data-context="${ctx}" style="--card:${{red:"#ffd7d9",black:"#d9dbea",yellow:"#fff2ad",pink:"#ffd9ec",blue:"#d7e8ff"}[c.bonus]}"><img class="card-face" src="${escapeHtml(c.img)}" alt="${escapeHtml(c.name)}"><div class="name"><span>${escapeHtml(c.name)}</span><span class="points">🏆${c.vp}</span></div><div class="cost">${costs}</div><div class="bonus">奖励 ${orbHtml(c.bonus,c.bonusCount||1)}</div>${c.evolvesTo?`<div class="evo">可进化为 ${escapeHtml(c.evolvesTo)} · ${BALL_NAMES[c.evoCost.color]}×${c.evoCost.count}</div>`:""}</article>`;
+  const selected=selectedCardId===c.id;
+  const canReserve=ctx!=="reserved"&&["stage1","stage2","stage3"].includes(c.tier);
+  const quickActions=selected?`<div class="card-quick-actions"><button class="primary" data-card-action="capture" data-card-id="${c.id}">捕捉</button>${canReserve?`<button data-card-action="reserve" data-card-id="${c.id}">保留</button>`:""}</div>`:"";
+  return `<article class="poke-card ${selected?"selected":""}" data-card="${c.id}" data-context="${ctx}" style="--card:${{red:"#ffd7d9",black:"#d9dbea",yellow:"#fff2ad",pink:"#ffd9ec",blue:"#d7e8ff"}[c.bonus]}">${quickActions}<img class="card-face" src="${escapeHtml(c.img)}" alt="${escapeHtml(c.name)}"><div class="name"><span>${escapeHtml(c.name)}</span><span class="points">🏆${c.vp}</span></div><div class="cost">${costs}</div>${c.evolvesTo?`<div class="evo">可进化为 ${escapeHtml(c.evolvesTo)} · ${BALL_NAMES[c.evoCost.color]}×${c.evoCost.count}</div>`:""}</article>`;
 }
 const playerStats=(g,p)=>({score:Engine.scoreOf(g,p),bonuses:Engine.bonuses(g,p),tokens:Engine.tokenTotal(p)});
 function render(){
@@ -70,10 +73,13 @@ function renderActions(v,g,me,myTurn,turn){
   for(const opt of ts.evolutions)addButton(`进化：${card(opt.fromId).name} → ${card(opt.toId).name}`,()=>submit({type:"evolve",fromId:opt.fromId,toId:opt.toId}));addButton("结束回合",()=>submit({type:"endTurn"}));
 }
 function addButton(text,on,disabled=false){const b=document.createElement("button");b.textContent=text;b.disabled=disabled;b.onclick=on;E.actionArea.appendChild(b);}
-function bindBoard(g,me,myTurn){E.tokens.querySelectorAll("[data-token]").forEach((b)=>b.onclick=()=>{const c=b.dataset.token;if(selection.includes(c))selection=selection.filter((x)=>x!==c);else if(selection.length<3)selection.push(c);render();});if(!myTurn||g.acted)return;document.querySelectorAll('.poke-card[data-card]:not([data-context="mine"])').forEach((el)=>el.onclick=()=>openCardActions(el.dataset.card,el.dataset.context));document.querySelectorAll("[data-blind]").forEach((el)=>el.onclick=()=>{if(confirm(`暗中保留${Engine.zhTier(el.dataset.blind)}牌堆顶卡？`))submit({type:"reserve",target:{fromDeck:el.dataset.blind}});});}
-function openCardActions(id,context){const c=card(id);E.modalTitle.textContent=c.name;E.modalBody.innerHTML=cardHtml(c);E.modalActions.innerHTML="";addModalButton("捕捉",()=>{closeModal();submit({type:"capture",cardId:id});},"primary");if(context!=="reserved"&&["stage1","stage2","stage3"].includes(c.tier))addModalButton("保留",()=>{closeModal();submit({type:"reserve",target:{fromField:id}});});addModalButton("取消",closeModal);E.modal.classList.remove("hidden");}
-function addModalButton(text,on,klass=""){const b=document.createElement("button");b.textContent=text;b.className=klass;b.onclick=on;E.modalActions.appendChild(b);}
-function closeModal(){E.modal.classList.add("hidden");}
+function bindBoard(g,me,myTurn){
+  E.tokens.querySelectorAll("[data-token]").forEach((b)=>b.onclick=()=>{const c=b.dataset.token;if(selection.includes(c))selection=selection.filter((x)=>x!==c);else if(selection.length<3)selection.push(c);render();});
+  if(!myTurn||g.acted)return;
+  document.querySelectorAll('.poke-card[data-card]:not([data-context="mine"])').forEach((el)=>el.onclick=(event)=>{event.stopPropagation();selectedCardId=el.dataset.card;render();});
+  document.querySelectorAll("[data-card-action]").forEach((button)=>button.onclick=(event)=>{event.stopPropagation();const id=button.dataset.cardId;if(button.dataset.cardAction==="capture")submit({type:"capture",cardId:id});else submit({type:"reserve",target:{fromField:id}});});
+  document.querySelectorAll("[data-blind]").forEach((el)=>el.onclick=()=>{if(confirm(`暗中保留${Engine.zhTier(el.dataset.blind)}牌堆顶卡？`))submit({type:"reserve",target:{fromDeck:el.dataset.blind}});});
+}
 
-async function init(){const response=await fetch("./data/cards.json");if(!response.ok)throw new Error("卡牌数据库加载失败");cards=await response.json();byId=Object.fromEntries(cards.map((c)=>[c.id,c]));E.hostModeButton.onclick=()=>{mode="host";setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});};E.guestModeButton.onclick=()=>{mode="guest";setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});};E.createRoomButton.onclick=createGameRoom;E.joinRoomButton.onclick=joinGameRoom;bindRoomCodeInput(E.roomCodeInput);E.roomPlayerCountSelect.onchange=changeCapacity;E.startGameButton.onclick=startGame;E.endGameButton.onclick=endGame;E.toggleLogButton.onclick=()=>E.logList.classList.toggle("collapsed");E.modal.onclick=(event)=>{if(event.target===E.modal)closeModal();};setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});room.checkServer().catch(()=>{});}
+async function init(){const response=await fetch("./data/cards.json");if(!response.ok)throw new Error("卡牌数据库加载失败");cards=await response.json();byId=Object.fromEntries(cards.map((c)=>[c.id,c]));E.hostModeButton.onclick=()=>{mode="host";setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});};E.guestModeButton.onclick=()=>{mode="guest";setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});};E.createRoomButton.onclick=createGameRoom;E.joinRoomButton.onclick=joinGameRoom;bindRoomCodeInput(E.roomCodeInput);E.roomPlayerCountSelect.onchange=changeCapacity;E.startGameButton.onclick=startGame;E.endGameButton.onclick=endGame;E.toggleLogButton.onclick=()=>E.logList.classList.toggle("collapsed");document.addEventListener("click",()=>{if(selectedCardId){selectedCardId=null;render();}});setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});room.checkServer().catch(()=>{});}
 init().catch((error)=>{E.connectionStatus.textContent=error.message;console.error(error);});
