@@ -1,5 +1,7 @@
 "use strict";
 
+import { reviewAgainst } from "./codenames-review.js";
+
 // 原创简体中文关键词库。按主题分组仅用于维护，游戏开始时会完全打乱。
 const GROUPS = [
   ["太阳","月亮","星星","天空","云朵","彩虹","闪电","雷声","风暴","雪花","冰川","火山","沙漠","森林","草原","海洋","河流","瀑布","岛屿","山峰"],
@@ -26,4 +28,7 @@ const GROUPS = [
   ["桥梁","塔楼","广场","公园","道路","十字路口","隧道","围墙","棋盘","圆圈","三角形","方块","中心","顶点","尾巴","翅膀","根部","种子","频道","浪潮"]
 ];
 
-export const KEYWORDS = Object.freeze(GROUPS.flat());
+export const ORIGINAL_KEYWORDS = Object.freeze(GROUPS.flat());
+export const CODENAMES_REVIEW = Object.freeze(reviewAgainst(ORIGINAL_KEYWORDS));
+export const EXPANSION_KEYWORDS = Object.freeze(CODENAMES_REVIEW.filter((item) => item.status === "included").map((item) => item.zh));
+export const KEYWORDS = Object.freeze([...ORIGINAL_KEYWORDS, ...EXPANSION_KEYWORDS]);

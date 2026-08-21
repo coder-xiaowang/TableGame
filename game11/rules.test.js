@@ -1,11 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createCodeDeck, isValidCode, lastEligiblePlayer, outcomeForTeams, scoreTransmission, validateClues } from "./rules.js";
-import { KEYWORDS } from "./words.js";
+import { CODENAMES_CANDIDATES } from "./codenames-review.js";
+import { CODENAMES_REVIEW, EXPANSION_KEYWORDS, KEYWORDS, ORIGINAL_KEYWORDS } from "./words.js";
 
-test("Chinese keyword deck contains 440 unique entries", () => {
-  assert.equal(KEYWORDS.length, 440);
-  assert.equal(new Set(KEYWORDS).size, 440);
+test("Codenames review covers exactly 400 unique English source words", () => {
+  assert.equal(CODENAMES_CANDIDATES.length, 400);
+  assert.equal(new Set(CODENAMES_CANDIDATES.map((item) => item.en)).size, 400);
+  assert.equal(CODENAMES_REVIEW.length, 400);
+  assert.ok(CODENAMES_REVIEW.every((item) => ["included", "merged", "excluded"].includes(item.status)));
+});
+test("expanded Chinese keyword deck is unique and traceable", () => {
+  assert.equal(ORIGINAL_KEYWORDS.length, 440);
+  assert.equal(KEYWORDS.length, ORIGINAL_KEYWORDS.length + EXPANSION_KEYWORDS.length);
+  assert.equal(new Set(KEYWORDS).size, KEYWORDS.length);
   assert.ok(KEYWORDS.every((word) => /^[\u3400-\u9fff]+$/.test(word)));
 });
 test("code deck contains every non-repeating three digit code", () => {
