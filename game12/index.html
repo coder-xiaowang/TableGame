@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Just One · 联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div><p class="eyebrow">ONE WORD · ONE GUESS · ONE TEAM</p><h1>JUST <i>ONE</i></h1><p>提示要准确，也要与众不同。</p></div>
+      <div class="room-status"><span id="connectionStatus">尚未连接</span><strong id="roomCodeDisplay">----</strong></div>
+    </header>
+
+    <section id="setupPanel" class="paper setup">
+      <div class="tabs"><button id="hostModeButton" class="active">创建房间</button><button id="guestModeButton">加入房间</button></div>
+      <div id="hostSetup" class="form-row">
+        <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+        <label>人数<select id="playerCountSelect"><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></label>
+        <label>模式<select id="gameModeSelect"><option value="classic">经典 13 卡</option><option value="casual">不限轮休闲</option></select></label>
+        <button id="createRoomButton" class="primary">创建房间</button>
+      </div>
+      <div id="guestSetup" class="form-row hidden">
+        <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+        <label>房间号<input id="roomCodeInput" maxlength="4" autocomplete="off"></label>
+        <button id="joinRoomButton" class="primary">加入房间</button>
+      </div>
+      <p class="tip">所有相同提示都会消失。三人局中，每位提示者填写两个词。</p>
+    </section>
+
+    <section id="roomPanel" class="hidden">
+      <div class="paper toolbar">
+        <div><span id="phaseBadge" class="badge">等待玩家</span><b id="roundText">第 0 轮</b></div>
+        <div id="timerWrap" class="timer hidden"><strong id="timerText">60</strong><i><em id="timerBar"></em></i></div>
+        <div id="hostTools"><button id="startGameButton" class="primary">开始游戏</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button></div>
+      </div>
+      <div id="notice" class="notice"></div>
+      <section id="lobbyArea" class="paper lobby"></section>
+
+      <section id="gameArea" class="game-grid hidden">
+        <aside class="paper side-panel">
+          <p class="eyebrow dark">TEAM SCORE</p><div id="scoreDisplay" class="score">0</div>
+          <div id="statsDisplay" class="stats"></div>
+          <h3>玩家顺序</h3><div id="playerList" class="player-list"></div>
+        </aside>
+        <section class="paper stage">
+          <div class="stage-head"><div><p class="eyebrow dark">CURRENT ROUND</p><h2 id="stageTitle">准备中</h2></div><span id="roleBadge" class="role"></span></div>
+          <div id="secretWord" class="secret hidden"></div>
+          <div id="choiceArea" class="choices hidden"></div>
+          <div id="clueArea" class="hidden"><div id="clueInputs" class="clue-inputs"></div><button id="submitCluesButton" class="primary">提交提示</button></div>
+          <div id="reviewArea" class="hidden"><p>点击提示切换“保留/消除”，系统已自动消除完全重复项。</p><div id="reviewClues" class="clue-board"></div><button id="finishReviewButton" class="primary">确认审查结果</button></div>
+          <div id="guessArea" class="hidden"><div id="visibleClues" class="clue-board"></div><label class="guess-input">你的唯一答案<input id="guessInput" maxlength="20" autocomplete="off"></label><div class="button-row"><button id="submitGuessButton" class="primary">提交答案</button><button id="passButton">放弃本轮</button></div></div>
+          <div id="voteArea" class="hidden"><p id="voteQuestion"></p><div class="button-row"><button id="voteYesButton" class="yes">算正确</button><button id="voteNoButton" class="danger">算错误</button></div><p id="voteStatus"></p></div>
+          <div id="revealArea" class="hidden"></div>
+          <p id="waitingText" class="waiting"></p>
+        </section>
+        <section class="paper history"><h2>回合记录</h2><div id="historyList"></div></section>
+      </section>
+
+      <section id="resultPanel" class="paper result hidden"><p class="eyebrow dark">GAME COMPLETE</p><h2 id="resultTitle"></h2><div id="resultStats"></div></section>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
