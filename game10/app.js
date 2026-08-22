@@ -12,7 +12,7 @@ const PROTOCOL_VERSION = 2;
 const ACTION_SECONDS = 30;
 const COLORS = ["#ef5b4c", "#2589bd", "#f5b82e", "#7557a8"];
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let state = null;
@@ -99,9 +99,20 @@ function startGame() {
   Object.assign(state, { phase: "playing", currentIndex: Math.floor(Math.random() * state.players.length), turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, revealAt: 0, rollId: 0, physicsSeed: 0, winnerId: null, logs: [] });
   log(`游戏开始，${currentPlayer().name} 首先攀登`); beginStage("roll");
 }
+function resetGameToLobby() {
+  hostTimer.clear();
+  state.players.forEach((player) => { player.progress = {}; player.claimed = []; });
+  Object.assign(state, { phase: "lobby", turnStage: "", turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, deadline: 0, revealAt: 0, rollId: 0, physicsSeed: 0, rollFromTimeout: false, winnerId: null, logs: [] });
+  dicePhysics?.hide();
+  sync();
+}
 function endGameEarly() {
   if (state?.phase !== "playing" || !confirm("确定结束当前游戏并返回大厅吗？")) return;
-  hostTimer.clear(); Object.assign(state, { phase: "lobby", turnStage: "", turnProgress: {}, dice: [], pendingDice: [], options: [], closed: {}, deadline: 0, revealAt: 0, physicsSeed: 0, winnerId: null, logs: [] }); dicePhysics?.hide(); sync();
+  resetGameToLobby();
+}
+function playAgain() {
+  if (mode !== "host" || state?.phase !== "ended") return;
+  resetGameToLobby();
 }
 function beginStage(stage) {
   hostTimer.clear(); state.turnStage = stage;
@@ -284,12 +295,12 @@ function render() {
   E.actionArea.querySelectorAll("[data-action]").forEach((button) => { button.onclick = () => submit({ type: button.dataset.action }); }); E.actionArea.querySelectorAll("[data-choice]").forEach((button) => { button.onclick = () => submit({ type: "choose", key: button.dataset.choice }); });
   E.logList.innerHTML = view.logs.map((entry) => `<p>${escapeHtml(entry.text)}</p>`).join("") || '<p class="muted">暂无记录</p>';
   if (view.phase === "playing" && view.deadline) countdown.start(view.deadline, ACTION_SECONDS * 1000); else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
-  setHidden(E.resultPanel, view.phase !== "ended"); if (view.phase === "ended") { const winner = view.players.find((player) => player.id === view.winnerId); E.winnerText.textContent = `${winner?.name || "玩家"} 征服了山峰！`; E.resultList.innerHTML = view.players.map((player) => `<p><i style="background:${player.color}"></i><b>${escapeHtml(player.name)}</b><span>${player.claimed.length} 条路线</span></p>`).join(""); }
+  setHidden(E.resultPanel, view.phase !== "ended"); setHidden(E.resultActions, mode !== "host" || view.phase !== "ended"); if (view.phase === "ended") { const winner = view.players.find((player) => player.id === view.winnerId); E.winnerText.textContent = `${winner?.name || "玩家"} 征服了山峰！`; E.resultList.innerHTML = view.players.map((player) => `<p><i style="background:${player.color}"></i><b>${escapeHtml(player.name)}</b><span>${player.claimed.length} 条路线</span></p>`).join(""); }
 }
 
 async function init() {
   bindRoomCodeInput(E.roomCodeInput); E.hostModeButton.onclick = () => { mode = "host"; renderEntryMode(); }; E.guestModeButton.onclick = () => { mode = "guest"; renderEntryMode(); };
-  E.createRoomButton.onclick = createGameRoom; E.joinRoomButton.onclick = joinGameRoom; E.roomPlayerCountSelect.onchange = changeCapacity; E.startGameButton.onclick = startGame; E.endGameButton.onclick = endGameEarly;
+  E.createRoomButton.onclick = createGameRoom; E.joinRoomButton.onclick = joinGameRoom; E.roomPlayerCountSelect.onchange = changeCapacity; E.startGameButton.onclick = startGame; E.endGameButton.onclick = endGameEarly; E.playAgainButton.onclick = playAgain;
   E.toggleLogButton.onclick = () => { E.logList.classList.toggle("collapsed"); E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起"; };
   renderEntryMode();
   const previewSeed = Number(new URLSearchParams(location.search).get("physicsTest"));
