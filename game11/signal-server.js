@@ -6,6 +6,6 @@ const startGameServer = require("../shared/server/start-game-server");
 startGameServer({
   gameRoot: __dirname,
   sharedRoot: path.resolve(__dirname, "../shared"),
-  protocolVersion: 2,
+  protocolVersion: 3,
   defaultPort: 8797
 });
