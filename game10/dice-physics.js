@@ -17,6 +17,12 @@ const FACE_NORMALS = [
 
 let rapierReady = null;
 const ensureRapier = () => rapierReady ||= RAPIER.init();
+let rapierInitialized = false;
+
+export async function initializeDicePhysicsSimulation() {
+  await ensureRapier();
+  rapierInitialized = true;
+}
 
 export function createSeededRandom(seed) {
   let value = Number(seed) >>> 0;
@@ -121,8 +127,7 @@ function addCircularBoundary(world, { radius = 3.18, segments = 24 } = {}) {
   }
 }
 
-export async function simulateDiceRoll(seed) {
-  await ensureRapier();
+function runDiceSimulation(seed) {
   const random = createSeededRandom(seed);
   const throwProfile = Math.floor(random() * 4);
   const world = new RAPIER.World({ x:0, y:-9.81, z:0 });
@@ -181,6 +186,16 @@ export async function simulateDiceRoll(seed) {
   const results = lastFrame.map((pose) => topFaceValue({ x:pose.q[0], y:pose.q[1], z:pose.q[2], w:pose.q[3] }));
   world.free();
   return Object.freeze({ seed:Number(seed) >>> 0, profile:throwProfile, fps:SAMPLE_HZ, frames, durationMs:Math.round((frames.length - 1) / SAMPLE_HZ * 1000), results });
+}
+
+export function simulateDiceRollReady(seed) {
+  if (!rapierInitialized) throw new Error("Dice physics has not been initialized");
+  return runDiceSimulation(seed);
+}
+
+export async function simulateDiceRoll(seed) {
+  await initializeDicePhysicsSimulation();
+  return runDiceSimulation(seed);
 }
 
 function makeFaceTexture(value) {
