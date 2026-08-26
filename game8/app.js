@@ -1,39 +1,31 @@
 "use strict";
 
-import { bindRoomCodeInput, cleanPlayerName, createRoomClient, createSessionStore, escapeHtml, renderConnectionStatus, setHidden, setModeVisibility } from "/shared/client/index.js";
+import { bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createSessionStore, escapeHtml, renderConnectionStatus, setHidden, setModeVisibility } from "/shared/client/index.js";
 
-const Engine=window.Engine, PROTOCOL_VERSION=2, COLORS=Engine.COLORS, TIER_KEYS=["stage3","stage2","stage1"];
+const Engine=window.Engine, PROTOCOL_VERSION=3, COLORS=Engine.COLORS, TIER_KEYS=["stage3","stage2","stage1"];
 const BALL_FILES={red:"red.png",blue:"blue.png",black:"black.png",pink:"pink.png",yellow:"yellow.png",purple:"master.png"};
 const BALL_NAMES={red:"精灵球",blue:"超级球",black:"高级球",pink:"治愈球",yellow:"先机球",purple:"大师球"};
 const $=(id)=>document.getElementById(id);
 const E=Object.fromEntries(["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","roomCodeDisplay","hostTools","roomPlayerCountSelect","startGameButton","endGameButton","playerBadge","players","logList","toggleLogButton","notice","tokens","rareMarket","legendMarket","rareCount","legendCount","markets","actionTitle","phaseBadge","selectionSummary","actionArea","myScore","myResources","myPokemon","myReserved","reserveCount"].map((id)=>[id,$(id)]));
-let mode="host",state=null,guestView=null,cards=[],byId={},selection=[],selectedCardId=null;
+let mode="host",view=null,cards=[],byId={},selection=[],selectedCardId=null;
 
 const sessions=createSessionStore({gameId:"pokemon-splendor"});
-const room=createRoomClient({protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
+const room=createAuthoritativeRoomClient({protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
   onStatus(status){renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode);},
-  handlers:{onHello:admitPlayer,onPresence:updatePresence,onAction:receiveAction,onView(view){guestView=view;enterRoom();render();},onRejected(message){alert(message||"房主拒绝了加入请求。");},onKicked(){alert("你已被房主移出房间。");location.reload();}}
+  handlers:{onView(nextView){view=nextView;enterRoom();render();},onKicked(){alert("你已被房主移出房间。");location.reload();}}
 });
-const makePlayer=(id,name,isHost=false)=>({id,name,isHost,connected:true});
-const makeLobby=(capacity,host)=>({phase:"lobby",capacity,players:[host],game:null});
 const roomInfo=()=>room.snapshot();
-const viewerSeat=(viewerId)=>state.players.findIndex((p)=>p.id===viewerId);
-const currentView=()=>mode==="host"?(state?buildView(roomInfo().playerId):null):guestView;
-function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.hostTools,mode!=="host");E.roomCodeDisplay.textContent=roomInfo().roomCode;}
-function sync(){render();broadcast();}
-function broadcast(){if(mode!=="host"||!state)return;for(const p of state.players)if(!p.isHost)room.sendView(p.id,buildView(p.id)).catch(()=>{});}
-function buildView(viewerId){const seat=viewerSeat(viewerId);return{phase:state.phase,capacity:state.capacity,players:state.players,viewerId,game:state.game?Engine.redactFor(state.game,seat):null};}
-function submit(action){selection=[];selectedCardId=null;if(mode==="host")receiveAction(roomInfo().playerId,action);else room.submitAction(action).catch((error)=>alert(`操作发送失败：${error.message}`));}
+const currentView=()=>view;
+const isHost=()=>roomInfo().role==="host";
+function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.hostTools,!isHost());E.roomCodeDisplay.textContent=roomInfo().roomCode;}
+function submit(action){selection=[];selectedCardId=null;return room.submitAction(action).catch((error)=>alert(`操作失败：${error.message}`));}
 
-async function createGameRoom(){try{const name=cleanPlayerName(E.hostNameInput.value,"房主"),result=await room.createRoom({name});state=makeLobby(Number(E.playerCountSelect.value),makePlayer(result.playerId,name,true));E.roomPlayerCountSelect.value=state.capacity;enterRoom();render();}catch(error){alert(`创建失败：${error.message}\n请运行 node game8/signal-server.js`);}}
+async function createGameRoom(){try{const name=cleanPlayerName(E.hostNameInput.value,"房主");await room.createRoom({name,capacity:Number(E.playerCountSelect.value)});}catch(error){alert(`创建失败：${error.message}\n请运行 node game8/signal-server.js`);}}
 async function joinGameRoom(){try{await room.joinRoom({code:E.roomCodeInput.value,name:E.guestNameInput.value});E.connectionStatus.textContent="已连接，等待房主同步";}catch(error){alert(`加入失败：${error.message}`);}}
-function admitPlayer(id,payload){if(!state||mode!=="host")return;const old=state.players.find((p)=>p.id===id);if(old){old.connected=true;return sync();}if(state.phase!=="lobby")return room.reject(id,"游戏已经开始，不能中途加入。");if(state.players.length>=state.capacity)return room.reject(id,"房间人数已满。");state.players.push(makePlayer(id,cleanPlayerName(payload.name,"训练家")));sync();}
-function updatePresence(id,connected){const p=state?.players.find((x)=>x.id===id);if(p&&p.connected!==connected){p.connected=connected;sync();}}
-function changeCapacity(){const n=Number(E.roomPlayerCountSelect.value);if(n<state.players.length){E.roomPlayerCountSelect.value=state.capacity;return alert("人数不能少于已加入玩家。");}state.capacity=n;sync();}
-function startGame(){if(state.players.length!==state.capacity)return alert(`需要 ${state.capacity} 位训练家到齐。`);if(state.players.some((p)=>!p.connected))return alert("请等待所有训练家恢复连接。");state.game=Engine.createGame(cards,{numPlayers:state.capacity,names:state.players.map((p)=>p.name)});state.phase="playing";sync();}
-function resetLobby(){state.phase="lobby";state.game=null;selection=[];selectedCardId=null;sync();}
-function endGame(){if(state.phase==="ended"||confirm("确定结束本局并返回大厅吗？"))resetLobby();}
-function receiveAction(playerId,action){if(mode!=="host"||state?.phase!=="playing")return;const seat=viewerSeat(playerId);if(seat<0)return;const result=Engine.applyAction(state.game,action,seat);if(!result.ok){if(playerId===roomInfo().playerId)alert(result.error);else room.reject(playerId,result.error);return;}if(state.game.phase==="gameover")state.phase="ended";sync();}
+function changeCapacity(){if(!view)return;const n=Number(E.roomPlayerCountSelect.value);if(n<view.players.length){E.roomPlayerCountSelect.value=view.capacity;return alert("人数不能少于已加入玩家。");}submit({type:"setCapacity",capacity:n});}
+function startGame(){submit({type:"start"});}
+function endGame(){if(!view)return;if(view.phase==="ended")return submit({type:"restart"});if(confirm("确定结束本局并返回大厅吗？"))submit({type:"end"});}
+function kickPlayer(playerId){if(confirm("确定移出这位训练家吗？"))room.kick(playerId).catch((error)=>alert(`移出失败：${error.message}`));}
 
 const card=(id)=>typeof id==="string"?byId[id]:null;
 const orbHtml=(color,n)=>`<span class="orb ${color}"><img src="${BALL_FILES[color]}" alt="${BALL_NAMES[color]}"><b>${n}</b></span>`;
@@ -53,8 +45,8 @@ function render(){
   // 网络视图会删除静态数据库，客户端用本地同版本数据重新挂载，只用于计算与渲染。
   if(g&&!g.byId){g.byId=byId;g.cardDB=cards;}
   const me=g?.players[seat],turn=g?.players[g.turn],myTurn=v.phase==="playing"&&g.turn===seat;
-  E.roomCodeDisplay.textContent=roomInfo().roomCode;E.roomPlayerCountSelect.value=v.capacity;E.playerBadge.textContent=`${v.players.length} / ${v.capacity}`;E.startGameButton.disabled=v.phase!=="lobby";setHidden(E.startGameButton,v.phase!=="lobby");E.endGameButton.textContent=v.phase==="ended"?"返回大厅":"结束游戏";
-  E.players.innerHTML=v.players.map((rp,i)=>{const gp=g?.players[i],s=gp?playerStats(g,gp):null;return `<div class="player ${g&&i===g.turn&&v.phase==="playing"?"turn":""} ${i===seat?"me":""}"><div class="player-top"><span>${escapeHtml(rp.name)} ${rp.isHost?"★":""} ${rp.connected?"":"(离线)"}</span><span>🏆 ${s?.score||0}</span></div><div class="player-meta">${s?`奖励 ${COLORS.map((c)=>orbHtml(c,s.bonuses[c])).join(" ")} · 球 ${s.tokens} · 保留 ${gp.reserve.length} · 进化 ${gp.buried.length}`:"等待开始"}</div></div>`;}).join("");
+  const canStart=v.permissions?.canStart&&v.players.length===v.capacity&&v.players.every((p)=>p.connected);E.roomCodeDisplay.textContent=roomInfo().roomCode;setHidden(E.hostTools,!isHost());E.roomPlayerCountSelect.value=v.capacity;E.roomPlayerCountSelect.disabled=v.phase!=="lobby";E.playerBadge.textContent=`${v.players.length} / ${v.capacity}`;E.startGameButton.disabled=!canStart;setHidden(E.startGameButton,!v.permissions?.canStart);setHidden(E.endGameButton,!v.permissions?.canEnd&&!v.permissions?.canRestart);E.endGameButton.textContent=v.phase==="ended"?"返回大厅":"结束游戏";
+  E.players.innerHTML=v.players.map((rp,i)=>{const gp=g?.players[i],s=gp?playerStats(g,gp):null;const kick=v.permissions?.canKick&&!rp.isHost?`<button class="small" data-kick="${escapeHtml(rp.id)}">移出</button>`:"";return `<div class="player ${g&&i===g.turn&&v.phase==="playing"?"turn":""} ${i===seat?"me":""}"><div class="player-top"><span>${escapeHtml(rp.name)} ${rp.isHost?"★":""} ${rp.connected?"":"(离线)"}</span><span>🏆 ${s?.score||0}</span></div><div class="player-meta">${s?`奖励 ${COLORS.map((c)=>orbHtml(c,s.bonuses[c])).join(" ")} · 球 ${s.tokens} · 保留 ${gp.reserve.length} · 进化 ${gp.buried.length}`:"等待开始"}</div>${kick}</div>`;}).join("");E.players.querySelectorAll("[data-kick]").forEach((button)=>button.onclick=()=>kickPlayer(button.dataset.kick));
   if(!g){renderLobby(v);return;}
   E.logList.innerHTML=[...g.log].reverse().map((x)=>`<div>${escapeHtml(x.msg)}</div>`).join("")||"<div>暂无记录</div>";
   E.tokens.innerHTML=Engine.ALL_TOKENS.map((c)=>`<button class="token ${c} ${selection.includes(c)?"selected":""}" data-token="${c}" ${!myTurn||g.acted||c==="purple"?"disabled":""}><b>${g.supply[c]}</b><span>${BALL_NAMES[c]}</span></button>`).join("");

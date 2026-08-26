@@ -1,11 +1,22 @@
 "use strict";
 
 const path = require("path");
-const startGameServer = require("../shared/server/start-game-server");
+const startAuthoritativeGameServer = require("../shared/server/start-authoritative-game-server");
+const { createSqliteRoomStore } = require("../shared/server/sqlite-room-store");
 
-startGameServer({
-  gameRoot: __dirname,
-  sharedRoot: path.resolve(__dirname, "../shared"),
-  protocolVersion: 2,
-  defaultPort: 8794
-});
+const databasePath = process.env.GAME8_DB_PATH
+  || path.resolve(__dirname, ".data/game8.sqlite");
+
+import("./server/game-engine.mjs")
+  .then((engine) => startAuthoritativeGameServer({
+    gameRoot: __dirname,
+    sharedRoot: path.resolve(__dirname, "../shared"),
+    engine,
+    protocolVersion: 3,
+    defaultPort: 8794,
+    roomStore: createSqliteRoomStore({ filename: databasePath })
+  }))
+  .catch((error) => {
+    console.error("Unable to start authoritative game8 server:", error);
+    process.exitCode = 1;
+  });

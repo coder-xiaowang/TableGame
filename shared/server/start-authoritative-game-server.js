@@ -17,6 +17,7 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml"
 };
 
@@ -45,7 +46,10 @@ module.exports = function startAuthoritativeGameServer({
   let shuttingDown = false;
 
   function snapshotRoom(room) {
-    const state = structuredClone(room.state);
+    const serializedState = engine.serializeState
+      ? engine.serializeState(room.state)
+      : room.state;
+    const state = structuredClone(serializedState);
     for (const player of state.players || []) player.connected = false;
     return {
       schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION,
@@ -77,7 +81,13 @@ module.exports = function startAuthoritativeGameServer({
     if (!snapshot.state || !Array.isArray(snapshot.state.players) || !Array.isArray(snapshot.members)) {
       throw new Error(`Room ${roomCode} has an invalid persisted snapshot`);
     }
-    const state = structuredClone(snapshot.state);
+    const serializedState = structuredClone(snapshot.state);
+    const state = engine.restoreState
+      ? engine.restoreState(serializedState)
+      : serializedState;
+    if (!state || !Array.isArray(state.players)) {
+      throw new Error(`Room ${roomCode} could not restore its game state`);
+    }
     for (const player of state.players) player.connected = false;
     const members = new Map(snapshot.members.map(({ id, ...member }) => [String(id), {
       ...member,
