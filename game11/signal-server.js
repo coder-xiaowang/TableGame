@@ -1,11 +1,22 @@
 "use strict";
 
 const path = require("path");
-const startGameServer = require("../shared/server/start-game-server");
+const startAuthoritativeGameServer = require("../shared/server/start-authoritative-game-server");
+const { createSqliteRoomStore } = require("../shared/server/sqlite-room-store");
 
-startGameServer({
-  gameRoot: __dirname,
-  sharedRoot: path.resolve(__dirname, "../shared"),
-  protocolVersion: 3,
-  defaultPort: 8797
-});
+const databasePath = process.env.GAME11_DB_PATH
+  || path.resolve(__dirname, ".data/game11.sqlite");
+
+import("./server/game-engine.mjs")
+  .then((engine) => startAuthoritativeGameServer({
+    gameRoot: __dirname,
+    sharedRoot: path.resolve(__dirname, "../shared"),
+    engine,
+    protocolVersion: 3,
+    defaultPort: 8797,
+    roomStore: createSqliteRoomStore({ filename: databasePath })
+  }))
+  .catch((error) => {
+    console.error("Unable to start authoritative game11 server:", error);
+    process.exitCode = 1;
+  });
