@@ -5,6 +5,7 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 const { URL } = require("url");
+const { createMemoryRoomStore, SCHEMA_VERSION } = require("./memory-room-store");
 
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MIME_TYPES = {
@@ -25,7 +26,8 @@ module.exports = function startAuthoritativeGameServer({
   sharedRoot = path.resolve(__dirname, ".."),
   protocolVersion = 3,
   defaultPort = 8787,
-  roomIdleMs = 2 * 60 * 60 * 1000
+  roomIdleMs = 2 * 60 * 60 * 1000,
+  roomStore = null
 }) {
   if (!engine?.createLobby || !engine?.applyAction || !engine?.buildView) {
     throw new TypeError("an authoritative game engine is required");
@@ -34,8 +36,67 @@ module.exports = function startAuthoritativeGameServer({
   const port = Number(process.env.PORT || defaultPort);
   const resolvedGameRoot = path.resolve(gameRoot);
   const resolvedSharedRoot = path.resolve(sharedRoot);
+  const store = roomStore || createMemoryRoomStore();
+  if (!store.loadRooms || !store.saveRoom || !store.deleteRoom) {
+    throw new TypeError("roomStore must implement loadRooms, saveRoom and deleteRoom");
+  }
   const rooms = new Map();
   const clients = new Map();
+  let shuttingDown = false;
+
+  function snapshotRoom(room) {
+    const state = structuredClone(room.state);
+    for (const player of state.players || []) player.connected = false;
+    return {
+      schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION,
+      protocolVersion,
+      hostId: room.hostId,
+      members: [...room.members.entries()].map(([id, member]) => ({
+        id,
+        ...structuredClone(member),
+        connected: false
+      })),
+      state,
+      version: room.version,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt
+    };
+  }
+
+  function persistRoom(roomCode, room) {
+    store.saveRoom(roomCode, snapshotRoom(room));
+  }
+
+  function restoreRoom(roomCode, snapshot) {
+    if (!snapshot || snapshot.schemaVersion !== (Number(store.schemaVersion) || SCHEMA_VERSION)) {
+      throw new Error(`Room ${roomCode} uses an unsupported persistence schema`);
+    }
+    if (snapshot.protocolVersion !== protocolVersion) {
+      throw new Error(`Room ${roomCode} uses protocol ${snapshot.protocolVersion}; expected ${protocolVersion}`);
+    }
+    if (!snapshot.state || !Array.isArray(snapshot.state.players) || !Array.isArray(snapshot.members)) {
+      throw new Error(`Room ${roomCode} has an invalid persisted snapshot`);
+    }
+    const state = structuredClone(snapshot.state);
+    for (const player of state.players) player.connected = false;
+    const members = new Map(snapshot.members.map(({ id, ...member }) => [String(id), {
+      ...member,
+      connected: false,
+      actionIds: Array.isArray(member.actionIds) ? member.actionIds.slice(-100) : []
+    }]));
+    if (!members.has(String(snapshot.hostId))) {
+      throw new Error(`Room ${roomCode} is missing its host session`);
+    }
+    return {
+      hostId: String(snapshot.hostId),
+      members,
+      state,
+      version: Number(snapshot.version) || 1,
+      timer: null,
+      createdAt: Number(snapshot.createdAt) || Date.now(),
+      updatedAt: Number(snapshot.updatedAt) || Date.now()
+    };
+  }
 
   function sendJson(response, status, payload) {
     response.writeHead(status, {
@@ -146,13 +207,26 @@ module.exports = function startAuthoritativeGameServer({
       const remaining = (Number(engine.getDeadline?.(room.state)) || 0) - Date.now();
       if (remaining > 0) return scheduleRoomTimer(roomCode, room);
       try {
-        if (!engine.handleTimeout(room.state, { now: Date.now() })) return;
-        room.version += 1;
-        room.updatedAt = Date.now();
+        const now = Date.now();
+        const nextState = structuredClone(room.state);
+        if (!engine.handleTimeout(nextState, { now })) return;
+        const candidate = {
+          ...room,
+          state: nextState,
+          version: room.version + 1,
+          updatedAt: now
+        };
+        persistRoom(roomCode, candidate);
+        room.state = nextState;
+        room.version = candidate.version;
+        room.updatedAt = now;
         broadcastViews(roomCode, room);
         scheduleRoomTimer(roomCode, room);
       } catch (error) {
         console.error(`Room ${roomCode} timeout failed:`, error);
+        if (rooms.get(roomCode) === room) {
+          room.timer = setTimeout(() => scheduleRoomTimer(roomCode, room), 1000);
+        }
       }
     }, delay);
   }
@@ -182,11 +256,28 @@ module.exports = function startAuthoritativeGameServer({
   }
 
   async function handleApi(request, response, url) {
+    if (request.method === "GET" && url.pathname === "/api/health") {
+      return sendJson(response, 200, { ok: true, protocolVersion });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/ready") {
+      const ready = store.check ? Boolean(store.check()) : true;
+      return sendJson(response, ready ? 200 : 503, {
+        ready,
+        persistence: store.kind || "custom",
+        schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION,
+        protocolVersion
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/config") {
       return sendJson(response, 200, {
         authorityMode: "server",
         protocolVersion,
-        actionSeconds: engine.ACTION_SECONDS
+        actionSeconds: engine.ACTION_SECONDS,
+        persistence: store.kind || "custom",
+        durable: Boolean(store.durable),
+        schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION
       });
     }
 
@@ -223,7 +314,11 @@ module.exports = function startAuthoritativeGameServer({
       member.connected = true;
       member.everConnected = true;
       room.updatedAt = Date.now();
-      if (changed) room.version += 1;
+      if (changed) {
+        room.version += 1;
+        try { persistRoom(roomCode, room); }
+        catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
+      }
       broadcastViews(roomCode, room);
 
       request.on("close", () => {
@@ -232,9 +327,12 @@ module.exports = function startAuthoritativeGameServer({
         clearInterval(active.heartbeat);
         clients.delete(key);
         member.connected = false;
+        if (shuttingDown) return;
         if (engine.setPresence(room.state, playerId, false, { now: Date.now() })) {
           room.version += 1;
           room.updatedAt = Date.now();
+          try { persistRoom(roomCode, room); }
+          catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
           broadcastViews(roomCode, room);
         }
       });
@@ -272,6 +370,7 @@ module.exports = function startAuthoritativeGameServer({
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
+      persistRoom(roomCode, room);
       rooms.set(roomCode, room);
       return sendJson(response, 200, {
         roomCode,
@@ -313,12 +412,13 @@ module.exports = function startAuthoritativeGameServer({
         throw error;
       } else {
         const resumeToken = createToken();
-        const player = engine.addPlayer(room.state, {
+        const nextState = structuredClone(room.state);
+        const player = engine.addPlayer(nextState, {
           id: playerId,
           name: data.name,
           connected: false
         }, { now: Date.now() });
-        member = {
+        const nextMember = {
           name: player.name,
           resumeToken,
           connected: false,
@@ -326,9 +426,22 @@ module.exports = function startAuthoritativeGameServer({
           kicked: false,
           actionIds: []
         };
-        room.members.set(playerId, member);
-        room.version += 1;
-        room.updatedAt = Date.now();
+        const nextMembers = new Map(room.members);
+        nextMembers.set(playerId, nextMember);
+        const now = Date.now();
+        const candidate = {
+          ...room,
+          members: nextMembers,
+          state: nextState,
+          version: room.version + 1,
+          updatedAt: now
+        };
+        persistRoom(roomCode, candidate);
+        room.state = nextState;
+        room.members.set(playerId, nextMember);
+        room.version = candidate.version;
+        room.updatedAt = now;
+        member = nextMember;
         broadcastViews(roomCode, room);
       }
       return sendJson(response, 200, {
@@ -373,11 +486,24 @@ module.exports = function startAuthoritativeGameServer({
         error.code = "version_conflict";
         throw error;
       }
-      engine.applyAction(room.state, playerId, data.action, { now: Date.now() });
-      member.actionIds.push(actionId);
-      if (member.actionIds.length > 100) member.actionIds.shift();
-      room.version += 1;
-      room.updatedAt = Date.now();
+      const now = Date.now();
+      const nextState = structuredClone(room.state);
+      engine.applyAction(nextState, playerId, data.action, { now });
+      const nextActionIds = [...member.actionIds, actionId].slice(-100);
+      const nextMembers = new Map(room.members);
+      nextMembers.set(playerId, { ...member, actionIds: nextActionIds });
+      const candidate = {
+        ...room,
+        members: nextMembers,
+        state: nextState,
+        version: room.version + 1,
+        updatedAt: now
+      };
+      persistRoom(roomCode, candidate);
+      room.state = nextState;
+      member.actionIds = nextActionIds;
+      room.version = candidate.version;
+      room.updatedAt = now;
       scheduleRoomTimer(roomCode, room);
       broadcastViews(roomCode, room);
       return sendJson(response, 200, { ok: true, version: room.version, protocolVersion });
@@ -407,18 +533,54 @@ module.exports = function startAuthoritativeGameServer({
         error.code = "invalid_kick_target";
         throw error;
       }
-      engine.removePlayer(room.state, data.hostId, data.playerId, { now: Date.now() });
+      const now = Date.now();
+      const nextState = structuredClone(room.state);
+      engine.removePlayer(nextState, data.hostId, data.playerId, { now });
+      const nextMembers = new Map(room.members);
+      nextMembers.set(String(data.playerId), { ...target, kicked: true, connected: false });
+      const candidate = {
+        ...room,
+        members: nextMembers,
+        state: nextState,
+        version: room.version + 1,
+        updatedAt: now
+      };
+      persistRoom(roomCode, candidate);
+      room.state = nextState;
       target.kicked = true;
       target.connected = false;
       push(roomCode, data.playerId, { kind: "kicked" });
-      room.version += 1;
-      room.updatedAt = Date.now();
+      room.version = candidate.version;
+      room.updatedAt = now;
       broadcastViews(roomCode, room);
       return sendJson(response, 200, { ok: true, version: room.version, protocolVersion });
     }
 
     return sendJson(response, 404, { error: "not found", code: "not_found", protocolVersion });
   }
+
+  function loadPersistedRooms() {
+    const now = Date.now();
+    let restored = 0;
+    for (const entry of store.loadRooms()) {
+      const roomCode = String(entry.roomCode || "").toUpperCase();
+      if (!roomCode || rooms.has(roomCode)) {
+        throw new Error(`Invalid or duplicate persisted room code: ${entry.roomCode}`);
+      }
+      const room = restoreRoom(roomCode, entry.snapshot);
+      if (now - room.updatedAt >= roomIdleMs) {
+        store.deleteRoom(roomCode);
+        continue;
+      }
+      rooms.set(roomCode, room);
+      persistRoom(roomCode, room);
+      scheduleRoomTimer(roomCode, room);
+      restored += 1;
+    }
+    if (store.durable) console.log(`Restored ${restored} authoritative room(s) from ${store.kind}.`);
+  }
+
+  loadPersistedRooms();
 
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
@@ -434,8 +596,13 @@ module.exports = function startAuthoritativeGameServer({
     for (const [roomCode, room] of rooms) {
       const online = [...room.members.values()].some((member) => member.connected && !member.kicked);
       if (online || now - room.updatedAt < roomIdleMs) continue;
-      clearRoomTimer(room);
-      rooms.delete(roomCode);
+      try {
+        store.deleteRoom(roomCode);
+        clearRoomTimer(room);
+        rooms.delete(roomCode);
+      } catch (error) {
+        console.error(`Room ${roomCode} cleanup persistence failed:`, error);
+      }
     }
   }, Math.min(roomIdleMs, 10 * 60 * 1000));
   cleanup.unref?.();
@@ -444,9 +611,11 @@ module.exports = function startAuthoritativeGameServer({
     console.log(`Authoritative table game: http://localhost:${server.address().port}`);
   });
   server.on("close", () => {
+    shuttingDown = true;
     clearInterval(cleanup);
     for (const room of rooms.values()) clearRoomTimer(room);
     for (const client of clients.values()) clearInterval(client.heartbeat);
+    store.close?.();
   });
   return server;
 };
