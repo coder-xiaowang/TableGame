@@ -600,6 +600,15 @@ module.exports = function startAuthoritativeGameServer({
       serveStatic(response, url.pathname);
     }
   });
+  const closeHttpServer = server.close.bind(server);
+  server.close = function closeAuthoritativeServer(callback) {
+    shuttingDown = true;
+    for (const client of clients.values()) {
+      clearInterval(client.heartbeat);
+      client.response.end();
+    }
+    return closeHttpServer(callback);
+  };
 
   const cleanup = setInterval(() => {
     const now = Date.now();
