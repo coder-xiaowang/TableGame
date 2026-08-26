@@ -77,6 +77,22 @@ function beginTurn(state, now) {
   state.deadline = now + ACTION_SECONDS * 1000;
 }
 
+function resetToLobby(state) {
+  state.phase = "lobby";
+  state.deck = [];
+  state.removed = [];
+  state.activeCard = null;
+  state.pot = 0;
+  state.deadline = 0;
+  state.winners = [];
+  state.logs = [];
+  state.logSequence = 0;
+  for (const player of state.players) {
+    player.cards = [];
+    player.chips = 0;
+  }
+}
+
 function finishGame(state, now) {
   state.phase = "ended";
   state.deadline = 0;
@@ -225,19 +241,16 @@ export function applyAction(state, actorId, action, {
     if (state.phase !== "playing") {
       throw new GameRuleError("game_not_playing", "当前没有可结束的游戏。", 409);
     }
-    state.phase = "lobby";
-    state.deck = [];
-    state.removed = [];
-    state.activeCard = null;
-    state.pot = 0;
-    state.deadline = 0;
-    state.winners = [];
-    state.logs = [];
-    state.logSequence = 0;
-    for (const player of state.players) {
-      player.cards = [];
-      player.chips = 0;
+    resetToLobby(state);
+    return;
+  }
+
+  if (type === "restart") {
+    requireHost(state, actorId);
+    if (state.phase !== "ended") {
+      throw new GameRuleError("game_not_ended", "只有结算完成后才能重新开始。", 409);
     }
+    resetToLobby(state);
     return;
   }
 
@@ -288,7 +301,8 @@ export function buildView(state, viewerId) {
       canManage: viewer.isHost,
       canKick: viewer.isHost && state.phase === "lobby",
       canStart: viewer.isHost && state.phase === "lobby",
-      canEnd: viewer.isHost && state.phase === "playing"
+      canEnd: viewer.isHost && state.phase === "playing",
+      canRestart: viewer.isHost && state.phase === "ended"
     },
     players: state.players.map((player) => ({
       id: player.id,

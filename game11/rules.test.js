@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCodeDeck, isValidCode, lastEligiblePlayer, outcomeForTeams, scoreTransmission, validateClues } from "./rules.js";
+import { createCodeDeck, isValidCode, lastEligiblePlayer, lockGuessDrafts, outcomeForTeams, scoreTransmission, validateClues } from "./rules.js";
 import { CODENAMES_CANDIDATES } from "./codenames-review.js";
 import { CODENAMES_REVIEW, EXPANSION_KEYWORDS, KEYWORDS, ORIGINAL_KEYWORDS } from "./words.js";
 
@@ -35,6 +35,16 @@ test("first round suppresses interception", () => {
 test("last eligible submitter skips encryptor", () => {
   const players = [{id:"a",team:"white"},{id:"b",team:"white"},{id:"c",team:"black"}];
   assert.equal(lastEligiblePlayer(players,"white","b").id,"a");
+});
+test("deadline locks valid drafts without inventing an untouched answer", () => {
+  assert.deepEqual(
+    lockGuessDrafts(
+      { decode:null, intercept:[4,3,2] },
+      { decode:[2,1,4], intercept:[1,1,2] }
+    ),
+    { decode:[2,1,4], intercept:[4,3,2] }
+  );
+  assert.deepEqual(lockGuessDrafts({ decode:null, intercept:null }, {}), { decode:null, intercept:null });
 });
 test("token score resolves ordinary ending and exposes tied tiebreak", () => {
   assert.deepEqual(outcomeForTeams({white:{interceptions:2,miscommunications:0},black:{interceptions:0,miscommunications:0}},2).winners,["white"]);

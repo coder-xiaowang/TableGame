@@ -25,7 +25,7 @@ const E = Object.fromEntries([
   "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "deckCount",
   "notice", "activeCard", "potCount", "timerText", "timerBar", "actionArea", "logList",
   "toggleLogButton", "myChips", "myCardScore", "myNetScore", "myCards", "resultPanel",
-  "winnerText", "scoreTable", "removedCards"
+  "winnerText", "scoreTable", "removedCards", "resultActions", "playAgainButton"
 ].map((id) => [id, $(id)]));
 
 let mode = "host";
@@ -106,6 +106,11 @@ function startGame() {
 function endGameEarly() {
   if (!view || view.phase !== "playing" || !confirm("确定结束当前游戏并返回大厅吗？")) return;
   submit({ type: "end" });
+}
+
+function playAgain() {
+  if (!view || view.phase !== "ended" || !view.permissions?.canRestart) return;
+  submit({ type: "restart" });
 }
 
 function submit(action) {
@@ -233,6 +238,7 @@ function render() {
   }
 
   setHidden(E.resultPanel, view.phase !== "ended");
+  setHidden(E.resultActions, !view.permissions?.canRestart);
   if (view.phase === "ended") {
     const winners = view.winners.map((id) => view.players.find((player) => player.id === id)?.name).join("、");
     E.winnerText.textContent = `${winners} 获胜！`;
@@ -260,6 +266,7 @@ async function init() {
   E.roomPlayerCountSelect.onchange = changeCapacity;
   E.startGameButton.onclick = startGame;
   E.endGameButton.onclick = endGameEarly;
+  E.playAgainButton.onclick = playAgain;
   E.toggleLogButton.onclick = () => {
     E.logList.classList.toggle("collapsed");
     E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起";

@@ -125,6 +125,7 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 
 .result-panel { display: grid; gap: 18px; border-top: 7px solid var(--yellow); }
 .result-panel h2 { margin: 0; font: 900 clamp(1.6rem, 4vw, 2.7rem) "Arial Black"; color: var(--green); }
+.result-actions { display: flex; justify-content: flex-end; }
 .score-table { display: grid; gap: 7px; }
 .score-row { display: grid; grid-template-columns: 30px 1fr repeat(3, auto); align-items: center; gap: 15px; padding: 10px 13px; border-radius: 9px; background: #ece5d8; font-size: .8rem; }
 .score-row.winner { color: white; background: var(--green); }.score-row > b:first-child { font: 900 1.1rem "Arial Black"; }

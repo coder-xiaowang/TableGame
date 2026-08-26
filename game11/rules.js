@@ -21,6 +21,13 @@ export function isValidCode(code) {
     && new Set(code.map(Number)).size === 3;
 }
 
+export function lockGuessDrafts(guesses = {}, drafts = {}) {
+  return Object.fromEntries(["decode", "intercept"].map((role) => {
+    const locked = isValidCode(guesses[role]) ? guesses[role] : drafts[role];
+    return [role, isValidCode(locked) ? locked.map(Number) : null];
+  }));
+}
+
 export function normalizeClue(value) {
   return String(value ?? "").trim().toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
 }

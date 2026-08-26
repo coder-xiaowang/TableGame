@@ -97,6 +97,9 @@ test("a complete server-owned game settles and reveals final information", () =>
   assert.equal(view.removed.length, 9);
   assert.equal(view.players.every((player) => player.finalScore != null && player.chips != null), true);
   assert.equal(view.winners.length > 0, true);
+  applyAction(state, "host", { type: "restart" }, { now: now + 1 });
+  assert.equal(state.phase, "lobby");
+  assert.equal(state.players.every((player) => player.cards.length === 0 && player.chips === 0), true);
 });
 
 test("presence belongs to server state", () => {
