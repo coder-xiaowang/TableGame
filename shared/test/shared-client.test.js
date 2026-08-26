@@ -2,6 +2,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createAuthoritativeRoomClient } from "../client/authoritative-room-client.js";
 import { createSessionStore } from "../client/session-store.js";
 import { assertProtocolVersion, ProtocolVersionError } from "../client/protocol.js";
 import { cleanPlayerName, escapeHtml, normalizeRoomCode } from "../client/utils.js";
@@ -40,4 +41,65 @@ test("protocol mismatch is rejected", () => {
     () => assertProtocolVersion({ protocolVersion: 1 }, 2),
     ProtocolVersionError
   );
+});
+
+test("authoritative client sends every role action to the server with a state version", async () => {
+  class FakeEventSource {
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+      queueMicrotask(() => this.listeners.get("open")?.({ type: "open" }));
+    }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    close() {}
+  }
+
+  const requests = [];
+  const initialView = {
+    selfId: "host_1",
+    phase: "lobby",
+    capacity: 3,
+    players: []
+  };
+  async function fetchImpl(path, options = {}) {
+    if (path === "/api/config") {
+      return new Response(JSON.stringify({ authorityMode: "server", protocolVersion: 3 }), {
+        status: 200, headers: { "Content-Type": "application/json" }
+      });
+    }
+    const data = JSON.parse(options.body);
+    requests.push({ path, data });
+    if (path === "/api/rooms") {
+      return new Response(JSON.stringify({
+        roomCode: "ABCD",
+        hostId: "host_1",
+        clientId: "host_1",
+        resumeToken: "secure-token",
+        role: "host",
+        version: 4,
+        view: initialView,
+        protocolVersion: 3
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ ok: true, version: 5, protocolVersion: 3 }), {
+      status: 200, headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  const views = [];
+  const client = createAuthoritativeRoomClient({
+    protocolVersion: 3,
+    sessionStore: createSessionStore({ gameId: "test-authority", storage: memoryStorage() }),
+    fetchImpl,
+    EventSourceImpl: FakeEventSource,
+    handlers: { onView: (view, version) => views.push({ view, version }) }
+  });
+  await client.createRoom({ name: "房主", capacity: 3, id: "host_1" });
+  await client.submitAction({ type: "start" });
+
+  assert.deepEqual(views, [{ view: initialView, version: 4 }]);
+  assert.equal(requests[1].path, "/api/actions");
+  assert.equal(requests[1].data.playerId, "host_1");
+  assert.equal(requests[1].data.expectedVersion, 4);
+  assert.deepEqual(requests[1].data.action, { type: "start" });
 });
