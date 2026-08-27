@@ -1,75 +1,137 @@
 "use strict";
-const PROTOCOL_VERSION = 2, COLORS = ["red", "yellow", "green", "blue"], COLOR_NAMES = { red: "红色", yellow: "黄色", green: "绿色", blue: "蓝色" };
-let mode = "host", selfId = "", roomCode = "", hostId = "", resumeToken = "", events = null, state = null, guestView = null, joinFailure = "", hostTimer = null, countdown = null, pendingCardId = null;
-const $ = id => document.getElementById(id), E = { connectionStatus: $("connectionStatus"), setupPanel: $("setupPanel"), roomPanel: $("roomPanel"), hostModeButton: $("hostModeButton"), guestModeButton: $("guestModeButton"), hostSetup: $("hostSetup"), guestSetup: $("guestSetup"), hostNameInput: $("hostNameInput"), guestNameInput: $("guestNameInput"), playerCountSelect: $("playerCountSelect"), createRoomButton: $("createRoomButton"), joinRoomButton: $("joinRoomButton"), roomCodeInput: $("roomCodeInput"), roomCodeDisplay: $("roomCodeDisplay"), hostTools: $("hostTools"), roomPlayerCountSelect: $("roomPlayerCountSelect"), startGameButton: $("startGameButton"), endGameButton: $("endGameButton"), notice: $("notice"), directionText: $("directionText"), deckCount: $("deckCount"), players: $("players"), drawPile: $("drawPile"), discardPile: $("discardPile"), currentColor: $("currentColor"), penaltyBanner: $("penaltyBanner"), actionTitle: $("actionTitle"), timerText: $("timerText"), timerBar: $("timerBar"), actionArea: $("actionArea"), handCount: $("handCount"), unoButton: $("unoButton"), hand: $("hand"), logList: $("logList"), toggleLogButton: $("toggleLogButton"), colorModal: $("colorModal"), cancelColorButton: $("cancelColorButton") };
-const uid = p => `${p}_${Math.random().toString(36).slice(2, 10)}`, clean = (v, d) => String(v || "").trim().slice(0, 12) || d, esc = v => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const sessionKey=code=>`tablegame:uno:${code}`,loadSession=code=>{try{return JSON.parse(localStorage.getItem(sessionKey(code))||"null")}catch{return null}},saveSession=n=>localStorage.setItem(sessionKey(roomCode),JSON.stringify({playerId:selfId,resumeToken,name:n})),clearSession=()=>roomCode&&localStorage.removeItem(sessionKey(roomCode));
-async function post(path, data) { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); if (!r.ok) throw Error(`${r.status} ${await r.text()}`); return r.json() } async function signal(to, payload) { return post("/api/signal", { roomCode, from: selfId, resumeToken, to, payload }) }
-function connectionError(action, error) { console.error(`${action}失败`, error); const detail = error instanceof Error ? error.message : String(error); const openedFromSignalServer = location.protocol.startsWith("http") && location.port === "8791"; if (!openedFromSignalServer) return `无法${action}：当前页面地址是 ${location.href}\n请直接打开 http://localhost:8791/，不要用 file://、Live Server 或其他端口打开 index.html。`; return `无法${action}：${detail}\n请查看运行 signal-server.js 的终端是否提示 EADDRINUSE（8791 端口被占用）。` }
-function requireProtocol(result) { if (result?.protocolVersion !== PROTOCOL_VERSION) throw new Error(`前端需要联机协议 v${PROTOCOL_VERSION}，但当前端口运行的是旧版服务。请彻底关闭占用 8791 的旧 Node 进程后重新启动。`); return result }
-function openEvents(id) { events?.close(); return new Promise((resolve, reject) => { let opened = false; const timer = setTimeout(() => { if (!opened) reject(new Error("事件通道连接超时")) }, 5000); events = new EventSource(`/api/events?clientId=${encodeURIComponent(id)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`); events.addEventListener("signal", e => receive(JSON.parse(e.data))); events.onopen = () => { opened = true; clearTimeout(timer); E.connectionStatus.textContent = mode === "guest" ? "已连接，等待房主确认" : `已连接房间 ${roomCode}`; resolve() }; events.onerror = () => { E.connectionStatus.textContent = "联机服务正在重连"; if (!opened) { clearTimeout(timer); reject(new Error("无法建立事件通道")) } } }) }
-function receive(m) { const p = m.payload; if (mode === "host" && p?.kind === "hello") return admit(m.from, p.name); if (mode === "host" && p?.kind === "presence") return updatePresence(p.playerId,p.connected); if (mode === "host" && p?.kind === "action") return act(m.from, p.action); if (mode === "guest" && p?.kind === "view") { guestView = p.view; E.connectionStatus.textContent = `已加入房间 ${roomCode}`; enter(); render() } if (mode === "guest" && p?.kind === "rejected") { joinFailure = p.message; events?.close(); E.connectionStatus.textContent = "加入失败" } if(p?.kind==="kicked"){clearSession();events?.close();alert("你已被房主移出房间。");location.reload()} }
-function setMode(m) { mode = m; E.hostModeButton.classList.toggle("active", m === "host"); E.guestModeButton.classList.toggle("active", m === "guest"); E.hostSetup.classList.toggle("hidden", m !== "host"); E.guestSetup.classList.toggle("hidden", m !== "guest") }
-function enter() { E.setupPanel.classList.add("hidden"); E.roomPanel.classList.remove("hidden"); E.hostTools.classList.toggle("hidden", mode !== "host"); E.roomCodeDisplay.textContent = roomCode }
-function player(id, n, host = false) { return { id, name: n, isHost: host, connected: true, hand: [], unoCalled: false } }
-async function createRoom() { selfId = uid("host"); state = { phase: "lobby", capacity: Number(E.playerCountSelect.value), players: [player(selfId, clean(E.hostNameInput.value, "房主"), true)], deck: [], discard: [], currentColor: null, currentIndex: 0, direction: 1, pendingDraw: 0, pendingWild: null, drawnCardId: null, unoVulnerableId: null, winnerId: null, deadline: 0, logs: [] }; let r; try { r = requireProtocol(await post("/api/rooms", { hostId: selfId, name: state.players[0].name })); roomCode = r.roomCode; resumeToken = r.resumeToken; await openEvents(selfId) } catch (e) { return alert(connectionError("创建房间", e)) } E.roomPlayerCountSelect.value = state.capacity; enter(); render() }
-async function joinRoom() { roomCode = E.roomCodeInput.value.trim().toUpperCase(); if (!/^[A-Z0-9]{4}$/.test(roomCode)) return alert("请输入四位房间号。"); const saved = loadSession(roomCode); selfId = saved?.playerId || uid("guest"); guestView = null; joinFailure = ""; E.joinRoomButton.disabled = true; try { const name = saved?.name || clean(E.guestNameInput.value, "玩家"); const r = requireProtocol(await post("/api/join", { roomCode, clientId: selfId, resumeToken: saved?.resumeToken, name: saved ? "" : name })); selfId = r.clientId; resumeToken = r.resumeToken; hostId = r.hostId; enter(); E.notice.textContent = "已找到房间，正在同步房主状态……"; E.connectionStatus.textContent = `正在加入 ${roomCode}`; await openEvents(selfId); await signal(hostId, { kind: "hello", name, resumed: r.resumed }); saveSession(name); for (let attempt = 0; attempt < 3 && !guestView && !joinFailure; attempt++) await new Promise(resolve => setTimeout(resolve, 700)); if (joinFailure) throw new Error(joinFailure); if (!guestView) throw new Error("房主没有收到加入事件") } catch (e) { events?.close(); E.roomPanel.classList.add("hidden"); E.setupPanel.classList.remove("hidden"); E.connectionStatus.textContent = "加入失败"; alert(`无法加入房间：${e.message}`) } finally { E.joinRoomButton.disabled = false } }
-function admit(id, n) { if (state.phase !== "lobby") return signal(id, { kind: "rejected", message: "游戏已经开始，不能中途加入。" }); const existing = state.players.find(p => p.id === id); if (existing) { existing.connected = true; return sync() } if (state.players.length >= state.capacity) return signal(id, { kind: "rejected", message: "房间人数已满。" }); state.players.push(player(id, clean(n, "玩家"))); sync() }
-function updatePresence(id, connected) { const p = state?.players.find(item => item.id === id); if (!p || p.connected === connected) return; p.connected = connected; if (!connected && state.phase === "playing" && current()?.id === id) timeoutTurn(); else sync(); }
-async function kickPlayer(id) { const p = state?.players.find(item => item.id === id); if (!p || p.isHost || !confirm(`确定要移出 ${p.name} 吗？`)) return; try { await post("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId: id }); const index = state.players.findIndex(item => item.id === id); state.players.splice(index, 1); if (state.phase === "playing") { if (state.players.length < 2) { state.phase = "ended"; state.deadline = 0; sync(); } else { if (index < state.currentIndex) state.currentIndex -= 1; else if (index === state.currentIndex) state.currentIndex %= state.players.length; beginTurn(); } } else sync(); } catch { alert("无法移出该玩家，请检查服务器连接。"); } }
-function changeCapacity() { const n = Number(E.roomPlayerCountSelect.value); if (n < state.players.length) { alert("人数不能少于已加入玩家。"); E.roomPlayerCountSelect.value = state.capacity; return } state.capacity = n; sync() }
-function makeDeck() { const cards = []; for (const color of COLORS) { cards.push(card(color, "number", 0)); for (let n = 1; n <= 9; n++) { cards.push(card(color, "number", n), card(color, "number", n)) } for (let n = 0; n < 2; n++)cards.push(card(color, "skip"), card(color, "reverse"), card(color, "draw2")) } for (let n = 0; n < 4; n++)cards.push(card(null, "wild"), card(null, "wild4")); return shuffle(cards) }
-function card(color, type, value = null) { return { id: uid("card"), color, type, value } } function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] } return a }
-function log(text) { state.logs.unshift({ id: uid("log"), text }); state.logs = state.logs.slice(0, 80) }
-function startGame() { if (state.players.length !== state.capacity) return alert(`需要 ${state.capacity} 人到齐。`); state.phase = "playing"; state.deck = makeDeck(); state.discard = []; state.direction = 1; state.currentIndex = 0; state.pendingDraw = 0; state.pendingWild = null; state.drawnCardId = null; state.unoVulnerableId = null; state.winnerId = null; state.players.forEach(p => { p.hand = []; p.unoCalled = false }); for (let n = 0; n < 7; n++)state.players.forEach(p => p.hand.push(drawRaw())); const numberIndex = state.deck.findIndex(c => c.type === "number"); const first = state.deck.splice(numberIndex, 1)[0]; state.discard.push(first); state.currentColor = first.color; log(`游戏开始，首张牌是${describe(first)}`); beginTurn() }
-function endGame() { if (mode !== "host" || !state || state.phase === "lobby") return; if (!confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。")) return; clearTimeout(hostTimer); pendingCardId = null; E.colorModal.classList.add("hidden"); state.phase = "lobby"; state.deck = []; state.discard = []; state.currentColor = null; state.currentIndex = 0; state.direction = 1; state.pendingDraw = 0; state.pendingWild = null; state.drawnCardId = null; state.unoVulnerableId = null; state.winnerId = null; state.deadline = 0; state.logs = []; state.players.forEach(p => { p.hand = []; p.unoCalled = false }); sync() }
-function drawRaw() { if (!state.deck.length) recycle(); return state.deck.pop() } function recycle() { if (state.discard.length <= 1) return; const top = state.discard.pop(); state.deck = shuffle(state.discard); state.discard = [top]; log("弃牌堆已重新洗成摸牌堆") }
-function nextIndex(from, steps = 1) { let i = from; for (let n = 0; n < steps; n++)i = (i + state.direction + state.players.length) % state.players.length; return i }
-function current() { return state.players[state.currentIndex] }
-function beginTurn() { clearTimeout(hostTimer); if (state.phase !== "playing") return sync(); state.drawnCardId = null; state.players.forEach((p, i) => { if (i !== state.currentIndex) p.unoCalled = false }); state.deadline = Date.now() + 15000; sync(); hostTimer = setTimeout(timeoutTurn, 15050) }
-function timeoutTurn() { if (mode !== "host" || state.phase !== "playing") return; const p = current(); expireUno(); if (state.pendingDraw > 0) { const n = state.pendingDraw; drawMany(p, n); log(`${p.name} 超时，摸取 ${n} 张罚牌`); clearPenalty(); advance() } else { drawMany(p, 1); log(`${p.name} 超时，自动摸1张并结束回合`); advance() } }
-function submit(action) { if (mode === "host") act(selfId, action); else signal(hostId, { kind: "action", action }).catch(() => E.connectionStatus.textContent = "操作发送失败") }
-function act(id, a) {
-    if (state.phase !== "playing") return; if (a?.type === "catchUno") return catchUno(id); const p = current(); if (!p || p.id !== id) return;
-    if (a.type === "callUno") { if (p.hand.length !== 2 || !p.hand.some(c => playable(c) && (!state.drawnCardId || state.drawnCardId === c.id))) return; p.unoCalled = true; log(`${p.name} 喊了 UNO！`); return sync() }
-    if (a.type === "challenge") return challengeWild(p);
-    if (a.type === "acceptPenalty") return acceptPenalty(p);
-    if (a.type === "draw") return drawAction(p);
-    if (a.type === "pass" && state.drawnCardId) { expireUno(); log(`${p.name} 保留摸到的牌`); return advance() }
-    if (a.type === "play") return playCard(p, String(a.cardId || ""), a.color);
+
+import {
+  bindRoomCodeInput,cleanPlayerName,createAuthoritativeRoomClient,createCountdown,
+  createSessionStore,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
+} from "/shared/client/index.js";
+import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
+
+const PROTOCOL_VERSION=3;
+const $=(id)=>document.getElementById(id);
+const E=Object.fromEntries([
+  "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
+  "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput",
+  "roomCodeDisplay","hostTools","roomPlayerCountSelect","startGameButton","endGameButton","notice","directionText",
+  "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
+  "actionArea","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
+].map((id)=>[id,$(id)]));
+
+let mode="host";
+let view=null;
+let pendingCardId=null;
+const sessions=createSessionStore({gameId:"uno"});
+const countdown=createCountdown({onTick(value){renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);}});
+const room=createAuthoritativeRoomClient({
+  protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
+  onStatus(status){renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode);},
+  handlers:{
+    onView(nextView){view=nextView;enterRoom();render();},
+    onKicked(){alert("你已被房主移出房间。");location.reload();}
+  }
+});
+
+function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.hostTools,!view?.permissions?.canManage);E.roomCodeDisplay.textContent=room.snapshot().roomCode;}
+function selectMode(nextMode){mode=nextMode;setModeVisibility(mode,{hostSetup:E.hostSetup,guestSetup:E.guestSetup,hostTools:E.hostTools,hostButton:E.hostModeButton,guestButton:E.guestModeButton});}
+async function createGameRoom(){
+  E.createRoomButton.disabled=true;
+  try{await room.createRoom({name:cleanPlayerName(E.hostNameInput.value,"房主"),capacity:Number(E.playerCountSelect.value)});}
+  catch(error){alert(`创建房间失败：${error.message}\n请确认已通过 node game5/signal-server.js 启动。`);}
+  finally{E.createRoomButton.disabled=false;}
 }
-function expireUno() { if (state.unoVulnerableId) { state.unoVulnerableId = null; log("抓 UNO 的时机已经结束") } }
-function catchUno(catcherId) { const offender = state.players.find(p => p.id === state.unoVulnerableId), catcher = state.players.find(p => p.id === catcherId); if (!offender || !catcher || offender.id === catcher.id) return; drawMany(offender, 2); state.unoVulnerableId = null; log(`${catcher.name} 抓到 ${offender.name} 未喊 UNO，后者摸2张`); sync() }
-function isDraw(c) { return c.type === "draw2" || c.type === "wild4" }
-function playable(c) { const top = state.discard.at(-1); if (state.pendingDraw > 0) return isDraw(c); return c.type === "wild" || c.type === "wild4" || c.color === state.currentColor || (c.type === top.type && (c.type !== "number" || c.value === top.value)) || (c.type === "number" && top.type === "number" && c.value === top.value) }
-function playCard(p, id, chosenColor) {
-    const index = p.hand.findIndex(c => c.id === id), c = p.hand[index]; if (!c || !playable(c) || state.drawnCardId && state.drawnCardId !== id) return; if ((c.type === "wild" || c.type === "wild4") && !COLORS.includes(chosenColor)) return; expireUno(); const oldColor = state.currentColor, wasLegal = c.type !== "wild4" || !p.hand.some((x, i) => i !== index && x.color === oldColor); p.hand.splice(index, 1); state.discard.push(c); state.currentColor = c.color || chosenColor; state.drawnCardId = null; log(`${p.name} 打出${describe(c)}${c.color ? "" : `，选择${COLOR_NAMES[chosenColor]}`}`);
-    if (p.hand.length === 1) { if (p.unoCalled) log(`${p.name} 已正确喊 UNO`); else { state.unoVulnerableId = p.id; log(`${p.name} 只剩1张牌，但还没有喊 UNO`) } } p.unoCalled = false;
-    if (c.type === "wild4") { state.pendingDraw += 4; state.pendingWild = { offenderId: p.id, wasLegal, amount: 4 }; const target = nextIndex(state.currentIndex); state.currentIndex = target; if (p.hand.length === 0) state.winnerId = p.id; return beginTurn() }
-    if (p.hand.length === 0) return finish(p.id);
-    if (c.type === "draw2") { state.pendingDraw += 2; state.pendingWild = null; state.currentIndex = nextIndex(state.currentIndex); return beginTurn() }
-    state.pendingWild = null; if (c.type === "skip") state.currentIndex = nextIndex(state.currentIndex, 2); else if (c.type === "reverse") { state.direction *= -1; state.currentIndex = nextIndex(state.currentIndex, state.players.length === 2 ? 2 : 1) } else state.currentIndex = nextIndex(state.currentIndex); beginTurn()
+async function joinGameRoom(){
+  E.joinRoomButton.disabled=true;
+  try{const result=await room.joinRoom({code:E.roomCodeInput.value,name:cleanPlayerName(E.guestNameInput.value,"玩家")});if(result.resumed)E.connectionStatus.textContent="身份已恢复，正在同步牌局";}
+  catch(error){alert(`加入房间失败：${error.message}`);}
+  finally{E.joinRoomButton.disabled=false;}
 }
-function drawAction(p) { expireUno(); if (state.pendingDraw > 0) return acceptPenalty(p); if (state.drawnCardId) return; const c = drawRaw(); p.hand.push(c); log(`${p.name} 摸了1张牌`); if (playable(c)) { state.drawnCardId = c.id; state.deadline = Date.now() + 15000; sync(); clearTimeout(hostTimer); hostTimer = setTimeout(timeoutTurn, 15050) } else advance() }
-function acceptPenalty(p) { expireUno(); const n = state.pendingDraw; drawMany(p, n); log(`${p.name} 接受罚牌，摸了 ${n} 张`); const winner = state.winnerId; clearPenalty(); if (winner) return finish(winner); advance() }
-function clearPenalty() { state.pendingDraw = 0; state.pendingWild = null; state.winnerId = null }
-function challengeWild(p) { if (!state.pendingWild) return; expireUno(); const info = state.pendingWild, offender = state.players.find(x => x.id === info.offenderId); if (!info.wasLegal) { drawMany(offender, 4); state.pendingDraw = Math.max(0, state.pendingDraw - 4); state.pendingWild = null; state.winnerId = null; log(`${p.name} 质疑成功，${offender.name} 非法使用 +4 并摸4张`); if (state.pendingDraw === 0) return beginTurn(); return beginTurn() } const n = state.pendingDraw + 2; drawMany(p, n); log(`${p.name} 质疑失败，摸取 ${n} 张并跳过`); const winner = state.winnerId; clearPenalty(); if (winner) return finish(winner); advance() }
-function drawMany(p, n) { for (let i = 0; i < n; i++)p.hand.push(drawRaw()) }
-function advance() { clearTimeout(hostTimer); state.currentIndex = nextIndex(state.currentIndex); beginTurn() }
-function finish(id) { clearTimeout(hostTimer); state.phase = "ended"; state.winnerId = id; state.deadline = 0; state.unoVulnerableId = null; log(`${state.players.find(p => p.id === id)?.name} 打完所有手牌，获得胜利！`); sync() }
-function describe(c) { if (c.type === "number") return `${COLOR_NAMES[c.color]} ${c.value}`; return `${c.color ? COLOR_NAMES[c.color] : "万能"}${{ skip: "禁止", reverse: "反转", draw2: " +2", wild: "变色", wild4: " +4" }[c.type]}` }
-function buildView(viewer) { const turnPlayer = current(); return { selfId: viewer, phase: state.phase, capacity: state.capacity, currentIndex: state.currentIndex, direction: state.direction, deckCount: state.deck.length, discard: state.discard.slice(-1), currentColor: state.currentColor, pendingDraw: state.pendingDraw, canChallenge: turnPlayer?.id === viewer && !!state.pendingWild, drawnCardId: turnPlayer?.id === viewer ? state.drawnCardId : null, unoVulnerableId: state.unoVulnerableId, winnerId: state.winnerId, deadline: state.deadline, logs: state.logs, players: state.players.map(p => ({ ...p, hand: p.id === viewer ? p.hand : p.hand.map(() => null) })) } }
-function view() { return mode === "host" ? (state ? buildView(selfId) : null) : guestView } function broadcast() { if (mode !== "host") return; state.players.filter(p => p.id !== selfId).forEach(p => signal(p.id, { kind: "view", view: buildView(p.id) }).catch(() => p.connected = false)) } function sync() { render(); broadcast() }
-function cardText(c) { if (c.type === "number") return { value: c.value, symbol: "" }; return { value: { skip: "⊘", reverse: "↻", draw2: "+2", wild: "WILD", wild4: "+4" }[c.type], symbol: "" } }
-function cardHtml(c, button = false, enabled = false) { if (c === null) return '<div class="uno-card wild"><span class="value">UNO</span></div>'; const t = cardText(c), klass = c.color || "wild", tag = button ? "button" : "div"; return `<${tag} class="uno-card ${klass} ${enabled ? "playable" : ""}" ${button ? `data-card="${c.id}" ${enabled ? "" : "disabled"}` : ""}><span class="value">${t.value}</span><span class="symbol">${t.symbol}</span></${tag}>` }
-function render() {
-    const v = view(); if (!v) return; const me = v.players.find(p => p.id === v.selfId), current = v.players[v.currentIndex], myTurn = v.phase === "playing" && current?.id === v.selfId; E.roomCodeDisplay.textContent = roomCode; E.roomPlayerCountSelect.value = v.capacity; E.roomPlayerCountSelect.disabled = v.phase !== "lobby"; E.startGameButton.classList.toggle("hidden", v.phase !== "lobby"); E.startGameButton.disabled = v.players.length !== v.capacity; E.endGameButton.classList.toggle("hidden", v.phase === "lobby"); E.directionText.textContent = v.direction === 1 ? "顺时针 ↻" : "逆时针 ↺"; E.deckCount.textContent = v.deckCount; E.players.innerHTML = v.players.map((p, i) => `<div class="player ${i === v.currentIndex && v.phase === "playing" ? "turn" : ""}"><div class="player-name"><span>${esc(p.name)}</span><b>${p.hand.length} 张</b></div><div class="player-meta">${p.isHost ? "房主 · " : ""}${p.id === v.unoVulnerableId ? "可抓UNO" : p.unoCalled ? "已喊UNO" : ""}</div><div class="mini-cards">${p.hand.slice(0, 18).map(() => '<i class="mini-card"></i>').join("")}</div></div>`).join(""); E.discardPile.innerHTML = v.discard[0] ? cardHtml(v.discard[0]) : ""; E.currentColor.textContent = `当前颜色：${COLOR_NAMES[v.currentColor] || "—"}`; E.currentColor.style.color = { red: "#c92525", yellow: "#9a7200", green: "#168843", blue: "#176db7" }[v.currentColor] || ""; E.penaltyBanner.classList.toggle("hidden", !v.pendingDraw); E.penaltyBanner.textContent = `累计罚牌 +${v.pendingDraw}：可继续叠加 +2 / +4`;
-    if (v.phase === "lobby") E.notice.textContent = v.players.length === v.capacity ? "玩家已经到齐，房主可以开始。" : `等待玩家加入：${v.players.length}/${v.capacity}`; else if (v.phase === "ended") E.notice.textContent = `${v.players.find(p => p.id === v.winnerId)?.name || "玩家"} 打完了所有牌，获得本局胜利！`; else E.notice.textContent = `轮到 ${current.name}，每次行动限时15秒。`;
-    E.handCount.textContent = me?.hand.length || 0; E.hand.innerHTML = (me?.hand || []).map(c => cardHtml(c, true, myTurn && playableView(c, v, me))).join(""); E.hand.querySelectorAll("[data-card]").forEach(b => b.onclick = () => chooseCard(b.dataset.card, me.hand.find(c => c.id === b.dataset.card))); const canCallUno = myTurn && me.hand.length === 2 && me.hand.some(c => playableView(c, v, me)); E.unoButton.disabled = !canCallUno; E.unoButton.classList.toggle("called", !!me?.unoCalled); E.unoButton.textContent = me?.unoCalled ? "已喊 UNO！" : "喊 UNO！"; renderActions(v, me, current, myTurn); E.logList.innerHTML = v.logs.map(x => `<div class="log-item">${esc(x.text)}</div>`).join(""); if(mode==="host")v.players.forEach((p,i)=>{if(!p.isHost){const b=document.createElement("button");b.textContent="移出";b.type="button";b.onclick=()=>kickPlayer(p.id);E.players.children[i]?.appendChild(b)}}); startCountdown(v.deadline)
+function submit(action){return Promise.resolve(room.submitAction(action)).catch((error)=>{E.connectionStatus.textContent=`操作失败：${error.message}`;alert(error.message);});}
+async function kickPlayer(playerId){
+  const player=view?.players.find((item)=>item.id===playerId);
+  if(!player||player.isHost||!confirm(`确定要移出 ${player.name} 吗？其手牌会洗回摸牌堆。`))return;
+  try{await room.kick(playerId);}catch(error){alert(`移出失败：${error.message}`);}
 }
-function playableView(c, v, me) { if (v.drawnCardId && v.drawnCardId !== c.id) return false; if (v.pendingDraw) return isDraw(c); const top = v.discard[0]; return c.type === "wild" || c.type === "wild4" || c.color === v.currentColor || (c.type === top.type && (c.type !== "number" || c.value === top.value)) || (c.type === "number" && top.type === "number" && c.value === top.value) }
-function renderActions(v, me, current, myTurn) { E.actionTitle.textContent = v.phase === "ended" ? "本局结束" : v.phase === "lobby" ? "等待开始" : myTurn ? "轮到你了" : `等待 ${current.name}`; E.actionArea.innerHTML = ""; if (v.phase !== "playing") return; if (v.unoVulnerableId && v.unoVulnerableId !== v.selfId) { const b = document.createElement("button"); b.className = "challenge"; b.textContent = "抓 UNO！"; b.onclick = () => submit({ type: "catchUno" }); E.actionArea.appendChild(b) } if (!myTurn) return; if (v.pendingDraw) { if (v.canChallenge) { const b = document.createElement("button"); b.className = "challenge"; b.textContent = "质疑上一张 +4"; b.onclick = () => submit({ type: "challenge" }); E.actionArea.appendChild(b) } const accept = document.createElement("button"); accept.className = "accept"; accept.textContent = `接受并摸 ${v.pendingDraw} 张`; accept.onclick = () => submit({ type: "acceptPenalty" }); E.actionArea.appendChild(accept) } else if (v.drawnCardId) { const pass = document.createElement("button"); pass.textContent = "保留摸到的牌并结束回合"; pass.onclick = () => submit({ type: "pass" }); E.actionArea.appendChild(pass) } else { const draw = document.createElement("button"); draw.className = "primary"; draw.textContent = "摸一张牌"; draw.onclick = () => submit({ type: "draw" }); E.actionArea.appendChild(draw) } }
-function chooseCard(id, c) { if (c.type === "wild" || c.type === "wild4") { pendingCardId = id; E.colorModal.classList.remove("hidden") } else submit({ type: "play", cardId: id }) }
-function startCountdown(deadline) { clearInterval(countdown); const tick = () => { if (!deadline) { E.timerText.textContent = "--"; E.timerBar.style.width = "0"; return } const left = Math.max(0, deadline - Date.now()); E.timerText.textContent = `${Math.ceil(left / 1000)}s`; E.timerBar.style.width = `${left / 150}%` }; tick(); countdown = setInterval(tick, 200) }
-async function init() { try { if ((await fetch("/api/config", { cache: "no-store" })).ok) E.connectionStatus.textContent = "联机服务可用" } catch { E.connectionStatus.textContent = "请通过 signal-server.js 打开" } E.hostModeButton.onclick = () => setMode("host"); E.guestModeButton.onclick = () => setMode("guest"); E.createRoomButton.onclick = createRoom; E.joinRoomButton.onclick = joinRoom; E.roomCodeInput.oninput = () => E.roomCodeInput.value = E.roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); E.roomPlayerCountSelect.onchange = changeCapacity; E.startGameButton.onclick = startGame; E.endGameButton.onclick = endGame; E.unoButton.onclick = () => submit({ type: "callUno" }); E.toggleLogButton.onclick = () => E.logList.classList.toggle("collapsed"); E.cancelColorButton.onclick = () => { pendingCardId = null; E.colorModal.classList.add("hidden") }; E.colorModal.querySelectorAll("[data-color]").forEach(b => b.onclick = () => { submit({ type: "play", cardId: pendingCardId, color: b.dataset.color }); pendingCardId = null; E.colorModal.classList.add("hidden") }); setMode("host") }
+function cardText(card){return card.type==="number"?card.value:{skip:"⊘",reverse:"↻",draw2:"+2",wild:"WILD",wild4:"+4"}[card.type];}
+function cardHtml(card,{button=false,enabled=false}={}){
+  if(card===null)return '<div class="uno-card wild"><span class="value">UNO</span></div>';
+  const tag=button?"button":"div";
+  return `<${tag} class="uno-card ${card.color||"wild"} ${enabled?"playable":""}" ${button?`data-card="${escapeHtml(card.id)}" ${enabled?"":"disabled"}`:""}><span class="value">${cardText(card)}</span><span class="symbol"></span></${tag}>`;
+}
+function currentPlayer(){return view?.players[view.currentIndex]||null;}
+function renderPlayers(){
+  E.players.innerHTML=view.players.map((player,index)=>`<div class="player ${index===view.currentIndex&&view.phase==="playing"?"turn":""}">
+    <div class="player-name"><span>${escapeHtml(player.name)}</span><b>${player.hand.length} 张</b></div>
+    <div class="player-meta">${player.isHost?"房主 · ":""}${player.connected?"在线":"离线"}${player.id===view.unoVulnerableId?" · 可抓UNO":player.unoCalled?" · 已喊UNO":""}</div>
+    <div class="mini-cards">${player.hand.slice(0,18).map(()=>'<i class="mini-card"></i>').join("")}</div>
+    ${view.permissions?.canKick&&!player.isHost?`<button class="kick-player" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>`:""}
+  </div>`).join("");
+  E.players.querySelectorAll("[data-player-id]").forEach((button)=>button.addEventListener("click",()=>kickPlayer(button.dataset.playerId)));
+}
+function renderActions(){
+  const current=currentPlayer();
+  const myTurn=view.phase==="playing"&&current?.id===view.selfId;
+  E.actionTitle.textContent=view.phase==="ended"?"本局结束":view.phase==="lobby"?"等待开始":myTurn?"轮到你了":`等待 ${current?.name||"玩家"}`;
+  E.actionArea.innerHTML="";
+  if(view.phase!=="playing")return;
+  const addButton=(text,className,action)=>{const button=document.createElement("button");button.textContent=text;if(className)button.className=className;button.addEventListener("click",()=>submit(action));E.actionArea.append(button);};
+  if(view.permissions.canCatchUno)addButton("抓 UNO！","challenge",{type:"catchUno"});
+  if(!myTurn)return;
+  if(view.permissions.canChallenge)addButton("质疑上一张 +4","challenge",{type:"challenge"});
+  if(view.permissions.canAcceptPenalty)addButton(`接受并摸 ${view.pendingDraw} 张`,"accept",{type:"acceptPenalty"});
+  else if(view.permissions.canPass)addButton("保留摸到的牌并结束回合","",{type:"pass"});
+  else if(view.permissions.canDraw)addButton("摸一张牌","primary",{type:"draw"});
+}
+function chooseCard(card){
+  if(card.type==="wild"||card.type==="wild4"){
+    pendingCardId=card.id;setHidden(E.colorModal,false);return;
+  }
+  submit({type:"play",cardId:card.id});
+}
+function render(){
+  if(!view)return;
+  const me=view.players.find((player)=>player.id===view.selfId);
+  const current=currentPlayer();
+  setHidden(E.hostTools,!view.permissions?.canManage);
+  setHidden(E.startGameButton,!view.permissions?.canStart);
+  setHidden(E.endGameButton,!view.permissions?.canEnd);
+  E.roomPlayerCountSelect.value=String(view.capacity);
+  E.roomPlayerCountSelect.disabled=!view.permissions?.canSetCapacity;
+  E.startGameButton.disabled=view.players.length!==view.capacity||view.players.some((player)=>!player.connected);
+  E.roomCodeDisplay.textContent=room.snapshot().roomCode;
+  E.directionText.textContent=view.direction===1?"顺时针 ↻":"逆时针 ↺";
+  E.deckCount.textContent=view.deckCount;
+  renderPlayers();
+  E.discardPile.innerHTML=view.discard[0]?cardHtml(view.discard[0]):"";
+  E.currentColor.textContent=`当前颜色：${COLOR_NAMES[view.currentColor]||"—"}`;
+  E.currentColor.style.color={red:"#c92525",yellow:"#9a7200",green:"#168843",blue:"#176db7"}[view.currentColor]||"";
+  setHidden(E.penaltyBanner,!view.pendingDraw);
+  E.penaltyBanner.textContent=`累计罚牌 +${view.pendingDraw}：可继续叠加 +2 / +4`;
+  if(view.phase==="lobby")E.notice.textContent=view.players.length===view.capacity?"玩家已经到齐，房主可以开始。":`等待玩家加入：${view.players.length}/${view.capacity}`;
+  else if(view.phase==="ended")E.notice.textContent=`${view.players.find((player)=>player.id===view.winnerId)?.name||"玩家"} 打完了所有牌，获得本局胜利！`;
+  else E.notice.textContent=`轮到 ${current?.name||"玩家"}，每次行动限时15秒。`;
+  E.handCount.textContent=me?.hand.length||0;
+  const playableIds=new Set(view.playableCardIds||[]);
+  E.hand.innerHTML=(me?.hand||[]).map((card)=>cardHtml(card,{button:true,enabled:playableIds.has(card.id)})).join("");
+  E.hand.querySelectorAll("[data-card]").forEach((button)=>button.addEventListener("click",()=>chooseCard(me.hand.find((card)=>card.id===button.dataset.card))));
+  E.unoButton.disabled=!view.permissions?.canCallUno;
+  E.unoButton.classList.toggle("called",Boolean(me?.unoCalled));
+  E.unoButton.textContent=me?.unoCalled?"已喊 UNO！":"喊 UNO！";
+  E.drawPile.disabled=!view.permissions?.canDraw;
+  E.drawPile.onclick=view.permissions?.canDraw?()=>submit({type:"draw"}):null;
+  renderActions();
+  E.logList.innerHTML=view.logs.map((entry)=>`<div class="log-item">${escapeHtml(entry.text)}</div>`).join("");
+  if(pendingCardId&&!me?.hand.some((card)=>card.id===pendingCardId)){pendingCardId=null;setHidden(E.colorModal,true);}
+  if(view.deadline)countdown.start(view.deadline,ACTION_SECONDS*1000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}
+}
+function endGame(){if(confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。"))submit({type:"end"});}
+async function init(){
+  bindRoomCodeInput(E.roomCodeInput);
+  E.hostModeButton.addEventListener("click",()=>selectMode("host"));E.guestModeButton.addEventListener("click",()=>selectMode("guest"));
+  E.createRoomButton.addEventListener("click",createGameRoom);E.joinRoomButton.addEventListener("click",joinGameRoom);
+  E.roomPlayerCountSelect.addEventListener("change",()=>submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)}));
+  E.startGameButton.addEventListener("click",()=>submit({type:"start"}));E.endGameButton.addEventListener("click",endGame);
+  E.unoButton.addEventListener("click",()=>submit({type:"callUno"}));E.toggleLogButton.addEventListener("click",()=>E.logList.classList.toggle("collapsed"));
+  E.cancelColorButton.addEventListener("click",()=>{pendingCardId=null;setHidden(E.colorModal,true);});
+  E.colorModal.querySelectorAll("[data-color]").forEach((button)=>button.addEventListener("click",()=>{if(pendingCardId)submit({type:"play",cardId:pendingCardId,color:button.dataset.color});pendingCardId=null;setHidden(E.colorModal,true);}));
+  selectMode("host");try{await room.checkServer();}catch{/* create/join presents details */}
+}
 init();

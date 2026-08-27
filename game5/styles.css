@@ -324,6 +324,13 @@ select {
     font-size: 10px
 }
 
+.kick-player {
+    min-height: 25px;
+    margin-top: 5px;
+    padding: 0 8px;
+    font-size: 10px
+}
+
 .mini-cards {
     display: flex;
     margin-top: 3px
