@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CABO 联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div><p class="eyebrow">SERVER AUTHORITATIVE · MEMORY CARD GAME</p><h1>CA<span>BO</span></h1><p>记住低点数，隐藏你的判断，在正确的时刻宣布 CABO。</p></div>
+    <div class="status" id="connectionStatus">准备连接</div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active">创建房间</button><button id="guestModeButton">加入房间</button></div>
+    <div id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">HOST A TABLE</p><h2>建立CABO牌局</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>人数<select id="playerCountSelect"><option>2</option><option>3</option><option selected>4</option></select></label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </div>
+    <div id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN A TABLE</p><h2>进入好友牌局</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 A7K2"></label>
+      <button id="joinRoomButton" class="primary">加入房间</button>
+    </div>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside>
+      <div class="panel room-card"><p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
+        <div id="hostTools" class="host-tools hidden">
+          <label>本房人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+          <button id="startGameButton" class="primary">开始游戏</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+      </div>
+      <div class="panel score-card"><p class="eyebrow">SCOREBOARD</p><div id="scoreboard"></div></div>
+      <div class="panel rules-card"><p class="eyebrow">2019 SECOND EDITION</p><small>2～4人 · CABO失败 +10<br>牌库耗尽结束本轮<br>首次恰好100分降至50<br>超过100分时结束整局</small></div>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <div class="panel table-panel">
+        <div class="table-head"><span>第 <b id="roundNumber">0</b> 轮</span><span id="phaseLabel">大厅</span><span>牌库 <b id="deckCount">0</b></span></div>
+        <div id="caboBanner" class="cabo-banner hidden"></div>
+        <div id="players" class="players"></div>
+        <div class="piles">
+          <button id="drawPile" class="card pile-card back" disabled><span>CABO</span><small>从牌库抽牌</small></button>
+          <div><p>弃牌堆 · <span id="discardCount">0</span></p><div id="discardPile" class="card pile-card empty">空</div></div>
+          <div id="pendingWrap" class="pending-wrap hidden"><p>你刚抽到</p><div id="pendingCard"></div></div>
+        </div>
+      </div>
+
+      <div class="panel action-panel">
+        <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+        <p id="selectionHint" class="selection-hint"></p><div id="actionArea" class="actions"></div>
+      </div>
+
+      <div id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">ROUND RESULT</p><div id="roundResults"></div></div>
+      <div class="panel log-panel"><div class="action-head"><h2>牌局记录</h2><button id="toggleLogButton" class="small">展开 / 收起</button></div><div id="logList" class="log collapsed"></div></div>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
