@@ -84,6 +84,14 @@
       <section class="table-area">
         <div class="notice" id="notice">等待玩家加入。</div>
 
+        <div class="panel reveal-panel hidden" id="revealPanel">
+          <div class="section-head">
+            <div><p class="eyebrow">REVEALED PLAYS</p><h2>本轮公开出牌</h2></div>
+            <span class="reveal-progress" id="revealProgress"></span>
+          </div>
+          <div class="revealed-plays" id="revealedPlays"></div>
+        </div>
+
         <div class="panel board-panel">
           <div class="section-head">
             <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
@@ -118,6 +126,6 @@
       </section>
     </section>
   </main>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
