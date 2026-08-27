@@ -1,822 +1,260 @@
 "use strict";
 
-const idioms = window.IDIOMS;
+import {
+  bindRoomCodeInput,
+  cleanPlayerName,
+  createAuthoritativeRoomClient,
+  createSessionStore,
+  escapeHtml,
+  renderConnectionStatus,
+  setHidden,
+  setModeVisibility
+} from "/shared/client/index.js";
+
+const PROTOCOL_VERSION = 3;
+const roleForSeat = (index) => Number(index) % 2 === 0 ? "captain" : "member";
+const teamIndexForSeat = (index) => Math.floor(Number(index) / 2);
+const $ = (id) => document.getElementById(id);
+const elements = Object.fromEntries([
+  "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
+  "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
+  "roomCodeInput","joinRoomButton","hostTools","roomCodeDisplay","roomPlayerCountSelect",
+  "startGameButton","endGameButton","returnLobbyButton","playerList","gameNotice","roundBadge",
+  "wordBadge","scoreBoard","seatBoard","idiomValue","turnTitle","teamBadge","actionArea","logList"
+].map((id) => [id,$(id)]));
 
 let mode = "host";
-let selfId = "";
-let roomCode = "";
-let hostClientId = "";
-let resumeToken = "";
-let signalEvents = null;
-let state = null;
-let guestView = null;
-
-const $ = (id) => document.getElementById(id);
-
-const elements = {
-  connectionStatus: $("connectionStatus"),
-  setupPanel: $("setupPanel"),
-  roomPanel: $("roomPanel"),
-  hostModeButton: $("hostModeButton"),
-  guestModeButton: $("guestModeButton"),
-  hostSetup: $("hostSetup"),
-  guestSetup: $("guestSetup"),
-  hostNameInput: $("hostNameInput"),
-  guestNameInput: $("guestNameInput"),
-  playerCountSelect: $("playerCountSelect"),
-  createRoomButton: $("createRoomButton"),
-  roomCodeInput: $("roomCodeInput"),
-  joinRoomButton: $("joinRoomButton"),
-  hostTools: $("hostTools"),
-  roomCodeDisplay: $("roomCodeDisplay"),
-  roomPlayerCountSelect: $("roomPlayerCountSelect"),
-  startGameButton: $("startGameButton"),
-  endGameButton: $("endGameButton"),
-  returnLobbyButton: $("returnLobbyButton"),
-  playerList: $("playerList"),
-  gameNotice: $("gameNotice"),
-  roundBadge: $("roundBadge"),
-  wordBadge: $("wordBadge"),
-  scoreBoard: $("scoreBoard"),
-  seatBoard: $("seatBoard"),
-  idiomValue: $("idiomValue"),
-  turnTitle: $("turnTitle"),
-  teamBadge: $("teamBadge"),
-  actionArea: $("actionArea"),
-  logList: $("logList")
-};
-
-function uid(prefix) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function sessionStorageKey(code) { return `tablegame:idiom:${code}`; }
-function loadSavedSession(code) { try { return JSON.parse(localStorage.getItem(sessionStorageKey(code)) || "null"); } catch { return null; } }
-function saveSession(name) { localStorage.setItem(sessionStorageKey(roomCode), JSON.stringify({ playerId: selfId, resumeToken, name })); }
-function clearSavedSession() { if (roomCode) localStorage.removeItem(sessionStorageKey(roomCode)); }
-
-function normalizeText(value) {
-  return String(value).trim().replace(/\s+/g, "").replace(/[，。！？、,.!?]/g, "");
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function shuffledIdioms() {
-  const result = [...idioms];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1));
-    [result[index], result[target]] = [result[target], result[index]];
-  }
-  return result;
-}
-
-function drawNextIdiom() {
-  if (!state.idiomDeck.length) {
-    state.idiomDeck = shuffledIdioms();
-    if (state.idiomDeck.length > 1 && state.idiomDeck[state.idiomDeck.length - 1] === state.idiom) {
-      [state.idiomDeck[0], state.idiomDeck[state.idiomDeck.length - 1]] = [state.idiomDeck[state.idiomDeck.length - 1], state.idiomDeck[0]];
+let view = null;
+const sessions = createSessionStore({gameId:"idiom"});
+const room = createAuthoritativeRoomClient({
+  protocolVersion:PROTOCOL_VERSION,
+  sessionStore:sessions,
+  onStatus(status) {
+    renderConnectionStatus(elements.connectionStatus,status,room.snapshot().roomCode);
+  },
+  handlers:{
+    onView(nextView) {
+      view = nextView;
+      enterRoom();
+      render();
+    },
+    onKicked() {
+      alert("你已被房主移出房间。");
+      location.reload();
     }
   }
-  return state.idiomDeck.pop();
-}
-
-function roleForSeat(index) {
-  return index % 2 === 0 ? "captain" : "member";
-}
-
-function roleText(role) {
-  return role === "captain" ? "队长" : "队员";
-}
-
-function teamNumberForSeat(index) {
-  return Math.floor(index / 2) + 1;
-}
-
-async function postJson(path, body) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
-  }
-  return response.json();
-}
-
-async function loadConfig() {
-  try {
-    const response = await fetch("/api/config", { cache: "no-store" });
-    if (!response.ok) return;
-    elements.connectionStatus.textContent = "服务器中继可用";
-  } catch {
-    elements.connectionStatus.textContent = "请通过 signal-server.js 打开游戏";
-  }
-}
-
-function openSignalEvents(clientId) {
-  if (signalEvents) signalEvents.close();
-  signalEvents = new EventSource(`/api/events?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);
-  signalEvents.addEventListener("signal", (event) => {
-    handleSignal(JSON.parse(event.data));
-  });
-  signalEvents.addEventListener("open", () => {
-    if (mode === "host" && roomCode) {
-      elements.connectionStatus.textContent = `房间 ${roomCode} 等待加入`;
-    } else if (mode === "guest" && roomCode) {
-      elements.connectionStatus.textContent = `已连接房间 ${roomCode}`;
-    }
-  });
-  signalEvents.addEventListener("error", () => {
-    elements.connectionStatus.textContent = "信令服务正在重连";
-  });
-}
-
-async function sendSignal(to, payload) {
-  await postJson("/api/signal", {
-    roomCode,
-    from: selfId,
-    resumeToken,
-    to,
-    payload
-  });
-}
-
-async function handleSignal(message) {
-  const payload = message.payload;
-  if (mode === "host" && payload?.kind === "hello") {
-    upsertPlayer(payload.playerId, payload.name);
-    renderAndBroadcast();
-    return;
-  }
-  if (mode === "host" && payload?.kind === "action") {
-    applyAction(message.from, payload.action);
-    return;
-  }
-  if (mode === "host" && payload?.kind === "presence") {
-    updatePlayerPresence(payload.playerId, payload.connected);
-    return;
-  }
-  if (payload?.kind === "kicked") {
-    clearSavedSession();
-    signalEvents?.close();
-    alert("你已被房主移出房间。");
-    location.reload();
-    return;
-  }
-  if (mode === "guest" && payload?.kind === "view") {
-    guestView = payload.view;
-    render();
-  }
-}
-
-function setMode(nextMode) {
-  mode = nextMode;
-  elements.hostModeButton.classList.toggle("active", mode === "host");
-  elements.guestModeButton.classList.toggle("active", mode === "guest");
-  elements.hostSetup.classList.toggle("hidden", mode !== "host");
-  elements.guestSetup.classList.toggle("hidden", mode !== "guest");
-  elements.connectionStatus.textContent = mode === "host" ? "准备开房" : "准备加入";
-}
+});
 
 function enterRoom() {
-  elements.setupPanel.classList.add("hidden");
-  elements.roomPanel.classList.remove("hidden");
-  elements.hostTools.classList.toggle("hidden", mode !== "host");
+  setHidden(elements.setupPanel,true);
+  setHidden(elements.roomPanel,false);
+  setHidden(elements.hostTools,!view?.permissions?.canManage);
+  elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }
 
-function createSeats(count) {
-  return Array.from({ length: count }, (_, index) => ({
-    index,
-    playerId: null
-  }));
-}
-
-function resizeSeats(count) {
-  const seats = createSeats(count);
-  seats.forEach((seat, index) => {
-    seat.playerId = state.seats[index]?.playerId || null;
+function selectMode(nextMode) {
+  mode = nextMode;
+  setModeVisibility(mode,{
+    hostSetup:elements.hostSetup,
+    guestSetup:elements.guestSetup,
+    hostTools:elements.hostTools,
+    hostButton:elements.hostModeButton,
+    guestButton:elements.guestModeButton
   });
-  state.playerCount = count;
-  state.seats = seats;
-  state.scores = Array(count / 2).fill(0);
 }
 
-function createHostState(playerCount) {
-  return {
-    phase: "lobby",
-    playerCount,
-    seats: createSeats(playerCount),
-    players: [{
-      id: selfId,
-      name: elements.hostNameInput.value.trim() || "房主",
-      connected: true,
-      isHost: true
-    }],
-    idiom: "",
-    turnTeamIndex: 0,
-    turnPhase: "describe",
-    currentDescription: "",
-    round: 0,
-    winnerTeamIndex: null,
-    winnerGuess: "",
-    scores: Array(playerCount / 2).fill(0),
-    wordNumber: 0,
-    wordStartTeamIndex: 0,
-    idiomDeck: [],
-    log: []
-  };
-}
-
-async function createRoom() {
-  selfId = uid("host");
-  state = createHostState(Number(elements.playerCountSelect.value));
-  elements.roomPlayerCountSelect.value = String(state.playerCount);
+async function createGameRoom() {
+  elements.createRoomButton.disabled = true;
   try {
-    const result = await postJson("/api/rooms", { hostId: selfId, name: state.players[0].name });
-    roomCode = result.roomCode;
-    resumeToken = result.resumeToken;
-    elements.roomCodeDisplay.textContent = roomCode;
-    openSignalEvents(selfId);
-    enterRoom();
-    render();
-  } catch {
-    alert("无法创建房间。请先运行 node game2/signal-server.js，再从服务地址打开页面。");
+    await room.createRoom({
+      name:cleanPlayerName(elements.hostNameInput.value,"房主"),
+      capacity:Number(elements.playerCountSelect.value)
+    });
+  } catch (error) {
+    alert(`创建房间失败：${error.message}\n请确认已通过 node game2/signal-server.js 启动。`);
+  } finally {
+    elements.createRoomButton.disabled = false;
   }
 }
 
-function changeRoomPlayerCount() {
-  if (mode !== "host" || !state || state.phase !== "lobby") {
-    elements.roomPlayerCountSelect.value = String(state?.playerCount || elements.playerCountSelect.value);
-    return;
-  }
-  resizeSeats(Number(elements.roomPlayerCountSelect.value));
-  renderAndBroadcast();
-}
-
-async function joinRoom() {
-  roomCode = elements.roomCodeInput.value.trim().toUpperCase();
-  if (!/^[A-Z0-9]{4}$/.test(roomCode)) {
-    alert("请输入 4 位房间号。");
-    return;
-  }
-  const savedSession = loadSavedSession(roomCode);
-  selfId = savedSession?.playerId || uid("guest");
-  let room;
+async function joinGameRoom() {
+  elements.joinRoomButton.disabled = true;
   try {
-    room = await postJson("/api/join", { roomCode, clientId: selfId, resumeToken: savedSession?.resumeToken, name: savedSession ? "" : (elements.guestNameInput.value.trim() || "玩家") });
-  } catch {
-    alert("没有找到这个房间号，或信令服务未启动。");
-    return;
+    const result = await room.joinRoom({
+      code:elements.roomCodeInput.value,
+      name:cleanPlayerName(elements.guestNameInput.value,"玩家")
+    });
+    if (result.resumed) elements.connectionStatus.textContent = "身份已恢复，正在同步游戏";
+  } catch (error) {
+    alert(`加入房间失败：${error.message}`);
+  } finally {
+    elements.joinRoomButton.disabled = false;
   }
+}
 
-  selfId = room.clientId;
-  resumeToken = room.resumeToken;
-  hostClientId = room.hostId;
-  openSignalEvents(selfId);
-  await sendSignal(hostClientId, {
-    kind: "hello",
-    playerId: selfId,
-    name: savedSession?.name || elements.guestNameInput.value.trim() || "玩家",
-    resumed: room.resumed
+function submit(action) {
+  return Promise.resolve(room.submitAction(action)).catch((error) => {
+    elements.connectionStatus.textContent = `操作失败：${error.message}`;
+    alert(error.message);
   });
-  saveSession(savedSession?.name || elements.guestNameInput.value.trim() || "玩家");
-  elements.connectionStatus.textContent = `已加入 ${roomCode}`;
-  enterRoom();
-  render();
-}
-
-function upsertPlayer(playerId, name) {
-  let player = state.players.find((item) => item.id === playerId);
-  if (!player && state.phase !== "lobby") return;
-  if (!player) {
-    player = {
-      id: playerId,
-      name: name || "玩家",
-      connected: true,
-      isHost: false
-    };
-    state.players.push(player);
-  }
-  player.name = name || player.name;
-  player.connected = true;
-}
-
-function teamIsReady(team) {
-  return Boolean(team?.captainId && team.memberId && state.players.find((player) => player.id === team.captainId)?.connected && state.players.find((player) => player.id === team.memberId)?.connected);
-}
-
-function updatePlayerPresence(playerId, connected) {
-  if (!state || playerId === selfId) return;
-  const player = state.players.find((item) => item.id === playerId);
-  if (!player || player.connected === connected) return;
-  player.connected = connected;
-  if (!connected && state.phase === "playing") {
-    const team = currentTeam();
-    if (!teamIsReady(team)) advanceTeam();
-  }
-  renderAndBroadcast();
 }
 
 async function kickPlayer(playerId) {
-  const player = state?.players.find((item) => item.id === playerId);
-  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？`)) return;
+  const player = view?.players.find((item) => item.id === playerId);
+  if (!player || player.isHost || !confirm(`确定要移出 ${player.name} 吗？游戏中移出玩家会直接结束大局。`)) return;
   try {
-    await postJson("/api/kick", { roomCode, hostId: selfId, resumeToken, playerId });
-    const wasPlaying = state.phase === "playing";
-    state.players = state.players.filter((item) => item.id !== playerId);
-    state.seats.forEach((seat) => { if (seat.playerId === playerId) seat.playerId = null; });
-    if (wasPlaying) finishGame();
-    else renderAndBroadcast();
-  } catch {
-    alert("无法移出该玩家，请检查服务器连接。");
+    await room.kick(playerId);
+  } catch (error) {
+    alert(`移出失败：${error.message}`);
   }
 }
 
-function submitAction(action) {
-  if (mode === "host") {
-    applyAction(selfId, action);
-    return;
-  }
-  sendSignal(hostClientId, { kind: "action", action }).catch(() => {
-    elements.connectionStatus.textContent = "操作发送失败，请检查服务器连接";
-  });
+function changeCapacity() {
+  if (!view?.permissions?.canSetCapacity) return;
+  submit({type:"setCapacity",capacity:Number(elements.roomPlayerCountSelect.value)});
 }
 
-function playerSeatIndex(playerId) {
-  return state.seats.findIndex((seat) => seat.playerId === playerId);
-}
-
-function teams() {
-  const result = [];
-  for (let index = 0; index < state.seats.length; index += 2) {
-    result.push({
-      index: index / 2,
-      captainSeat: index,
-      memberSeat: index + 1,
-      captainId: state.seats[index]?.playerId || null,
-      memberId: state.seats[index + 1]?.playerId || null
-    });
-  }
-  return result;
-}
-
-function currentTeam() {
-  return teams()[state.turnTeamIndex] || null;
-}
-
-function currentActorId() {
-  const team = currentTeam();
-  if (!team) return null;
-  return state.turnPhase === "describe" ? team.captainId : team.memberId;
-}
-
-function nameOf(playerId) {
-  return state.players.find((player) => player.id === playerId)?.name || "玩家";
-}
-
-function buildView(viewerId) {
-  const seatIndex = playerSeatIndex(viewerId);
-  const role = seatIndex >= 0 ? roleForSeat(seatIndex) : null;
-  const actorId = state.phase === "playing" ? currentActorId() : null;
-  const team = state.phase === "playing" ? currentTeam() : null;
-  const showIdiom = state.phase === "ended" || role === "captain";
-
-  return {
-    selfId: viewerId,
-    phase: state.phase,
-    playerCount: state.playerCount,
-    seats: state.seats,
-    players: state.players,
-    mySeatIndex: seatIndex,
-    myRole: role,
-    idiom: showIdiom ? state.idiom : "",
-    idiomHidden: state.phase === "playing" && role !== "captain",
-    turnTeamIndex: state.turnTeamIndex,
-    turnPhase: state.turnPhase,
-    currentActorId: actorId,
-    currentDescription: state.currentDescription,
-    round: state.round,
-    winnerTeamIndex: state.winnerTeamIndex,
-    winnerGuess: state.winnerGuess,
-    scores: state.scores,
-    wordNumber: state.wordNumber,
-    log: state.log,
-    notice: getNotice(),
-    turnLabel: getTurnLabel(team, actorId)
-  };
-}
-
-function getNotice() {
-  if (!state) return "等待创建房间。";
-  if (state.phase === "lobby") {
-    const seated = state.seats.filter((seat) => seat.playerId).length;
-    return `房主选择了 ${state.playerCount} 人局，当前 ${seated}/${state.playerCount} 人落座。相邻两席为一队，前席队长，后席队员。`;
-  }
-  if (state.phase === "ended") {
-    const highest = Math.max(...state.scores);
-    const leaders = state.scores.map((score, index) => score === highest ? `第 ${index + 1} 队` : "").filter(Boolean);
-    return `大局结束，${leaders.join("、")}${leaders.length > 1 ? "并列第一" : "获胜"}，最高 ${highest} 分。最后一题答案是「${state.idiom}」。`;
-  }
-  const actor = nameOf(currentActorId());
-  return state.turnPhase === "describe"
-    ? `轮到第 ${state.turnTeamIndex + 1} 队队长 ${actor} 描述成语。`
-    : `轮到第 ${state.turnTeamIndex + 1} 队队员 ${actor} 根据描述猜成语。`;
-}
-
-function getTurnLabel(team, actorId) {
-  if (!team || !actorId) return "未开始";
-  const action = state.turnPhase === "describe" ? "描述" : "猜词";
-  return `第 ${team.index + 1} 队 ${nameOf(actorId)} ${action}`;
-}
-
-function currentView() {
-  if (mode === "host") return state ? buildView(selfId) : null;
-  return guestView;
-}
-
-function broadcastViews() {
-  if (mode !== "host" || !state) return;
-  for (const player of state.players) {
-    if (player.id === selfId) continue;
-    sendSignal(player.id, { kind: "view", view: buildView(player.id) }).catch(() => {
-      const remote = state.players.find((item) => item.id === player.id);
-      if (remote) remote.connected = false;
-      render();
-    });
-  }
-}
-
-function renderAndBroadcast() {
-  render();
-  broadcastViews();
-}
-
-function applyAction(playerId, action) {
-  if (!state) return;
-  if (action.type === "sit") {
-    sitPlayer(playerId, action.seatIndex);
-    return;
-  }
-  if (action.type === "leaveSeat") {
-    leaveSeat(playerId);
-    return;
-  }
-  if (action.type === "describe") {
-    submitDescription(playerId, action.text);
-    return;
-  }
-  if (action.type === "guess") {
-    submitGuess(playerId, action.text);
-  }
-}
-
-function sitPlayer(playerId, seatIndex) {
-  if (state.phase !== "lobby") return;
-  const player = state.players.find((item) => item.id === playerId);
-  const target = state.seats[seatIndex];
-  if (!player || !target || target.playerId) return;
-  state.seats.forEach((seat) => {
-    if (seat.playerId === playerId) seat.playerId = null;
-  });
-  target.playerId = playerId;
-  renderAndBroadcast();
-}
-
-function leaveSeat(playerId) {
-  if (state.phase !== "lobby") return;
-  state.seats.forEach((seat) => {
-    if (seat.playerId === playerId) seat.playerId = null;
-  });
-  renderAndBroadcast();
-}
-
-function startGame() {
-  if (!state || state.phase !== "lobby") return;
-  const emptySeat = state.seats.find((seat) => !seat.playerId);
-  if (emptySeat) {
-    alert("还有座位为空，所有人落座后才能开始。");
-    return;
-  }
-  if (state.seats.some((seat) => !state.players.find((player) => player.id === seat.playerId)?.connected)) {
-    alert("所有已落座玩家在线后才能开始。");
-    return;
-  }
-  state.phase = "playing";
-  state.scores = Array(state.playerCount / 2).fill(0);
-  state.idiomDeck = shuffledIdioms();
-  state.idiom = drawNextIdiom();
-  state.turnTeamIndex = 0;
-  state.wordStartTeamIndex = 0;
-  state.turnPhase = "describe";
-  state.currentDescription = "";
-  state.round = 1;
-  state.wordNumber = 1;
-  state.winnerTeamIndex = null;
-  state.winnerGuess = "";
-  state.log = [{
-    id: uid("log"),
-    text: "大局开始",
-    detail: `本局共有 ${state.playerCount / 2} 队，每猜中一题得 1 分，积分持续到房主手动结束。`
-  }];
-  renderAndBroadcast();
-}
-
+function startGame() { submit({type:"start"}); }
 function finishGame() {
-  if (mode !== "host" || !state || state.phase !== "playing") return;
-  state.phase = "ended";
-  state.log.unshift({
-    id: uid("log"),
-    text: "房主结束了大局",
-    detail: `最终比分：${state.scores.map((score, index) => `第 ${index + 1} 队 ${score} 分`).join("，")}`
-  });
-  renderAndBroadcast();
+  if (view?.phase === "playing" && confirm("确定结束当前大局并结算比分吗？")) submit({type:"end"});
 }
-
-function returnToLobby() {
-  if (mode !== "host" || !state || state.phase !== "ended") return;
-  state.phase = "lobby";
-  state.idiom = "";
-  state.turnTeamIndex = 0;
-  state.turnPhase = "describe";
-  state.currentDescription = "";
-  state.round = 0;
-  state.winnerTeamIndex = null;
-  state.winnerGuess = "";
-  state.scores = Array(state.playerCount / 2).fill(0);
-  state.wordNumber = 0;
-  state.wordStartTeamIndex = 0;
-  state.idiomDeck = [];
-  state.log = [];
-  renderAndBroadcast();
-}
-
-function submitDescription(playerId, text) {
-  if (state.phase !== "playing") return;
-  if (state.turnPhase !== "describe" || currentActorId() !== playerId) return;
-  const cleanText = String(text || "").trim();
-  if (!cleanText) return;
-  state.currentDescription = cleanText;
-  state.turnPhase = "guess";
-  state.log.unshift({
-    id: uid("log"),
-    text: `${nameOf(playerId)} 描述：${cleanText}`,
-    detail: `第 ${state.turnTeamIndex + 1} 队队长提交`
-  });
-  renderAndBroadcast();
-}
-
-function submitGuess(playerId, text) {
-  if (state.phase !== "playing") return;
-  if (state.turnPhase !== "guess" || currentActorId() !== playerId) return;
-  const guess = String(text || "").trim();
-  if (!guess) return;
-  const correct = normalizeText(guess) === normalizeText(state.idiom);
-  state.log.unshift({
-    id: uid("log"),
-    text: `${nameOf(playerId)} 猜：${guess}`,
-    detail: correct ? `回答正确，第 ${state.turnTeamIndex + 1} 队获得 1 分。` : "回答错误，轮到下一队。"
-  });
-  if (correct) {
-    state.scores[state.turnTeamIndex] += 1;
-    state.winnerTeamIndex = state.turnTeamIndex;
-    state.winnerGuess = guess;
-    startNextWord();
-  } else {
-    advanceTeam();
-  }
-  renderAndBroadcast();
-}
-
-function startNextWord() {
-  const previousTeamIndex = state.turnTeamIndex;
-  const nextTeamIndex = nextReadyTeamIndex(previousTeamIndex);
-  state.idiom = drawNextIdiom();
-  state.wordNumber += 1;
-  state.turnTeamIndex = nextTeamIndex;
-  state.wordStartTeamIndex = nextTeamIndex;
-  state.turnPhase = "describe";
-  state.currentDescription = "";
-  state.round = 1;
-  state.log.unshift({
-    id: uid("log"),
-    text: `第 ${previousTeamIndex + 1} 队获得 1 分，开始第 ${state.wordNumber} 题`,
-    detail: `当前比分：${state.scores.map((score, index) => `第 ${index + 1} 队 ${score} 分`).join("，")}；由第 ${nextTeamIndex + 1} 队先行动。`
-  });
-}
-
-function nextReadyTeamIndex(fromIndex) {
-  const teamCount = state.playerCount / 2;
-  for (let offset = 1; offset <= teamCount; offset += 1) {
-    const index = (fromIndex + offset) % teamCount;
-    if (teamIsReady(teams()[index])) return index;
-  }
-  return fromIndex;
-}
-
-function advanceTeam() {
-  const teamCount = state.playerCount / 2;
-  let next = state.turnTeamIndex;
-  let found = false;
-  for (let attempt = 0; attempt < teamCount; attempt += 1) {
-    next = (next + 1) % teamCount;
-    if (next === state.wordStartTeamIndex) state.round += 1;
-    if (teamIsReady(teams()[next])) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
-    state.turnPhase = "describe";
-    state.currentDescription = "";
-    return;
-  }
-  state.turnTeamIndex = next;
-  state.turnPhase = "describe";
-  state.currentDescription = "";
-}
+function returnToLobby() { submit({type:"restart"}); }
 
 function render() {
-  const view = currentView();
-  elements.hostTools.classList.toggle("hidden", mode !== "host");
   if (!view) return;
-  if (mode === "host") {
-    elements.roomPlayerCountSelect.value = String(view.playerCount);
-    elements.roomPlayerCountSelect.disabled = view.phase !== "lobby";
-    elements.startGameButton.classList.toggle("hidden", view.phase !== "lobby");
-    elements.endGameButton.classList.toggle("hidden", view.phase !== "playing");
-    elements.returnLobbyButton.classList.toggle("hidden", view.phase !== "ended");
-  }
+  setHidden(elements.hostTools,!view.permissions?.canManage);
+  setHidden(elements.startGameButton,!view.permissions?.canStart);
+  setHidden(elements.endGameButton,!view.permissions?.canEnd);
+  setHidden(elements.returnLobbyButton,!view.permissions?.canRestart);
+  elements.roomPlayerCountSelect.value = String(view.capacity);
+  elements.roomPlayerCountSelect.disabled = !view.permissions?.canSetCapacity;
+  const seatsFull = view.seats.every((seat) => seat.playerId);
+  elements.startGameButton.disabled = view.players.length !== view.capacity
+    || !seatsFull
+    || view.players.some((player) => !player.connected);
+  elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
   elements.gameNotice.textContent = view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
   elements.wordBadge.textContent = `第 ${view.wordNumber} 题`;
   elements.turnTitle.textContent = view.turnLabel;
   elements.teamBadge.textContent = view.phase === "playing" ? `第 ${view.turnTeamIndex + 1} 队` : "--";
-  renderPlayers(view);
-  renderScores(view);
-  renderSeats(view);
-  renderIdiom(view);
-  renderActions(view);
-  renderLog(view);
+  renderPlayers();
+  renderScores();
+  renderSeats();
+  renderIdiom();
+  renderActions();
+  renderLog();
 }
 
-function renderScores(view) {
+function renderScores() {
   const highest = view.scores.length ? Math.max(...view.scores) : 0;
-  elements.scoreBoard.innerHTML = view.scores.map((score, index) => `
+  elements.scoreBoard.innerHTML = view.scores.map((score,index) => `
     <div class="score-card ${view.phase !== "lobby" && score === highest ? "leader" : ""}">
-      <strong>第 ${index + 1} 队</strong>
-      <span class="score-value">${score}</span>
-    </div>
-  `).join("");
+      <strong>第 ${index + 1} 队</strong><span class="score-value">${score}</span>
+    </div>`).join("");
 }
 
-function renderPlayers(view) {
+function renderPlayers() {
   elements.playerList.innerHTML = view.players.map((player) => `
-    <div class="player-item">
-      <div>
-        <div class="player-name">${escapeHtml(player.name)}</div>
-        <div class="player-meta">${player.isHost ? "房主" : "玩家"}</div>
+    <div class="player-item ${player.id === view.selfId ? "player-self" : ""}">
+      <div><div class="player-name">${escapeHtml(player.name)}</div><div class="player-meta">${player.isHost ? "房主" : "玩家"}</div></div>
+      <div class="player-actions">
+        <span class="tag ${player.connected ? "online" : "offline"}">${player.connected ? "在线" : "离线"}</span>
+        ${view.permissions?.canKick && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}
       </div>
-      <div class="player-actions"><span class="tag ${player.connected ? "online" : "offline"}">${player.connected ? "在线" : "离线"}</span>${mode === "host" && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}</div>
-    </div>
-  `).join("");
-  if (mode === "host") elements.playerList.querySelectorAll(".kick-player-button").forEach((button) => button.addEventListener("click", () => kickPlayer(button.dataset.playerId)));
+    </div>`).join("");
+  elements.playerList.querySelectorAll(".kick-player-button").forEach((button) => {
+    button.addEventListener("click",() => kickPlayer(button.dataset.playerId));
+  });
 }
 
-function renderSeats(view) {
-  const playersById = new Map(view.players.map((player) => [player.id, player]));
+function roleText(role) { return role === "captain" ? "队长" : "队员"; }
+
+function renderSeats() {
+  const playersById = new Map(view.players.map((player) => [player.id,player]));
   elements.seatBoard.innerHTML = view.seats.map((seat) => {
     const player = playersById.get(seat.playerId);
     const role = roleForSeat(seat.index);
-    const team = teamNumberForSeat(seat.index);
-    const isMine = seat.playerId === view.selfId;
-    const isCurrent = view.phase === "playing" && seat.playerId === view.currentActorId;
-    const canSit = view.phase === "lobby" && !seat.playerId;
-    const canLeave = view.phase === "lobby" && isMine;
-    const button = canSit
+    const team = teamIndexForSeat(seat.index) + 1;
+    const mine = seat.playerId === view.selfId;
+    const current = view.phase === "playing" && seat.playerId === view.currentActorId;
+    const button = view.phase === "lobby" && !seat.playerId
       ? `<button data-sit="${seat.index}" type="button">落座</button>`
-      : canLeave
-        ? `<button data-leave="1" type="button">离座</button>`
-        : "";
+      : view.phase === "lobby" && mine ? '<button data-leave="1" type="button">离座</button>' : "";
     return `
-      <div class="seat-card ${isCurrent ? "current" : ""}">
-        <div class="seat-head">
-          <strong>第 ${team} 队</strong>
-          <span class="role-chip role-${role}">${roleText(role)}</span>
-        </div>
-        <div>
-          <div class="${player ? "seat-name" : "seat-empty"}">${escapeHtml(player?.name || "空位")}</div>
-          <div class="seat-meta">席位 ${seat.index + 1}${isMine ? " · 你" : ""}</div>
-        </div>
+      <div class="seat-card ${current ? "current" : ""}">
+        <div class="seat-head"><strong>第 ${team} 队</strong><span class="role-chip role-${role}">${roleText(role)}</span></div>
+        <div><div class="${player ? "seat-name" : "seat-empty"}">${escapeHtml(player?.name || "空位")}</div><div class="seat-meta">席位 ${seat.index + 1}${mine ? " · 你" : ""}</div></div>
         ${button}
-      </div>
-    `;
+      </div>`;
   }).join("");
-
   elements.seatBoard.querySelectorAll("[data-sit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      submitAction({ type: "sit", seatIndex: Number(button.dataset.sit) });
-    });
+    button.addEventListener("click",() => submit({type:"sit",seatIndex:Number(button.dataset.sit)}));
   });
   elements.seatBoard.querySelectorAll("[data-leave]").forEach((button) => {
-    button.addEventListener("click", () => {
-      submitAction({ type: "leaveSeat" });
-    });
+    button.addEventListener("click",() => submit({type:"leaveSeat"}));
   });
 }
 
-function renderIdiom(view) {
-  elements.idiomValue.classList.toggle("hidden-word", view.idiomHidden);
-  if (view.phase === "lobby") {
-    elements.idiomValue.textContent = "尚未开始";
-  } else if (view.idiomHidden) {
-    elements.idiomValue.textContent = "队员不可见";
-  } else {
-    elements.idiomValue.textContent = view.idiom || "尚未抽取";
-  }
+function renderIdiom() {
+  elements.idiomValue.classList.toggle("hidden-word",view.idiomHidden);
+  if (view.phase === "lobby") elements.idiomValue.textContent = "尚未开始";
+  else if (view.idiomHidden) elements.idiomValue.textContent = "队员不可见";
+  else elements.idiomValue.textContent = view.idiom || "等待完整队伍";
 }
 
-function renderActions(view) {
+function renderActions() {
   if (view.phase === "lobby") {
-    elements.actionArea.innerHTML = `<p class="muted">自由落座中。所有席位坐满后，由房主开始游戏。</p>`;
+    elements.actionArea.innerHTML = '<p class="muted">自由落座中。所有席位坐满后，由房主开始游戏。</p>';
     return;
   }
   if (view.phase === "ended") {
     const highest = Math.max(...view.scores);
-    const leaders = view.scores.map((score, index) => score === highest ? `第 ${index + 1} 队` : "").filter(Boolean);
+    const leaders = view.scores.map((score,index) => score === highest ? `第 ${index + 1} 队` : "").filter(Boolean);
     const winner = `${leaders.join("、")}${leaders.length > 1 ? "并列第一" : "获胜"}`;
-    elements.actionArea.innerHTML = `
-      <div class="result-title">${escapeHtml(winner)}</div>
-      <p>最高分：${highest} 分</p>
-      <p>最后一题成语：${escapeHtml(view.idiom)}</p>
-    `;
+    elements.actionArea.innerHTML = `<div class="result-title">${escapeHtml(winner)}</div><p>最高分：${highest} 分</p><p>最后一题成语：${escapeHtml(view.idiom)}</p>`;
     return;
   }
-  if (view.currentActorId !== view.selfId) {
+  if (!view.currentActorId) {
+    elements.actionArea.innerHTML = '<p class="muted">当前没有完整在线队伍，等待玩家恢复连接。</p>';
+    return;
+  }
+  if (!view.permissions?.canDescribe && !view.permissions?.canGuess) {
     const description = view.currentDescription
-      ? `<div class="notice"><strong>当前描述：</strong>${escapeHtml(view.currentDescription)}</div>`
-      : "";
+      ? `<div class="notice"><strong>当前描述：</strong>${escapeHtml(view.currentDescription)}</div>` : "";
     elements.actionArea.innerHTML = `${description}<p class="muted">等待当前队伍行动。</p>`;
     return;
   }
-  if (view.turnPhase === "describe") {
-    elements.actionArea.innerHTML = `
-      <label>
-        队长描述
-        <textarea id="descriptionInput" autocomplete="off" maxlength="120" placeholder="输入给队员看的描述"></textarea>
-      </label>
-      <button class="primary" id="submitDescriptionButton" type="button">提交描述</button>
-    `;
-    $("submitDescriptionButton").addEventListener("click", () => {
-      submitAction({ type: "describe", text: $("descriptionInput").value });
-    });
+  if (view.permissions.canDescribe) {
+    elements.actionArea.innerHTML = `<label>队长描述<textarea id="descriptionInput" autocomplete="off" maxlength="120" placeholder="输入给队员看的描述"></textarea></label><button class="primary" id="submitDescriptionButton" type="button">提交描述</button>`;
+    $("submitDescriptionButton").addEventListener("click",() => submit({type:"describe",text:$("descriptionInput").value}));
     return;
   }
-  elements.actionArea.innerHTML = `
-    <div class="notice"><strong>当前描述：</strong>${escapeHtml(view.currentDescription)}</div>
-    <label>
-      队员猜词
-      <input id="guessInput" autocomplete="off" maxlength="12" placeholder="输入四字成语">
-    </label>
-    <button class="primary" id="submitGuessButton" type="button">提交猜词</button>
-  `;
-  $("submitGuessButton").addEventListener("click", () => {
-    submitAction({ type: "guess", text: $("guessInput").value });
-  });
+  elements.actionArea.innerHTML = `<div class="notice"><strong>当前描述：</strong>${escapeHtml(view.currentDescription)}</div><label>队员猜词<input id="guessInput" autocomplete="off" maxlength="12" placeholder="输入四字成语"></label><button class="primary" id="submitGuessButton" type="button">提交猜词</button>`;
+  $("submitGuessButton").addEventListener("click",() => submit({type:"guess",text:$("guessInput").value}));
 }
 
-function renderLog(view) {
+function renderLog() {
   if (!view.log.length) {
-    elements.logList.innerHTML = `<p class="muted">还没有公开记录。</p>`;
+    elements.logList.innerHTML = '<p class="muted">还没有公开记录。</p>';
     return;
   }
-  elements.logList.innerHTML = view.log.slice(0, 40).map((item) => `
-    <div class="log-item">
-      <div class="log-line">${escapeHtml(item.text)}</div>
-      <div class="muted">${escapeHtml(item.detail || "")}</div>
-    </div>
-  `).join("");
+  elements.logList.innerHTML = view.log.slice(0,40).map((item) => `
+    <div class="log-item"><div class="log-line">${escapeHtml(item.text)}</div><div class="muted">${escapeHtml(item.detail || "")}</div></div>`).join("");
 }
 
 async function init() {
-  await loadConfig();
-  elements.hostModeButton.addEventListener("click", () => setMode("host"));
-  elements.guestModeButton.addEventListener("click", () => setMode("guest"));
-  elements.createRoomButton.addEventListener("click", createRoom);
-  elements.joinRoomButton.addEventListener("click", joinRoom);
-  elements.roomPlayerCountSelect.addEventListener("change", changeRoomPlayerCount);
-  elements.startGameButton.addEventListener("click", startGame);
-  elements.endGameButton.addEventListener("click", finishGame);
-  elements.returnLobbyButton.addEventListener("click", returnToLobby);
-  setMode("host");
+  bindRoomCodeInput(elements.roomCodeInput);
+  elements.hostModeButton.addEventListener("click",() => selectMode("host"));
+  elements.guestModeButton.addEventListener("click",() => selectMode("guest"));
+  elements.createRoomButton.addEventListener("click",createGameRoom);
+  elements.joinRoomButton.addEventListener("click",joinGameRoom);
+  elements.roomPlayerCountSelect.addEventListener("change",changeCapacity);
+  elements.startGameButton.addEventListener("click",startGame);
+  elements.endGameButton.addEventListener("click",finishGame);
+  elements.returnLobbyButton.addEventListener("click",returnToLobby);
+  selectMode("host");
+  try { await room.checkServer(); } catch { /* create/join shows the detailed error */ }
 }
 
 init();
