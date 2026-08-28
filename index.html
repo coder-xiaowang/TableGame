@@ -1,150 +1,51 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
-  <title>桌游大厅</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="zillionx 的桌游大厅——挑一款喜欢的游戏，和朋友围坐一桌。">
+  <meta name="theme-color" content="#f6e8ce">
+  <title>桌游大厅 · zillionx 的憩所</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      padding: 40px 20px;
-      color: #eef3ff;
-      background:
-        radial-gradient(circle at top, #233a67 0, transparent 45%),
-        #0b1220;
-      font-family:
-        system-ui, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", "Microsoft YaHei", sans-serif;
-    }
-
-    main {
-      width: min(100%, 1100px);
-      margin: 0 auto;
-    }
-
-    header {
-      margin-bottom: 32px;
-      text-align: center;
-    }
-
-    h1 {
-      margin: 0 0 12px;
-      font-size: clamp(32px, 6vw, 56px);
-    }
-
-    header p {
-      margin: 0;
-      color: #aebdd5;
-    }
-
-    #games {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 18px;
-    }
-
-    .game {
-      display: block;
-      min-height: 145px;
-      padding: 22px;
-      color: inherit;
-      text-decoration: none;
-      border: 1px solid #31466b;
-      border-radius: 18px;
-      background: rgba(23, 36, 61, 0.88);
-      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.18);
-      transition: transform 150ms ease, border-color 150ms ease;
-    }
-
-    .game:hover {
-      transform: translateY(-3px);
-      border-color: #7da7ff;
-    }
-
-    .number {
-      color: #7da7ff;
-      font-size: 14px;
-    }
-
-    .game h2 {
-      margin: 15px 0 8px;
-      font-size: 22px;
-    }
-
-    .game p {
-      margin: 0;
-      color: #aebdd5;
-      font-size: 14px;
-    }
-
-    footer {
-      margin-top: 32px;
-      color: #7889a5;
-      text-align: center;
-      font-size: 13px;
-    }
+    :root{color-scheme:light;--ink:#4f3528;--muted:#826b5d;--paper:#fffaf0;--paper-deep:#f6e7cc;--orange:#c86d2c;--orange-dark:#9f4f1f;--sage:#8b9c62;--line:rgba(126,85,53,.18);--shadow:0 18px 52px rgba(104,66,35,.17);--serif:"幼圆","YouYuan","华文楷体","STKaiti",serif;--sans:"幼圆","YouYuan","Microsoft YaHei UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-width:320px;min-height:100vh;color:var(--ink);font-family:var(--sans);background:#f4e2bf;background-image:radial-gradient(circle at 12% 5%,rgba(255,252,231,.9),transparent 28%),radial-gradient(circle at 88% 12%,rgba(221,193,145,.38),transparent 28%),linear-gradient(145deg,#f7e9cc,#eed4a9 58%,#f4e5c8);overflow-x:hidden}body::before{position:fixed;inset:0;z-index:-1;opacity:.22;background-image:repeating-linear-gradient(0deg,transparent 0 27px,rgba(129,93,59,.07) 27px 28px);content:""}a{color:inherit}.site-header{position:sticky;top:18px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:20px;width:min(94vw,1320px);min-height:78px;margin:18px auto 0;padding:10px 20px;border:1px solid rgba(145,98,58,.18);border-radius:24px 20px 26px 21px;background:rgba(255,250,239,.91);box-shadow:0 12px 34px rgba(105,66,37,.14),inset 0 0 30px rgba(255,255,255,.72);backdrop-filter:blur(16px)}.site-header::after{position:absolute;inset:5px;border:1px dashed rgba(157,105,63,.14);border-radius:19px;content:"";pointer-events:none}.brand{position:relative;z-index:1;display:flex;align-items:center;gap:12px;text-decoration:none}.brand-mark{display:grid;place-items:center;width:52px;height:52px;border:3px solid #fff4dc;border-radius:50%;color:#fff7e7;background:linear-gradient(145deg,#e3a25f,#bd6932);box-shadow:0 4px 12px rgba(115,66,35,.22);font-size:23px}.brand strong{display:block;font:700 clamp(17px,2vw,23px) var(--serif);letter-spacing:.04em}.brand small{display:block;margin-top:3px;color:#9a7b67;font:11px Georgia,serif}.header-nav{position:relative;z-index:1;display:flex;align-items:center;gap:10px}.header-nav a{padding:10px 14px;border-radius:999px;color:#755748;font-size:13px;text-decoration:none}.header-nav a:hover,.header-nav a:focus-visible{color:var(--orange-dark);background:#f6e4c7}.header-nav .active{color:#fff;background:var(--orange)}main{width:min(94vw,1320px);margin:0 auto;padding:42px 0 58px}.hero{position:relative;max-width:850px;margin:0 auto 28px;text-align:center}.eyebrow{margin:0 0 8px;color:#b77a4f;font:700 10px Georgia,serif;letter-spacing:.25em}.hero h1{margin:0;font:700 clamp(32px,5vw,58px)/1.15 var(--serif);letter-spacing:.05em}.hero h1 span{color:var(--orange)}.hero>p:not(.eyebrow){max-width:650px;margin:13px auto 0;color:var(--muted);font-size:14px;line-height:1.8}.hero-vine{display:flex;align-items:center;gap:10px;width:min(540px,72%);margin:16px auto;color:var(--sage)}.hero-vine::before,.hero-vine::after{height:1px;flex:1;background:linear-gradient(90deg,transparent,#c7ad88);content:""}.hero-vine::after{background:linear-gradient(90deg,#c7ad88,transparent)}.lobby-board{position:relative;padding:24px;border:1px solid rgba(143,96,58,.16);border-radius:24px;background:rgba(255,251,241,.78);box-shadow:var(--shadow),inset 0 0 35px rgba(255,255,255,.7)}.lobby-board::before{position:absolute;inset:7px;border:1px dashed rgba(150,103,66,.15);border-radius:18px;content:"";pointer-events:none}.board-head{position:relative;z-index:1;display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:20px}.board-head h2{margin:2px 0 0;font:700 clamp(21px,3vw,30px) var(--serif)}.board-head p{margin:0;color:var(--muted);font-size:13px}.filters{display:flex;flex-wrap:wrap;gap:8px}.filter{border:1px solid rgba(146,99,61,.2);border-radius:999px;padding:8px 13px;color:#795b49;background:#fff8e9;font-family:inherit;cursor:pointer}.filter:hover,.filter:focus-visible,.filter.active{border-color:var(--orange);color:#fff;background:var(--orange)}.games{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.game{--card-accent:#c6773d;position:relative;display:flex;flex-direction:column;min-height:226px;padding:20px;border:1px solid rgba(132,88,54,.17);border-radius:17px 20px 16px 22px;color:inherit;background:linear-gradient(155deg,rgba(255,253,246,.98),rgba(250,236,208,.94));box-shadow:0 10px 22px rgba(92,57,31,.11);text-decoration:none;overflow:hidden;transition:transform 180ms ease,box-shadow 180ms ease,border-color 180ms ease}.game::before{position:absolute;top:-33px;right:-28px;width:112px;height:112px;border:18px solid color-mix(in srgb,var(--card-accent) 22%,transparent);border-radius:50%;content:""}.game::after{position:absolute;right:17px;bottom:14px;width:30px;height:46px;border-radius:100% 0 100% 0;background:color-mix(in srgb,var(--card-accent) 18%,transparent);content:"";transform:rotate(24deg)}.game:hover,.game:focus-visible{transform:translateY(-5px) rotate(-.2deg);border-color:color-mix(in srgb,var(--card-accent) 50%,#c9a77a);box-shadow:0 17px 29px rgba(92,57,31,.17);outline:none}.game[hidden]{display:none}.game:nth-child(4n+2){transform:rotate(.25deg)}.game:nth-child(4n+3){transform:rotate(-.2deg)}.game:nth-child(4n+2):hover,.game:nth-child(4n+3):hover{transform:translateY(-5px) rotate(0)}.game-top{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between}.game-number{color:var(--card-accent);font:700 10px Georgia,serif;letter-spacing:.16em}.status{padding:5px 8px;border:1px solid color-mix(in srgb,var(--card-accent) 28%,transparent);border-radius:999px;color:color-mix(in srgb,var(--card-accent) 80%,#604234);background:color-mix(in srgb,var(--card-accent) 9%,#fff);font-size:10px}.game-icon{position:relative;z-index:1;display:grid;place-items:center;width:50px;height:50px;margin:20px 0 12px;border-radius:15px 17px 13px 18px;color:#fff;background:var(--card-accent);box-shadow:0 7px 15px color-mix(in srgb,var(--card-accent) 27%,transparent);font-size:25px;transform:rotate(-3deg)}.game h3{position:relative;z-index:1;margin:0;font:700 21px/1.25 var(--serif)}.game p{position:relative;z-index:1;min-height:42px;margin:8px 0 18px;color:var(--muted);font-size:12px;line-height:1.65}.game-action{position:relative;z-index:1;display:flex;align-items:center;gap:6px;margin-top:auto;color:var(--orange-dark);font-size:12px;font-weight:700}.game-action span{transition:transform 160ms ease}.game:hover .game-action span{transform:translateX(4px)}.authority-note{position:relative;z-index:1;display:flex;align-items:flex-start;gap:13px;margin-top:18px;padding:17px 19px;border:1px solid rgba(135,116,67,.19);border-radius:14px;background:rgba(239,244,218,.7)}.authority-note span{font-size:24px}.authority-note strong{display:block;margin-bottom:3px;font:700 16px var(--serif)}.authority-note p{margin:0;color:#6f6b4c;font-size:12px;line-height:1.65}footer{padding:0 20px 36px;color:#8f715d;text-align:center}footer p{margin:0 0 7px;font:15px var(--serif)}footer small{font-size:11px}.leaf{display:inline-block;color:var(--sage);transform:rotate(-18deg)}
+    @media(max-width:1100px){.games{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:780px){.site-header{top:8px;margin-top:8px}.brand small{display:none}.header-nav a{padding:9px}.board-head{align-items:flex-start;flex-direction:column}.games{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:510px){.site-header{width:calc(100% - 16px);padding:8px 12px}.brand-mark{width:45px;height:45px}.header-nav{gap:3px}main{width:calc(100% - 16px);padding-top:30px}.lobby-board{padding:17px 13px}.games{grid-template-columns:1fr}.game{min-height:205px}.filters{width:100%}.filter{flex:1;padding-inline:8px}.authority-note{padding:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.game,.game-action span{transition:none}}
   </style>
 </head>
 <body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="返回憩所首页"><span class="brand-mark" aria-hidden="true">⌂</span><span><strong>zillionx 的憩所</strong><small>A quiet corner to rest &amp; play.</small></span></a>
+    <nav class="header-nav" aria-label="大厅导航"><a href="/">返回首页</a><a class="active" href="/index.html" aria-current="page">桌游大厅</a></nav>
+  </header>
   <main>
-    <header>
-      <h1>桌游大厅</h1>
-      <p>选择一个游戏，创建房间后把房间号分享给朋友。</p>
-    </header>
-
-    <section id="games"></section>
-
-    <footer>
-      测试版本：创建房间的玩家需要在整局中保持在线
-    </footer>
+    <section class="hero" aria-labelledby="pageTitle"><p class="eyebrow">TABLETOP GAME LOUNGE</p><h1 id="pageTitle">今晚，想玩哪一桌<span>？</span></h1><p>挑一款喜欢的游戏，创建房间，再把房间号分享给朋友。这里没有匆忙的脚步，只有一张等大家围坐过来的桌子。</p><div class="hero-vine" aria-hidden="true"><span class="leaf">❧</span></div></section>
+    <section class="lobby-board" aria-labelledby="gamesTitle">
+      <div class="board-head"><div><p class="eyebrow">CHOOSE A TABLE</p><h2 id="gamesTitle">正在亮灯的游戏桌</h2></div><div class="filters" role="group" aria-label="筛选游戏"><button class="filter active" type="button" data-filter="all">全部</button><button class="filter" type="button" data-filter="authority">服务器权威</button><button class="filter" type="button" data-filter="preview">测试与开发中</button></div></div>
+      <div class="games" id="games"></div>
+      <div class="authority-note"><span aria-hidden="true">☕</span><div><strong>房间已经搬到云端</strong><p>标记为“服务器权威”的游戏由服务器保存规则与牌局状态；房主刷新或短暂离线，不会让整局游戏随之消失。</p></div></div>
+    </section>
   </main>
-
+  <footer><p>愿每一次开局，都能为普通的一天添一点好心情。</p><small>© <span id="year"></span> zillionx 的憩所 · Made with care</small></footer>
   <script>
-    const games = [
-      { port: 8787, name: "速速破译" },
-      { port: 8788, name: "我话你猜" },
-      { port: 8789, name: "快艇骰子" },
-      { port: 8790, name: "德州扑克" },
-      { port: 8791, name: "UNO" },
-      { port: 8792, name: "牛头王" },
-      { port: 8793, name: "马尼拉·港口大亨" },
-      { port: 8794, name: "璀璨宝石·宝可梦版" },
-      { port: 8795, name: "No Thanks!" },
-      { port: 8796, name: "Can't Stop" },
-      { port: 8797, name: "截码战" },
-      { port: 8798, name: "Just One" },
-      { port: 8799, name: "CABO" }
+    const games=[
+      {port:8787,name:"速速破译",icon:"⌁",description:"在有限线索里拼出答案，考验联想与默契。",kind:"authority",color:"#c7743f"},
+      {port:8788,name:"我说你猜",icon:"☁",description:"用恰到好处的描述，把答案送到队友耳边。",kind:"authority",color:"#b88754"},
+      {port:8789,name:"快艇骰子",icon:"⚄",description:"组合骰面、规划计分，在取舍中冲击高分。",kind:"authority",color:"#859b62"},
+      {port:8790,name:"德州扑克",icon:"♠",description:"读牌、下注与心理博弈，等候权威模式改造。",kind:"preview",color:"#a87662"},
+      {port:8791,name:"UNO",icon:"◉",description:"匹配颜色与数字，用功能牌制造热闹转折。",kind:"authority",color:"#d16e54"},
+      {port:8792,name:"牛头王",icon:"♉",description:"选择数字、避开牛头，在牌列间小心落座。",kind:"authority",color:"#b98b45"},
+      {port:8793,name:"马尼拉 · 港口大亨",icon:"⚓",description:"押注货船与港口收益，等待下一轮权威改造。",kind:"preview",color:"#718f83"},
+      {port:8794,name:"璀璨宝石 · 宝可梦版",icon:"◇",description:"收集资源、吸引伙伴，搭建自己的闪亮阵容。",kind:"authority",color:"#a98391"},
+      {port:8795,name:"No Thanks!",icon:"✋",description:"拿走卡牌还是交出筹码？把风险留给下一位。",kind:"authority",color:"#c47759"},
+      {port:8796,name:"Can't Stop",icon:"△",description:"继续攀登或及时停手，在运气变坏前做决定。",kind:"authority",color:"#d09a4d"},
+      {port:8797,name:"截码战",icon:"⌘",description:"藏住信息、破解编码，让每条线索恰到好处。",kind:"authority",color:"#758e75"},
+      {port:8798,name:"Just One",icon:"✎",description:"合作写下独特提示；项目仍在继续打磨。",kind:"preview",color:"#9b83a0"},
+      {port:8799,name:"CABO",icon:"☾",description:"记住低点数、交换暗牌，在正确时刻宣布CABO。",kind:"authority",color:"#b96d47"}
     ];
-
-    const container = document.querySelector("#games");
-
-    for (const [index, game] of games.entries()) {
-      const link = document.createElement("a");
-      link.className = "game";
-      link.href =
-        `${location.protocol}//${location.hostname}:${game.port}/`;
-
-      const number = document.createElement("div");
-      number.className = "number";
-      number.textContent = `GAME ${index + 1}`;
-
-      const title = document.createElement("h2");
-      title.textContent = game.name;
-
-      const description = document.createElement("p");
-      description.textContent = `进入游戏`;
-
-      link.append(number, title, description);
-      container.append(link);
-    }
+    const container=document.querySelector("#games"),statusText={authority:"服务器权威",preview:"测试与开发中"},gameProtocol=location.protocol==="https:"?"http:":location.protocol;
+    games.forEach((game,index)=>{const link=document.createElement("a");link.className="game";link.dataset.kind=game.kind;link.style.setProperty("--card-accent",game.color);link.href=`${gameProtocol}//${location.hostname}:${game.port}/`;link.setAttribute("aria-label",`进入${game.name}`);link.innerHTML=`<span class="game-top"><span class="game-number">GAME ${String(index+1).padStart(2,"0")}</span><span class="status">${statusText[game.kind]}</span></span><span class="game-icon" aria-hidden="true">${game.icon}</span><h3></h3><p></p><span class="game-action">进入游戏 <span aria-hidden="true">→</span></span>`;link.querySelector("h3").textContent=game.name;link.querySelector("p").textContent=game.description;container.append(link)});
+    document.querySelectorAll(".filter").forEach((button)=>button.addEventListener("click",()=>{document.querySelectorAll(".filter").forEach((item)=>item.classList.toggle("active",item===button));document.querySelectorAll(".game").forEach((card)=>{card.hidden=button.dataset.filter!=="all"&&card.dataset.kind!==button.dataset.filter})}));
+    document.querySelector("#year").textContent=new Intl.DateTimeFormat("zh-CN",{timeZone:"Asia/Shanghai",year:"numeric"}).format(new Date()).replace("年","");
   </script>
 </body>
 </html>

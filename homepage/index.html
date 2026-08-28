@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="zillionx 的憩所——一个放慢脚步、一起玩桌游，也收藏日常灵感的小角落。">
+    <meta name="theme-color" content="#f6e8ce">
+    <title>zillionx 的憩所</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="回到首页">
+        <span class="brand-avatar" aria-hidden="true">
+          <span class="avatar-hair"></span>
+          <span class="avatar-face">⌣</span>
+        </span>
+        <span>
+          <strong>zillionx 的憩所</strong>
+          <small>A quiet corner to rest & play.</small>
+        </span>
+      </a>
+
+      <button class="menu-button" id="menuButton" type="button" aria-expanded="false" aria-controls="siteNav">
+        <span></span><span></span><span></span>
+        <span class="sr-only">打开导航</span>
+      </button>
+
+      <nav class="site-nav" id="siteNav" aria-label="主导航">
+        <a class="active" href="#home">首页</a>
+        <a href="/index.html">桌游大厅</a>
+        <a href="#about">关于这里</a>
+        <a href="#roadmap">未来计划</a>
+      </nav>
+
+      <p class="header-note"><span aria-hidden="true">☀</span> 保持热爱，慢慢生活。</p>
+    </header>
+
+    <main id="mainContent">
+      <section class="welcome" id="home" aria-labelledby="welcomeTitle">
+        <p class="eyebrow">WELCOME, TRAVELER</p>
+        <h1 id="welcomeTitle">嗨，欢迎来到我的小小憩所 <span aria-hidden="true">♡</span></h1>
+        <p>在这里暂时放下匆忙，和朋友玩一局桌游，也看看沿途收藏的微光。</p>
+        <div class="welcome-vine" aria-hidden="true"><span></span>❧</div>
+      </section>
+
+      <div class="home-layout">
+        <aside class="side-column quote-column" aria-label="今日名句">
+          <div class="quote-hanger">
+            <span class="hanger-pin" aria-hidden="true"></span>
+            <article class="paper-note quote-note">
+              <span class="wooden-clip clip-left" aria-hidden="true"></span>
+              <span class="wooden-clip clip-right" aria-hidden="true"></span>
+              <header class="quote-note-header">
+                <p class="note-kicker">今日一页 <span aria-hidden="true">☼</span></p>
+                <time class="quote-date" id="dailyQuoteDate"></time>
+              </header>
+              <blockquote id="dailyQuote">正在翻开今天的一页……</blockquote>
+              <p class="quote-source" id="quoteSource"></p>
+              <span class="pressed-flower" aria-hidden="true"><i></i><i></i><i></i></span>
+            </article>
+          </div>
+
+        </aside>
+
+        <section class="content-board" aria-label="站点入口">
+          <div class="entry-grid">
+            <a class="featured-card" href="/index.html">
+              <img src="assets/tabletop-healing-hero.jpg" alt="阳光房间里，一位女孩和熟睡的小猫守在摆满桌游组件的木桌旁">
+              <span class="featured-shade"></span>
+              <span class="featured-copy">
+                <strong>桌游大厅</strong>
+                <span class="featured-ribbon">一起玩桌游吧！ <b aria-hidden="true">⚄</b></span>
+                <span class="featured-description">挑一款喜欢的游戏，创建房间，再把快乐分享给朋友。</span>
+                <span class="primary-action">进入大厅 <span aria-hidden="true">→</span></span>
+              </span>
+            </a>
+
+            <div class="module-grid" id="moduleGrid"></div>
+          </div>
+
+          <section class="about-note" id="about">
+            <span aria-hidden="true">♡</span>
+            <div>
+              <h2>在这里，慢一点也没关系</h2>
+              <p>这是一处正在生长的私人小站。桌游已经开门，其他房间也会在合适的时候亮起灯。</p>
+            </div>
+            <span aria-hidden="true">☕</span>
+          </section>
+        </section>
+
+        <aside class="side-column calendar-column" aria-label="今日台历">
+          <div class="shelf-decoration" aria-hidden="true">
+            <div class="vase"><span></span><i></i><i></i><i></i></div>
+            <div class="book-stack"><i></i><i></i><i></i></div>
+          </div>
+
+          <article class="calendar-card">
+            <div class="calendar-rings" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </div>
+            <header>
+              <div>
+                <p id="calendarYear"></p>
+                <h2 id="calendarMonth"></h2>
+              </div>
+              <div class="today-badge">
+                <strong id="todayNumber"></strong>
+                <span id="todayWeekday"></span>
+              </div>
+            </header>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+            </div>
+            <div class="calendar-days" id="calendarDays"></div>
+            <p class="calendar-wish">今天也要，好好休息呀。</p>
+          </article>
+
+          <article class="roadmap-mini" id="roadmap">
+            <span class="paperclip" aria-hidden="true"></span>
+            <p class="note-kicker">下一站</p>
+            <h2>更多小房间</h2>
+            <ul>
+              <li><span>✓</span> 桌游大厅</li>
+              <li><span>○</span> 实用工具</li>
+              <li><span>○</span> 随笔记录</li>
+              <li><span>○</span> 收藏分享</li>
+            </ul>
+          </article>
+        </aside>
+      </div>
+    </main>
+
+    <footer>
+      <p>愿你在这里，拾到一点快乐和灵感。</p>
+      <small>© <span id="footerYear"></span> zillionx 的憩所 · Made with care</small>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
