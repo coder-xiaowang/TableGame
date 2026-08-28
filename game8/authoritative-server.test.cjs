@@ -59,6 +59,7 @@ test("game8 authoritative server owns actions and sends private views", async (c
   assert.equal(config.protocolVersion, 3);
   const page = await fetch(`${baseUrl}/`);
   assert.equal(page.status, 200);
+  assert.match(await page.text(), /id="trainerInspector"/);
   const cardImage = await fetch(`${baseUrl}/assets/cards/s1_01.webp`);
   assert.equal(cardImage.status, 200);
   assert.equal(cardImage.headers.get("content-type"), "image/webp");
@@ -90,7 +91,8 @@ test("game8 authoritative server owns actions and sends private views", async (c
     clientId: created.payload.clientId,
     resumeToken: created.payload.resumeToken
   });
-  const actorId = latest.payload.view.players[latest.payload.view.game.turn].id;
+  const actorSeat = latest.payload.view.game.turn;
+  const actorId = latest.payload.view.players[actorSeat].id;
   const actor = actorId === "host" ? created.payload : joined.payload;
   const nonActor = actorId === "host" ? joined.payload : created.payload;
   const cardId = latest.payload.view.game.field.stage1.find(Boolean);
@@ -113,9 +115,8 @@ test("game8 authoritative server owns actions and sends private views", async (c
     clientId: nonActor.clientId,
     resumeToken: nonActor.resumeToken
   });
-  const actorSeat = own.payload.view.game.turn;
   assert.equal(own.payload.view.game.players[actorSeat].reserve[0], cardId);
-  assert.equal(other.payload.view.game.players[actorSeat].reserve[0].hidden, true);
+  assert.equal(other.payload.view.game.players[actorSeat].reserve[0], cardId);
   assert.ok(other.payload.view.game.decks.stage1.every((card) => card === null));
 
   const unauthorized = await post(baseUrl, "/api/actions", {

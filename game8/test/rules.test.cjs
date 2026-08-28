@@ -189,8 +189,10 @@ test('reserve grants a master and respects hand limit', () => {
   assert.ok(r.ok);
   assert.strictEqual(p.tokens.purple, 1);
   assert.strictEqual(p.reserve.length, 1);
+  assert.strictEqual(p.reserveVisibility[id], 'public');
   // fill hand to 3 then reject
   g.acted = false; E.actionReserve(g, { fromDeck: 'stage1' });
+  assert.strictEqual(p.reserveVisibility[p.reserve[1]], 'secret');
   g.acted = false; E.actionReserve(g, { fromDeck: 'stage2' });
   g.acted = false;
   assert.ok(!E.actionReserve(g, { fromDeck: 'stage3' }).ok);
@@ -220,7 +222,7 @@ test('applyAction ownership guard: only the active seat may move', () => {
   assert.strictEqual(g.players[0].tokens.red, 1);
 });
 
-test('redactFor hides deck order + opponents reserves, keeps own + public info', () => {
+test('redactFor hides deck order and blind reserves while keeping market reserves public', () => {
   const g = E.createGame(DB, { numPlayers: 2, seed: 13 });
   assert.ok(E.actionReserve(g, { fromDeck: 'stage1' }).ok); // p0 reserves blind → a secret
   const ownId = g.players[0].reserve[0];
@@ -238,6 +240,10 @@ test('redactFor hides deck order + opponents reserves, keeps own + public info',
   assert.notStrictEqual(stub, ownId);
   assert.strictEqual(stub.hidden, true);
   assert.strictEqual(stub.tier, 'stage1');
+  const publicGame = E.createGame(DB, { numPlayers: 2, seed: 14 });
+  const publicId = publicGame.field.stage1[0];
+  assert.ok(E.actionReserve(publicGame, { fromField: publicId }).ok);
+  assert.strictEqual(E.redactFor(publicGame, 1).players[0].reserve[0], publicId);
   // 3) static refs not shipped; public info intact
   assert.ok(!('byId' in mine) && !('cardDB' in mine), 'no static card refs leaked');
   assert.deepStrictEqual(mine.supply, g.supply);

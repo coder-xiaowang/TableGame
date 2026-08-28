@@ -69,19 +69,28 @@
           <div class="market-group legendary"><div class="special-deck"><b>传说／幻之</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
         </section>
         <section id="markets" class="markets"></section>
-        <section class="panel action-panel">
-          <div class="section-head"><div><p class="eyebrow">YOUR TURN</p><h2 id="actionTitle">等待开始</h2></div><span id="phaseBadge" class="badge">准备阶段</span></div>
-          <div id="selectionSummary" class="selection"></div>
-          <div id="actionArea" class="actions"></div>
-        </section>
-        <section class="panel trainer-board">
-          <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
-          <div id="myResources" class="resource-strip"></div>
-          <h3>已捕捉的宝可梦</h3><div id="myPokemon" class="collection"></div>
-          <h3>保留区 <span id="reserveCount">0 / 3</span></h3><div id="myReserved" class="collection"></div>
-        </section>
+        <div class="trainer-column">
+          <section class="panel action-panel">
+            <div class="section-head"><div><p class="eyebrow">YOUR TURN</p><h2 id="actionTitle">等待开始</h2></div><span id="phaseBadge" class="badge">准备阶段</span></div>
+            <div id="selectionSummary" class="selection"></div>
+            <div id="actionArea" class="actions"></div>
+          </section>
+          <section class="panel trainer-board">
+            <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
+            <div id="myResources" class="resource-strip"></div>
+            <h3>已捕捉的宝可梦</h3><div id="myPokemon" class="owned-pokemon-list"></div>
+            <h3>保留区 <span id="reserveCount">0 / 3</span></h3><div id="myReserved" class="reserved-pokemon-list"></div>
+          </section>
+        </div>
       </div>
     </main>
+  </div>
+
+  <div id="trainerInspector" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainerInspectorTitle">
+    <section class="modal-card trainer-inspector">
+      <div class="section-head inspector-head"><div><p class="eyebrow">TRAINER OVERVIEW</p><h2 id="trainerInspectorTitle">训练家详情</h2></div><button id="closeTrainerInspectorButton" class="small" type="button" aria-label="关闭训练家详情">关闭</button></div>
+      <div id="trainerInspectorContent"></div>
+    </section>
   </div>
 
   <script src="rules.js"></script>

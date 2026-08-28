@@ -159,6 +159,7 @@
         board: [],   // captured card ids currently in play (provide bonus + vp)
         buried: [],  // card ids under the tile (evolved away — no bonus/vp)
         reserve: [], // reserved card ids (in hand)
+        reserveVisibility: {}, // card id -> public (market) | secret (deck)
         assoc: {},   // Pokémart copy cards: cardId -> associated bonus colour
       });
     }
@@ -374,18 +375,22 @@
       tier = loc.tier; slot = loc.slot;
     }
     p.reserve.push(cardId);
+    p.reserveVisibility = p.reserveVisibility || {};
+    p.reserveVisibility[cardId] = fromDeck ? 'secret' : 'public';
     if (!fromDeck) { s.field[tier][slot] = null; refill(s, tier); }
     // gain a master ball if available
     let got = '';
     if (s.supply.purple > 0) { s.supply.purple--; p.tokens.purple++; got = ' 并获得1个大师球'; }
     s.acted = true;
-    log(s, `${p.name} 保留了一张${zhTier(tier)}宝可梦${fromDeck ? '（牌堆顶）' : ''}${got}`);
+    log(s, fromDeck
+      ? `${p.name} 暗中保留了一张${zhTier(tier)}宝可梦${got}`
+      : `${p.name} 从市场保留了 ${s.byId[cardId].name}${got}`);
     return { ok: true, cardId };
   }
 
   // remove a just-captured card from wherever it sat (field or own reserve)
   function takeFromSource(s, p, loc, fromReserve, cardId) {
-    if (fromReserve) { const i = p.reserve.indexOf(cardId); if (i >= 0) p.reserve.splice(i, 1); }
+    if (fromReserve) { const i = p.reserve.indexOf(cardId); if (i >= 0) p.reserve.splice(i, 1); if (p.reserveVisibility) delete p.reserveVisibility[cardId]; }
     else { s.field[loc.tier][loc.slot] = null; refill(s, loc.tier); }
   }
   // remove a board card out of the game (Pokémart "discard … returned to the box")
@@ -585,7 +590,7 @@
     // move target out of field/reserve
     const loc = locateCard(s, opt.toId);
     if (loc.where === 'field') { s.field[loc.tier][loc.slot] = null; refill(s, loc.tier); }
-    else if (loc.where === 'reserve') { s.players[loc.owner].reserve.splice(loc.slot, 1); }
+    else if (loc.where === 'reserve') { const owner=s.players[loc.owner]; owner.reserve.splice(loc.slot, 1); if (owner.reserveVisibility) delete owner.reserveVisibility[opt.toId]; }
     // replace on board: remove fromId -> buried; add toId
     const bi = p.board.indexOf(fromId);
     p.board.splice(bi, 1);
@@ -894,8 +899,11 @@
     if (v.decks) for (const t in v.decks) v.decks[t] = v.decks[t].map(() => null); // hide deck order, keep length
     v.players = v.players.map((p, i) => {
       if (i === viewerId) return p;                       // you see your OWN reserve ids
-      return Object.assign({}, p, {                       // opponents' reserves → {hidden,tier} stubs
-        reserve: p.reserve.map(id => ({ hidden: true, tier: (s.byId[id] || {}).tier || null })),
+      return Object.assign({}, p, {
+        reserve: p.reserve.map(id => p.reserveVisibility && p.reserveVisibility[id] === 'public'
+          ? id
+          : ({ hidden: true, tier: (s.byId[id] || {}).tier || null })),
+        reserveVisibility: {},
       });
     });
     v.viewerId = viewerId;

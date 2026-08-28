@@ -136,6 +136,16 @@ test("game8 restores a playable room and deduplication after restart", async (co
   });
   assert.equal(actorView.payload.view.game.players[resumed.payload.view.game.turn].reserve[0], cardId);
 
+  await closeServer(running.server);
+  running = await startServer(engine, filename);
+  const observer = sessions.find((session) => session.clientId !== actor.clientId);
+  const observerView = await post(running.baseUrl, "/api/join", {
+    roomCode: created.payload.roomCode,
+    clientId: observer.clientId,
+    resumeToken: observer.resumeToken
+  });
+  assert.equal(observerView.payload.view.game.players[resumed.payload.view.game.turn].reserve[0], cardId);
+
   const duplicate = await post(running.baseUrl, "/api/actions", {
     roomCode: created.payload.roomCode,
     playerId: created.payload.clientId,

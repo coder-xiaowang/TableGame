@@ -55,13 +55,29 @@ function resetToLobby(state) {
 }
 
 function staticGameData(game) {
-  return {
+  const restored = {
     ...game,
     cardDB: CARDS,
     byId: CARD_BY_ID,
     megaDB: [],
     pokemartDB: []
   };
+  for (const player of restored.players || []) {
+    player.reserveVisibility ||= {};
+    for (const id of player.reserve || []) player.reserveVisibility[id] ||= "secret";
+  }
+  return restored;
+}
+
+function finishTurnWhenNoDecisionRemains(game, seat, actionType) {
+  if (!game || game.phase === "gameover" || !game.acted) return;
+  const pending = Engine.turnState(game);
+  if (pending.mustDiscard > 0) return;
+  const completedEvolution = actionType === "evolve" || actionType === "megaEvolve";
+  const hasEvolutionChoice = pending.evolutions.length > 0 || pending.megaEvolutions.length > 0;
+  if (!completedEvolution && hasEvolutionChoice) return;
+  const ended = Engine.applyAction(game, { type: "endTurn" }, seat);
+  if (!ended?.ok) throw new Error(`Unable to automatically end game8 turn: ${ended?.error || "unknown error"}`);
 }
 
 export function createLobby({ capacity, host }) {
@@ -175,6 +191,7 @@ export function applyAction(state, actorId, action, { random = Math.random } = {
   if (!result?.ok) {
     throw new GameRuleError("invalid_game_action", result?.error || "当前操作不合法。", 409);
   }
+  if (type !== "endTurn") finishTurnWhenNoDecisionRemains(state.game, seat, type);
   if (state.game.phase === "gameover") state.phase = "ended";
 }
 
