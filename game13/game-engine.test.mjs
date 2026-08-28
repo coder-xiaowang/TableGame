@@ -48,22 +48,29 @@ test("failed three-card match reveals selections and deals an unseen penalty",()
   const state=started();const player=state.players[0];
   player.slots=[{slotId:"a",card:card("a",4),faceUp:false},{slotId:"b",card:card("b",4),faceUp:false},{slotId:"c",card:card("c",5),faceUp:false}];
   const beforeDeck=state.deck.length;rigDrawn(state,{drawn:card("new",1)});
-  engine.applyAction(state,"p1",{type:"exchange",slotIds:["a","b","c"],end:"left",penaltyEnd:"right"},{now:3000});
-  assert.equal(player.slots.length,5);assert.ok(player.slots.slice(1,4).every((slot)=>slot.faceUp));assert.equal(state.deck.length,beforeDeck-1);
+  engine.applyAction(state,"p1",{type:"exchange",slotIds:["a","b","c"]},{now:3000});
+  assert.equal(state.phase,"failedExchange");
+  engine.applyAction(state,"p1",{type:"placeFailedExchange",end:"left"},{now:3100});
+  assert.equal(player.slots.length,5);assert.ok(["a","b","c"].every((id)=>player.slots.find((slot)=>slot.slotId===id)?.faceUp));assert.equal(state.deck.length,beforeDeck-1);
 });
 
-test("spy is sent only to its viewer and expires into the next turn",()=>{
-  const state=started();const target=state.players[1];rigDrawn(state,{drawn:card("spy",9)});
+test("spy reveals the value only to its viewer while the target learns only the operated slot",()=>{
+  const state=started(3);const target=state.players[1];rigDrawn(state,{drawn:card("spy",9)});
   engine.applyAction(state,"p1",{type:"usePower",targetPlayerId:"p2",slotId:target.slots[0].slotId},{now:3000});
-  const p1=engine.buildView(state,"p1"),p2=engine.buildView(state,"p2");
-  assert.equal(p1.players[1].slots[0].value,target.slots[0].card.value);assert.equal(p2.players[1].slots[0].value,null);
+  const p1=engine.buildView(state,"p1"),p2=engine.buildView(state,"p2"),p3=engine.buildView(state,"p3");
+  assert.equal(p1.players[1].slots[0].value,target.slots[0].card.value);assert.equal(p1.targetNotice,null);
+  assert.equal(p2.players[1].slots[0].value,null);assert.equal(p2.targetNotice.type,"spy");assert.equal(p2.targetNotice.targetSlotId,target.slots[0].slotId);assert.equal("value" in p2.targetNotice,false);
+  assert.equal(p3.targetNotice,null);assert.equal(p3.players[1].slots[0].value,null);
   engine.handleTimeout(state,{now:8000});assert.equal(state.phase,"turn");assert.equal(state.currentIndex,1);assert.equal(state.privateReveal,null);
 });
 
-test("swap moves card and orientation without revealing either value",()=>{
-  const state=started();const own=state.players[0].slots[0],other=state.players[1].slots[0];own.faceUp=true;other.faceUp=false;const ownId=own.card.id,otherId=other.card.id;rigDrawn(state,{drawn:card("swap",11)});
+test("swap moves card and orientation while only its target learns the operated slot",()=>{
+  const state=started(3);const own=state.players[0].slots[0],other=state.players[1].slots[0];own.faceUp=true;other.faceUp=false;const ownId=own.card.id,otherId=other.card.id;state.deck.pop();rigDrawn(state,{drawn:card("swap",11)});
   engine.applyAction(state,"p1",{type:"usePower",ownSlotId:own.slotId,targetPlayerId:"p2",targetSlotId:other.slotId},{now:3000});
   assert.equal(own.card.id,otherId);assert.equal(own.faceUp,false);assert.equal(other.card.id,ownId);assert.equal(other.faceUp,true);
+  const p1=engine.buildView(state,"p1"),p2=engine.buildView(state,"p2"),p3=engine.buildView(state,"p3");
+  assert.equal(p1.targetNotice,null);assert.equal(p3.targetNotice,null);assert.equal(p2.targetNotice.type,"swap");assert.equal(p2.targetNotice.targetSlotId,other.slotId);assert.equal("value" in p2.targetNotice,false);
+  const restored=engine.restoreState(engine.serializeState(state));assert.equal(engine.buildView(restored,"p2").targetNotice.targetSlotId,other.slotId);assert.equal(engine.buildView(restored,"p3").targetNotice,null);
 });
 
 test("CABO grants every other player exactly one final turn",()=>{

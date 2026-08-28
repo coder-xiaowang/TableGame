@@ -14,6 +14,7 @@ node game13/signal-server.js
 
 - 浏览器只提交动作，洗牌、牌值、计时和计分均由 Node 服务端裁决。
 - 每名玩家收到单独生成的视图；背面牌、牌库顺序和他人的私密查看结果不会发往客户端。
+- Spy 与 Swap 会向目标玩家发送仅含被操作牌位的专属提示，牌值仍按原有隐藏信息规则隔离。
 - 完整房间状态写入 SQLite，进程重启后可恢复牌库、阶段、截止时间和私密待处理动作。
 - 协议版本为 v3，使用 `shared/server/start-authoritative-game-server.js` 和共享客户端。
 

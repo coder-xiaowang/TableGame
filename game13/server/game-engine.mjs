@@ -56,10 +56,16 @@ function makeSlot(state,card,faceUp=false) {
 }
 function setDeadline(state,now,seconds) { state.deadline = now + seconds * 1000; }
 function nextIndex(state,index=state.currentIndex) { return (index + 1) % state.players.length; }
+function setTargetNotice(state,{type,actorId,targetPlayerId,targetSlotId},now) {
+  state.targetNotice={
+    id:`${type}_${now}_${actorId}_${targetPlayerId}_${targetSlotId}`,
+    type,actorId,targetPlayerId,targetSlotId,until:now+REVEAL_SECONDS*1000
+  };
+}
 
 function resetToLobby(state) {
   state.phase="lobby"; state.round=0; state.deck=[]; state.discard=[]; state.currentIndex=0;
-  state.pending=null; state.privateReveal=null; state.cabo=null; state.deadline=0;
+  state.pending=null; state.privateReveal=null; state.targetNotice=null; state.cabo=null; state.deadline=0;
   state.roundResult=[]; state.winnerIds=[]; state.logs=[]; state.logSequence=0; state.slotSequence=0;
   for (const player of state.players) {
     player.slots=[]; player.score=0; player.lastRoundScore=0; player.resetUsed=false; player.initialPeekIds=[];
@@ -83,6 +89,7 @@ function beginRound(state,random,now,{first=false}={}) {
   state.discard = [];
   state.pending = null;
   state.privateReveal = null;
+  state.targetNotice = null;
   state.cabo = null;
   state.roundResult = [];
   state.winnerIds = [];
@@ -123,7 +130,7 @@ function finishRound(state,now,reason) {
     }
     item.totalScore=player.score;
   }
-  state.pending=null; state.privateReveal=null; state.cabo=null; state.deadline=0;
+  state.pending=null; state.privateReveal=null; state.targetNotice=null; state.cabo=null; state.deadline=0;
   const over=state.players.some((player)=>player.score>100);
   if (over) {
     const lowest=Math.min(...state.players.map((player)=>player.score));
@@ -209,12 +216,14 @@ function usePower(state,actor,action,now) {
     if (!target || target.id===actor.id || !slot || slot.faceUp) throw new GameRuleError("invalid_spy_target","请选择另一名玩家的一张背面牌。",409);
     addDiscard(state,pending.card); state.pending=null;
     state.privateReveal={viewerId:actor.id,targetPlayerId:target.id,slotId:slot.slotId,power,until:now+REVEAL_SECONDS*1000};
+    setTargetNotice(state,{type:"spy",actorId:actor.id,targetPlayerId:target.id,targetSlotId:slot.slotId},now);
   } else {
     const own=slotById(actor,action.ownSlotId); const target=playerById(state,action.targetPlayerId); const other=slotById(target,action.targetSlotId);
     if (!own || !target || target.id===actor.id || !other) throw new GameRuleError("invalid_swap_target","请选择自己和一名对手各一张牌。",409);
     addDiscard(state,pending.card); state.pending=null;
     [own.card,other.card]=[other.card,own.card];
     [own.faceUp,other.faceUp]=[other.faceUp,own.faceUp];
+    setTargetNotice(state,{type:"swap",actorId:actor.id,targetPlayerId:target.id,targetSlotId:other.slotId},now);
     addLog(state,`${actor.name} 交换了自己和 ${target.name} 的一张牌。`,now);
     return finishTurn(state,now);
   }
@@ -227,7 +236,7 @@ function autoInitialPeek(state) {
 }
 
 export function createLobby({capacity,host}) {
-  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),round:0,players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentIndex:0,startingPlayerId:null,pending:null,privateReveal:null,cabo:null,deadline:0,roundResult:[],winnerIds:[],logs:[],logSequence:0,slotSequence:0};
+  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),round:0,players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentIndex:0,startingPlayerId:null,pending:null,privateReveal:null,targetNotice:null,cabo:null,deadline:0,roundResult:[],winnerIds:[],logs:[],logSequence:0,slotSequence:0};
 }
 
 export function addPlayer(state,player) {
@@ -367,6 +376,7 @@ export function buildView(state,viewerId) {
     discardCount:state.discard.length,pendingCard:pendingForViewer,deadline:state.deadline,
     cabo:state.cabo?{callerId:state.cabo.callerId,remainingIds:[...state.cabo.remainingIds]}:null,
     privateReveal:state.privateReveal?.viewerId===viewer.id?{power:state.privateReveal.power,targetPlayerId:state.privateReveal.targetPlayerId,slotId:state.privateReveal.slotId,until:state.privateReveal.until}:null,
+    targetNotice:state.targetNotice?.targetPlayerId===viewer.id?{id:state.targetNotice.id,type:state.targetNotice.type,actorId:state.targetNotice.actorId,targetSlotId:state.targetNotice.targetSlotId,until:state.targetNotice.until}:null,
     roundResult:state.roundResult.map((item)=>({...item})),winnerIds:[...state.winnerIds],logs:state.logs.map((entry)=>({...entry})),
     players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,score:player.score,lastRoundScore:player.lastRoundScore,resetUsed:player.resetUsed,hasInitialPeek:player.initialPeekIds.length===2,slots:player.slots.map((slot)=>visibleSlot(slot,viewer.id,player.id,state))})),
     permissions:{
@@ -392,5 +402,5 @@ export function validateState(state) {
 export function serializeState(state) { return structuredClone(state); }
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion!==STATE_VERSION) throw new Error(`Unsupported game13 state version: ${serializedState?.stateVersion}`);
-  const state=structuredClone(serializedState); validateState(state); return state;
+  const state=structuredClone(serializedState); state.targetNotice??=null; validateState(state); return state;
 }
