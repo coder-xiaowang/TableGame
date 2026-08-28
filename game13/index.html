@@ -40,6 +40,7 @@
       </div>
       <div class="panel score-card"><p class="eyebrow">SCOREBOARD</p><div id="scoreboard"></div></div>
       <div class="panel rules-card"><p class="eyebrow">2019 SECOND EDITION</p><small>2～4人 · CABO失败 +10<br>牌库耗尽结束本轮<br>首次恰好100分降至50<br>超过100分时结束整局</small></div>
+      <div class="panel log-panel sidebar-log"><div class="action-head"><div><p class="eyebrow">JOURNEY NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">展开</button></div><div id="logList" class="log collapsed"></div></div>
     </aside>
 
     <section class="game-area">
@@ -47,21 +48,21 @@
       <div class="panel table-panel">
         <div class="table-head"><span>第 <b id="roundNumber">0</b> 轮</span><span id="phaseLabel">大厅</span><span>牌库 <b id="deckCount">0</b></span></div>
         <div id="caboBanner" class="cabo-banner hidden"></div>
-        <div id="players" class="players"></div>
-        <div class="piles">
-          <button id="drawPile" class="card pile-card back" disabled><span>CABO</span><small>从牌库抽牌</small></button>
-          <div><p>弃牌堆 · <span id="discardCount">0</span></p><div id="discardPile" class="card pile-card empty">空</div></div>
-          <div id="pendingWrap" class="pending-wrap hidden"><p>你刚抽到</p><div id="pendingCard"></div></div>
+        <div class="table-stage">
+          <div id="players" class="players"></div>
+          <div class="piles">
+            <button id="drawPile" class="card pile-card back" type="button" aria-label="从牌库抽一张" title="从牌库抽一张" disabled><span>CABO</span></button>
+            <div><p>弃牌堆 · <span id="discardCount">0</span></p><div id="discardPile" class="card pile-card empty">空</div></div>
+            <div id="pendingWrap" class="pending-wrap hidden"><p>你刚抽到</p><div id="pendingCard"></div></div>
+          </div>
+          <div class="action-panel table-actions">
+            <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+            <p id="selectionHint" class="selection-hint"></p><div id="actionArea" class="actions"></div>
+          </div>
         </div>
       </div>
 
-      <div class="panel action-panel">
-        <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
-        <p id="selectionHint" class="selection-hint"></p><div id="actionArea" class="actions"></div>
-      </div>
-
       <div id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">ROUND RESULT</p><div id="roundResults"></div></div>
-      <div class="panel log-panel"><div class="action-head"><h2>牌局记录</h2><button id="toggleLogButton" class="small">展开 / 收起</button></div><div id="logList" class="log collapsed"></div></div>
     </section>
   </section>
 </main>

@@ -8,7 +8,7 @@ async function view(base,session){return(await post(base,"/api/join",{roomCode:s
 
 test("game13 HTTP server enforces turns and emits player-specific CABO views",async(context)=>{
   const engine=await import("./server/game-engine.mjs");const server=startServer({gameRoot:path.resolve(__dirname),sharedRoot:path.resolve(__dirname,"../shared"),engine,protocolVersion:3,defaultPort:0});await new Promise((resolve)=>server.once("listening",resolve));const base=`http://127.0.0.1:${server.address().port}`;context.after(async()=>{if(server.listening)await close(server);});
-  const page=await fetch(base).then((response)=>response.text());assert.match(page,/CABO 联机版/);
+  const page=await fetch(base).then((response)=>response.text());assert.match(page,/CABO 联机版/);assert.match(page,/class="table-stage"/);assert.match(page,/class="action-panel table-actions"/);assert.match(page,/class="panel log-panel sidebar-log"/);
   const config=await fetch(`${base}/api/config`).then((response)=>response.json());assert.equal(config.authorityMode,"server");assert.equal(config.actionSeconds,45);
   const host=(await post(base,"/api/rooms",{hostId:"p1",name:"甲",capacity:2})).payload;await events(base,host);const guest=(await post(base,"/api/join",{roomCode:host.roomCode,clientId:"p2",name:"乙"})).payload;await events(base,guest);
   assert.equal((await action(base,host,"start",{type:"start"})).response.status,200);

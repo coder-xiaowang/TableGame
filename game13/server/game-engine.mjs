@@ -159,22 +159,37 @@ function exchangeCards(state,actor,action,now) {
   if (selected.some((slot)=>!slot)) throw new GameRuleError("invalid_slot","选择中包含不存在的牌位。",409);
   const indexes=selected.map((slot)=>actor.slots.indexOf(slot)).sort((a,b)=>a-b);
   const matches=selected.every((slot)=>slot.card.value===selected[0].card.value);
-  const incoming=makeSlot(state,pending.card,pending.source==="discard");
   if (ids.length===1 || matches) {
+    const incoming=makeSlot(state,pending.card,pending.source==="discard");
     for (const slot of selected) addDiscard(state,slot.card);
     actor.slots=actor.slots.filter((slot)=>!ids.includes(slot.slotId));
     actor.slots.splice(indexes[0],0,incoming);
     addLog(state,`${actor.name} 用抽到的牌替换了 ${ids.length} 张牌${ids.length>1?"，匹配成功":""}。`,now);
   } else {
     for (const slot of selected) slot.faceUp=true;
-    const end=action.end==="left"?"left":"right";
-    if (end==="left") actor.slots.unshift(incoming); else actor.slots.push(incoming);
-    if (ids.length>=3 && state.deck.length) {
-      const penalty=makeSlot(state,drawCard(state),false);
-      if (action.penaltyEnd==="left") actor.slots.unshift(penalty); else actor.slots.push(penalty);
-    }
-    addLog(state,`${actor.name} 的多牌匹配失败，所选牌已经公开。`,now);
+    state.pending.failedExchange={selectedCount:ids.length};
+    state.phase="failedExchange";
+    setDeadline(state,now,DECISION_SECONDS);
+    addLog(state,`${actor.name} 的多牌匹配失败，所选牌已经公开，等待放置新增牌。`,now);
+    return;
   }
+  state.pending=null;
+  finishTurn(state,now);
+}
+
+function placeFailedExchange(state,actor,action,now) {
+  const pending=state.pending;
+  if (!pending?.failedExchange) throw new GameRuleError("placement_unavailable","当前没有等待放置的匹配失败牌。",409);
+  if (action.end!=="left" && action.end!=="right") throw new GameRuleError("invalid_placement","请选择放在手牌最左侧或最右侧。",409);
+  const incoming=makeSlot(state,pending.card,pending.source==="discard");
+  if (action.end==="left") actor.slots.unshift(incoming); else actor.slots.push(incoming);
+  let penaltyAdded=false;
+  if (pending.failedExchange.selectedCount>=3 && state.deck.length) {
+    const penalty=makeSlot(state,drawCard(state),false);
+    if (action.end==="left") actor.slots.unshift(penalty); else actor.slots.push(penalty);
+    penaltyAdded=true;
+  }
+  addLog(state,`${actor.name} 将匹配失败后的新增牌放在了${action.end==="left"?"左":"右"}侧${penaltyAdded?"，并获得一张惩罚牌":""}。`,now);
   state.pending=null;
   finishTurn(state,now);
 }
@@ -277,6 +292,11 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
     if (state.privateReveal?.viewerId!==actor.id) throw new GameRuleError("reveal_unavailable","当前没有属于你的查看窗口。",409);
     state.privateReveal=null; return finishTurn(state,now);
   }
+  if (state.phase==="failedExchange") {
+    requireCurrent(state,actor);
+    if (type!=="placeFailedExchange") throw new GameRuleError("placement_required","请先决定把新增牌放在手牌左侧还是右侧。",409);
+    return placeFailedExchange(state,actor,action,now);
+  }
   if (state.phase!=="turn" && state.phase!=="drawn") throw new GameRuleError("action_unavailable","当前阶段不能执行这个操作。",409);
   requireCurrent(state,actor);
   if (state.phase==="turn") {
@@ -322,6 +342,10 @@ export function handleTimeout(state,{now=Date.now(),random=Math.random}={}) {
     else exchangeCards(state,actor,{slotIds:[actor.slots[0].slotId],end:"right"},now);
     return true;
   }
+  if (state.phase==="failedExchange") {
+    placeFailedExchange(state,currentPlayer(state),{end:"right"},now);
+    return true;
+  }
   return false;
 }
 
@@ -352,6 +376,7 @@ export function buildView(state,viewerId) {
       canDraw:state.phase==="turn"&&current?.id===viewer.id,canCallCabo:state.phase==="turn"&&current?.id===viewer.id&&!state.cabo,
       canExchange:state.phase==="drawn"&&current?.id===viewer.id,canDiscard:state.phase==="drawn"&&current?.id===viewer.id&&state.pending?.source==="deck",
       canUsePower:state.phase==="drawn"&&current?.id===viewer.id&&state.pending?.source==="deck"&&Boolean(state.pending.card.power),
+      canPlaceFailedExchange:state.phase==="failedExchange"&&current?.id===viewer.id,
       canCloseReveal:state.phase==="reveal"&&state.privateReveal?.viewerId===viewer.id
     }
   };
