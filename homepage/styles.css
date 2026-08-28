@@ -610,6 +610,12 @@ main {
   font-size: 10px;
 }
 
+.module-status.online {
+  color: #58724b;
+  border-color: rgba(82, 115, 70, 0.2);
+  background: rgba(239, 248, 226, 0.82);
+}
+
 .module-icon {
   margin-bottom: 8px;
   color: #7b674e;

@@ -8,6 +8,10 @@ const modules = [
     icon: "⌁",
     title: "实用工具",
     description: "简单、顺手，也许能替日常省下一点时间。",
+    href: "#roadmap",
+    status: "planned",
+    statusText: "筹备中",
+    action: "看看计划",
     theme: "sage"
   },
   {
@@ -15,6 +19,10 @@ const modules = [
     icon: "✎",
     title: "随笔与记录",
     description: "记下生活、想法，以及偶然遇见的小故事。",
+    href: "notes/",
+    status: "online",
+    statusText: "已开放",
+    action: "进入阅读",
     theme: "blue"
   },
   {
@@ -22,6 +30,10 @@ const modules = [
     icon: "☆",
     title: "收藏与分享",
     description: "书、电影、音乐，还有值得反复回味的东西。",
+    href: "#roadmap",
+    status: "planned",
+    statusText: "筹备中",
+    action: "看看计划",
     theme: "lavender"
   },
   {
@@ -29,6 +41,10 @@ const modules = [
     icon: "⌁",
     title: "未来计划",
     description: "慢慢搭建中，新的房间会陆续亮起灯来。",
+    href: "#roadmap",
+    status: "planned",
+    statusText: "筹备中",
+    action: "看看计划",
     theme: "apricot"
   }
 ];
@@ -66,14 +82,14 @@ function renderModules() {
   for (const module of modules) {
     const card = document.createElement("a");
     card.className = `module-card theme-${module.theme}`;
-    card.href = `#roadmap`;
+    card.href = module.href;
     card.dataset.module = module.id;
     card.innerHTML = `
-      <span class="module-status">筹备中</span>
+      <span class="module-status ${module.status}">${module.statusText}</span>
       <span class="module-icon" aria-hidden="true">${module.icon}</span>
       <strong>${module.title}</strong>
       <span class="module-description">${module.description}</span>
-      <span class="module-action">看看计划 <span aria-hidden="true">→</span></span>
+      <span class="module-action">${module.action} <span aria-hidden="true">→</span></span>
       <span class="module-doodle" aria-hidden="true"></span>
     `;
     grid.append(card);

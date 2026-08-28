@@ -1,0 +1,32 @@
+[
+  {
+    "slug": "welcome",
+    "title": "欢迎来到随笔与记录",
+    "date": "2026-08-28",
+    "updated": "2026-08-28",
+    "summary": "这里会收下一些生活碎片、临时冒出的想法，以及值得分享的发现。",
+    "tags": [
+      "站点",
+      "随想"
+    ],
+    "mood": "温暖",
+    "readingMinutes": 1,
+    "href": "articles/welcome/",
+    "year": "2026"
+  },
+  {
+    "slug": "update",
+    "title": "桌游更新路线",
+    "date": "2026-08-28",
+    "updated": "2026-08-28",
+    "summary": "桌游的更新日志",
+    "tags": [
+      "工作",
+      "记录"
+    ],
+    "mood": "认真",
+    "readingMinutes": 1,
+    "href": "articles/update/",
+    "year": "2026"
+  }
+]
