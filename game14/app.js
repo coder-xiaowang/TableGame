@@ -224,7 +224,7 @@ function renderActions() {
   }
   if (view.permissions.canExchange) {
     addAction("公开三张无法使用的牌并全部更换", () => {
-      if (confirm("服务器已确认三张牌均无法合法使用。确定公开并全部更换吗？")) {
+      if (confirm("已确认三张牌均无法合法使用。确定公开并全部更换吗？")) {
         selectedCardId = null;
         submit({ type: "exchangeHand" });
       }
