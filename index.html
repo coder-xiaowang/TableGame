@@ -41,7 +41,8 @@
       {port:8797,name:"截码战",icon:"⌘",description:"藏住信息、破解编码，让每条线索恰到好处。",kind:"authority",color:"#758e75"},
       {port:8798,name:"Just One",icon:"✎",description:"合作写下独特提示；项目仍在继续打磨。",kind:"preview",color:"#9b83a0"},
       {port:8799,name:"CABO",icon:"☾",description:"记住低点数、交换暗牌，在正确时刻宣布CABO。",kind:"authority",color:"#b96d47"},
-      {port: 8800,name: "脏小猪",icon: "🐷",description: "跳进泥坑、盖好猪舍，让自己的所有小猪率先变脏。",kind: "authority",color: "#a86f4c"}
+      {port: 8800,name: "脏小猪",icon: "🐷",description: "跳进泥坑、盖好猪舍，让自己的所有小猪率先变脏。",kind: "authority",color: "#a86f4c"},
+      {port: 8801,name: "拉密",icon: "▦",description: "组合数字组与同色顺子，重排牌桌并率先打空自己的牌架。",kind: "authority",color: "#39765e"}
     ];
     const container=document.querySelector("#games"),statusText={authority:"服务器权威",preview:"测试与开发中"},gameProtocol=location.protocol==="https:"?"http:":location.protocol;
     games.forEach((game,index)=>{const link=document.createElement("a");link.className="game";link.dataset.kind=game.kind;link.style.setProperty("--card-accent",game.color);link.href=`${gameProtocol}//${location.hostname}:${game.port}/`;link.setAttribute("aria-label",`进入${game.name}`);link.innerHTML=`<span class="game-top"><span class="game-number">GAME ${String(index+1).padStart(2,"0")}</span><span class="status">${statusText[game.kind]}</span></span><span class="game-icon" aria-hidden="true">${game.icon}</span><h3></h3><p></p><span class="game-action">进入游戏 <span aria-hidden="true">→</span></span>`;link.querySelector("h3").textContent=game.name;link.querySelector("p").textContent=game.description;container.append(link)});
