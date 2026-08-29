@@ -27,7 +27,7 @@ module.exports = function startAuthoritativeGameServer({
   sharedRoot = path.resolve(__dirname, ".."),
   protocolVersion = 3,
   defaultPort = 8787,
-  roomIdleMs = 2 * 60 * 60 * 1000,
+  roomIdleMs = 0.5 * 60 * 60 * 1000,
   roomStore = null
 }) {
   if (!engine?.createLobby || !engine?.applyAction || !engine?.buildView) {
