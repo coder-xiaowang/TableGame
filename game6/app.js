@@ -187,7 +187,7 @@ function renderAction(me) {
     E.actionArea.textContent = me.hasSelected ? "你的牌已经锁定，其他玩家看不到牌面。" : "点击下方手牌完成选择，提交后不能更改。";
   } else if (view.phase === "revealing") {
     E.actionTitle.textContent = "公开本轮出牌";
-    E.actionArea.textContent = "请查看上方出牌区；服务器将从最小的牌开始逐张处理。";
+    E.actionArea.textContent = "请查看上方出牌区；将从最小的牌开始逐张处理。";
   } else if (view.phase === "placing") {
     E.actionTitle.textContent = view.animation?.type === "captureAndPlace" ? "收走第六张所在牌列" : "正在放置卡牌";
     E.actionArea.textContent = view.animation?.type === "captureAndPlace"
