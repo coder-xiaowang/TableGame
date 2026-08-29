@@ -69,28 +69,28 @@
       <div id="notice" class="notice">等待玩家加入。</div>
       <div id="exchangeReveal" class="exchange-reveal hidden" role="status" aria-live="polite"></div>
 
+      <section class="panel control-dock">
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div class="hand-zone">
+          <div class="hand-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
+          <div id="hand" class="hand"></div>
+        </div>
+      </section>
+
       <div class="panel farm-table">
         <div class="table-head">
           <span>牌库 <b id="deckCount">0</b></span>
           <span>弃牌 <b id="discardCount">0</b> · <b id="discardTop">空</b></span>
         </div>
-        <div class="mud-patch" aria-hidden="true"><span>快乐泥坑</span></div>
         <div id="players" class="players"></div>
       </div>
-
-      <section class="panel action-panel">
-        <div class="section-head">
-          <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-          <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-        </div>
-        <p id="actionHint" class="action-hint"></p>
-        <div id="actionButtons" class="action-buttons"></div>
-      </section>
-
-      <section class="panel hand-panel">
-        <div class="section-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
-        <div id="hand" class="hand"></div>
-      </section>
     </section>
   </section>
 </main>

@@ -70,6 +70,12 @@ test("game14 HTTP server supports six players, owns turns and keeps hands privat
   const page = await fetch(base).then((response) => response.text());
   assert.match(page, /脏小猪/);
   assert.match(page, /id="players"/);
+  assert.match(page, /class="panel control-dock"/);
+  assert.doesNotMatch(page, /mud-patch/);
+  const background = await fetch(`${base}/assets/farm-table.jpg`);
+  assert.equal(background.status, 200);
+  assert.match(background.headers.get("content-type"), /image\/jpeg/);
+  assert.ok((await background.arrayBuffer()).byteLength > 100_000);
   const config = await fetch(`${base}/api/config`).then((response) => response.json());
   assert.equal(config.authorityMode, "server");
   assert.equal(config.actionSeconds, 30);

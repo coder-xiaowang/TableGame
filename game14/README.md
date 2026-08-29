@@ -16,6 +16,7 @@
 - `server/game-engine.mjs`：完整状态、行动验证、目标判断、回合、超时、胜负和逐玩家视图。
 - `signal-server.js`：接入共享协议v3服务器与SQLite。
 - `app.js`：接收私密视图、渲染页面并提交意图。
+- `assets/farm-table.jpg`：为牌桌生成并压缩的美式农场背景插画。
 - `RULES.md`：本项目采用的完整规则口径。
 - `*.test.*`：规则、引擎、HTTP权威边界和SQLite恢复测试。
 
