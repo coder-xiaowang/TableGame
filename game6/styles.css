@@ -105,6 +105,17 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .revealed-play.status-active .number-card { opacity: .3; }
 .revealed-play.status-done { opacity: .48; filter: saturate(.5); }
 .revealed-play.status-done .revealed-state { color: var(--green); }
+.board-action-panel {
+  display: grid; grid-template-columns: minmax(175px,.72fr) minmax(260px,1.6fr) 150px;
+  align-items: center; gap: 12px; margin-top: 12px; border: 1px solid rgba(31,105,73,.2);
+  border-radius: 14px; padding: 10px 12px; background: linear-gradient(135deg,rgba(231,239,224,.82),rgba(255,253,247,.9));
+  box-shadow: inset 4px 0 var(--green);
+}
+.board-action-title { min-width: 0; }
+.board-action-title .eyebrow { margin-bottom: 2px; font-size: .64rem; }
+.board-action-title h2 { margin: 0; overflow: hidden; color: var(--green-dark); font-size: 1rem; line-height: 1.25; text-overflow: ellipsis; }
+.board-action-panel .actions { min-height: 0; margin-top: 0; font-size: .82rem; line-height: 1.45; }
+.board-action-panel .timer { justify-self: end; }
 .rows { display: grid; gap: 7px; margin-top: 11px; }
 .card-row {
   display: flex; align-items: center; gap: 8px; min-height: 82px; overflow-x: auto;
@@ -174,6 +185,12 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .game-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; grid-template-columns: repeat(2, 1fr); }
   .sidebar .rules { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .board-action-panel { grid-template-columns: minmax(0,1fr) 112px; grid-template-areas: "title timer" "actions actions"; gap: 7px 10px; padding: 9px 10px; }
+  .board-action-title { grid-area: title; }
+  .board-action-panel .actions { grid-area: actions; padding-top: 7px; border-top: 1px dashed rgba(31,105,73,.2); }
+  .board-action-panel .timer { grid-area: timer; width: 112px; }
 }
 @media (max-width: 600px) {
   .shell { width: min(100% - 18px, 1440px); padding-top: 12px; }
