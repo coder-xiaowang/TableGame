@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>拉密 · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div><p class="eyebrow">SERVER AUTHORITATIVE · RUMMIKUB</p><h1>拉密</h1><p>组合、拆分、重排——把最后一张牌送上桌面。</p></div>
+    <div id="connectionStatus" class="connection-status">准备连接</div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active">创建房间</button><button id="guestModeButton">加入房间</button></div>
+    <div id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">CREATE A TABLE</p><h2>建立拉密比赛</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>人数<select id="playerCountSelect"><option>2</option><option>3</option><option selected>4</option></select></label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </div>
+    <div id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN A TABLE</p><h2>加入朋友的牌桌</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 R8K2"></label>
+      <button id="joinRoomButton" class="primary">加入房间</button>
+    </div>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside class="sidebar">
+      <div class="panel room-card">
+        <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
+        <div id="hostTools" class="host-tools hidden">
+          <label>本房人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+          <button id="startGameButton" class="primary">开始比赛</button>
+          <button id="nextGameButton" class="primary hidden">开始下一局</button>
+          <button id="restartMatchButton" class="primary hidden">开始新比赛</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+      </div>
+      <div class="panel score-card">
+        <p class="eyebrow">MATCH SCORE</p><h2>比赛积分</h2><div id="scoreboard" class="scoreboard"></div>
+      </div>
+      <div class="panel rule-card">
+        <p class="eyebrow">QUICK RULES</p><h2>30分开牌</h2>
+        <p>同数异色3～4张，或同色连续3张以上。首次开牌只能用自己的牌，合计至少30分。</p>
+        <p>确认时所有牌组都必须合法；动过草稿后超时摸3张，否则摸1张。</p>
+      </div>
+      <div class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">TABLE NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
+        <div id="logList" class="log"></div>
+      </div>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+
+      <section id="controlDock" class="panel control-dock" data-expanded="false">
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div class="hand-zone">
+          <div class="hand-head"><div><p class="eyebrow">YOUR RACK</p><h2>我的牌架</h2></div><span id="handHint">开局获得14张牌</span></div>
+          <div id="hand" class="hand drop-hand" data-drop-hand="true"></div>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="table-head">
+          <div><p class="eyebrow">PUBLIC TABLE</p><h2>公共牌桌</h2></div>
+          <div class="table-meta"><span>第 <b id="gameNumber">0</b>/<b id="totalGames">0</b> 局</span><span>牌池 <b id="poolCount">0</b></span></div>
+        </div>
+        <div id="changeNotice" class="change-notice hidden"></div>
+        <div id="table" class="meld-board"></div>
+        <div id="newMeldActions" class="new-meld-actions hidden">
+          <button type="button" data-new-kind="group">把所选牌放入新数字组</button>
+          <button type="button" data-new-kind="run">把所选牌放入新顺子</button>
+        </div>
+      </section>
+
+      <section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">GAME RESULT</p><h2 id="resultTitle"></h2><div id="resultScores"></div></section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
