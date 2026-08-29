@@ -16,7 +16,7 @@ const E = Object.fromEntries([
   "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
   "joinRoomButton","roomCodeInput","roomCodeDisplay","hostTools","roomPlayerCountSelect",
   "startGameButton","endGameButton","playerCountBadge","playerList","notice","roundBadge",
-  "turnBadge","revealPanel","revealProgress","revealedPlays","rows","actionTitle","actionArea","timerText","timerBar","handCount","hand",
+  "turnBadge","revealPanel","revealProgress","revealedPlays","rows","turnConsole","actionTitle","actionArea","timerText","timerBar","handCount","hand",
   "selectionState","logList","toggleLogButton"
 ].map((id) => [id,$(id)]));
 
@@ -183,7 +183,7 @@ function renderNotice() {
 function renderAction(me) {
   E.actionArea.innerHTML = "";
   if (view.phase === "selecting") {
-    E.actionTitle.textContent = me.hasSelected ? "已选择" : "选择一张手牌";
+    E.actionTitle.textContent = me.hasSelected ? `已选择 ${me.selectedCard ?? ""}`.trim() : "选择一张手牌";
     E.actionArea.textContent = me.hasSelected ? "你的牌已经锁定，其他玩家看不到牌面。" : "点击下方手牌完成选择，提交后不能更改。";
   } else if (view.phase === "revealing") {
     E.actionTitle.textContent = "公开本轮出牌";
@@ -301,6 +301,8 @@ function render() {
   E.roundBadge.textContent = `第 ${view.round} 局`;
   E.turnBadge.textContent = `第 ${view.turn} / 10 回合`;
   E.handCount.textContent = me?.hand.length || 0;
+  E.turnConsole.dataset.phase = view.phase;
+  E.turnConsole.dataset.handExpanded = String(Boolean(view.phase === "selecting" && !me?.hasSelected && view.permissions?.canSelect));
   renderPlayers();
   renderRevealedPlays();
   renderRows();

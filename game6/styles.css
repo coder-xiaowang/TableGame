@@ -105,17 +105,27 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .revealed-play.status-active .number-card { opacity: .3; }
 .revealed-play.status-done { opacity: .48; filter: saturate(.5); }
 .revealed-play.status-done .revealed-state { color: var(--green); }
-.board-action-panel {
-  display: grid; grid-template-columns: minmax(175px,.72fr) minmax(260px,1.6fr) 150px;
-  align-items: center; gap: 12px; margin-top: 12px; border: 1px solid rgba(31,105,73,.2);
-  border-radius: 14px; padding: 10px 12px; background: linear-gradient(135deg,rgba(231,239,224,.82),rgba(255,253,247,.9));
-  box-shadow: inset 4px 0 var(--green);
+.turn-console {
+  display: grid; grid-template-columns: minmax(280px,.72fr) minmax(0,1.5fr); align-items: stretch;
+  gap: 10px; margin-top: 12px; border: 1px solid rgba(31,105,73,.2); border-radius: 16px;
+  padding: 9px 10px; background: linear-gradient(135deg,rgba(231,239,224,.9),rgba(255,253,247,.96));
+  box-shadow: inset 4px 0 var(--green), 0 8px 20px rgba(35,48,39,.08);
 }
-.board-action-title { min-width: 0; }
+.board-action-panel {
+  display: grid; grid-template-columns: minmax(0,1fr) 122px; grid-template-areas: "title timer" "actions actions";
+  align-items: center; gap: 7px 10px; min-width: 0; border-radius: 11px; padding: 7px 9px;
+  background: rgba(255,255,255,.46);
+}
+.board-action-title { grid-area: title; min-width: 0; }
 .board-action-title .eyebrow { margin-bottom: 2px; font-size: .64rem; }
 .board-action-title h2 { margin: 0; overflow: hidden; color: var(--green-dark); font-size: 1rem; line-height: 1.25; text-overflow: ellipsis; }
-.board-action-panel .actions { min-height: 0; margin-top: 0; font-size: .82rem; line-height: 1.45; }
-.board-action-panel .timer { justify-self: end; }
+.board-action-panel .actions { grid-area: actions; min-height: 0; margin-top: 0; padding-top: 6px; border-top: 1px dashed rgba(31,105,73,.18); font-size: .78rem; line-height: 1.4; }
+.board-action-panel .timer { grid-area: timer; justify-self: end; width: 122px; }
+.turn-hand-panel { min-width: 0; padding: 3px 0 1px 10px; border-left: 1px dashed rgba(31,105,73,.22); }
+.turn-hand-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.turn-hand-head h2 { margin: 0; font-size: 1rem; }
+.turn-hand-head .eyebrow { margin-bottom: 2px; font-size: .64rem; }
+.turn-hand-head .selection-state { padding: 6px 9px; font-size: .72rem; }
 .rows { display: grid; gap: 7px; margin-top: 11px; }
 .card-row {
   display: flex; align-items: center; gap: 8px; min-height: 82px; overflow-x: auto;
@@ -152,7 +162,8 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   box-shadow: 0 10px 22px rgba(168,58,50,.22);
 }
 .player.score-pulse { border-color: var(--red); animation: player-score-pulse .55s ease-in-out infinite alternate; }
-.hand { display: flex; gap: 8px; overflow-x: auto; padding: 14px 3px 3px; min-height: 104px; }
+.hand { display: flex; gap: 8px; overflow-x: auto; padding: 9px 3px 3px; min-height: 94px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.hand .number-card { scroll-snap-align: center; }
 .hand button { padding: 0; color: inherit; cursor: pointer; transition: transform .14s, filter .14s; }
 .hand button:hover:not(:disabled) { transform: translateY(-8px); filter: brightness(1.03); }
 .hand button.selected { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(215,152,49,.28); transform: translateY(-8px); }
@@ -185,12 +196,22 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .game-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; grid-template-columns: repeat(2, 1fr); }
   .sidebar .rules { grid-column: 1 / -1; }
+  .turn-console { grid-template-columns: minmax(250px,.68fr) minmax(0,1.32fr); }
 }
 @media (max-width: 720px) {
-  .board-action-panel { grid-template-columns: minmax(0,1fr) 112px; grid-template-areas: "title timer" "actions actions"; gap: 7px 10px; padding: 9px 10px; }
-  .board-action-title { grid-area: title; }
-  .board-action-panel .actions { grid-area: actions; padding-top: 7px; border-top: 1px dashed rgba(31,105,73,.2); }
-  .board-action-panel .timer { grid-area: timer; width: 112px; }
+  .turn-console {
+    position: sticky; z-index: 20; top: max(4px,env(safe-area-inset-top)); grid-template-columns: 1fr;
+    gap: 7px; max-height: calc(100dvh - 8px); margin-inline: -5px; padding: 8px;
+    overflow-y: auto; overscroll-behavior: contain; box-shadow: inset 4px 0 var(--green),0 14px 30px rgba(35,48,39,.22);
+  }
+  .board-action-panel { grid-template-columns: minmax(0,1fr) 112px; padding: 6px 8px; }
+  .board-action-panel .timer { width: 112px; }
+  .turn-hand-panel { padding: 7px 0 0; border-top: 1px dashed rgba(31,105,73,.22); border-left: 0; }
+  .turn-console[data-hand-expanded="false"] .turn-hand-panel { display: none; }
+  .turn-hand-head .eyebrow { display: none; }
+  .turn-hand-head h2 { font-size: .92rem; }
+  .turn-hand-head .selection-state { padding: 4px 7px; font-size: .67rem; }
+  .hand { min-height: 84px; padding-top: 6px; }
 }
 @media (max-width: 600px) {
   .shell { width: min(100% - 18px, 1440px); padding-top: 12px; }

@@ -97,20 +97,21 @@
             <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
             <div class="badges"><span id="roundBadge">第 0 局</span><span id="turnBadge">第 0 / 10 回合</span></div>
           </div>
-          <div class="board-action-panel">
-            <div class="board-action-title"><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-            <div class="actions" id="actionArea"></div>
-            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          <div class="turn-console" id="turnConsole" data-hand-expanded="false">
+            <div class="board-action-panel">
+              <div class="board-action-title"><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+              <div class="actions" id="actionArea"></div>
+              <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+            </div>
+            <div class="turn-hand-panel">
+              <div class="turn-hand-head">
+                <div><p class="eyebrow">YOUR HAND</p><h2>我的手牌 <span id="handCount">0</span></h2></div>
+                <span class="selection-state" id="selectionState"></span>
+              </div>
+              <div class="hand" id="hand"></div>
+            </div>
           </div>
           <div class="rows" id="rows"></div>
-        </div>
-
-        <div class="panel hand-panel">
-          <div class="section-head">
-            <div><p class="eyebrow">YOUR HAND</p><h2>我的手牌 <span id="handCount">0</span></h2></div>
-            <span class="selection-state" id="selectionState"></span>
-          </div>
-          <div class="hand" id="hand"></div>
         </div>
 
         <div class="panel log-panel">

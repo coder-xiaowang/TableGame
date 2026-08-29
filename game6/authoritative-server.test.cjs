@@ -35,6 +35,10 @@ test("game6 server owns the deck and sends a different secret view to each playe
   await new Promise((resolve) => server.once("listening",resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   context.after(async () => {if (server.listening) await closeServer(server);});
+  const page = await fetch(baseUrl).then((response) => response.text());
+  assert.match(page,/id="turnConsole"/);
+  assert.match(page,/class="turn-hand-panel"/);
+  assert.ok(page.indexOf('id="turnConsole"') < page.indexOf('id="rows"'));
   const config = await fetch(`${baseUrl}/api/config`).then((response) => response.json());
   assert.equal(config.authorityMode,"server"); assert.equal(config.protocolVersion,3); assert.equal(config.actionSeconds,15);
 
