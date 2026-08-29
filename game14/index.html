@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>脏小猪 · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">SERVER AUTHORITATIVE · DIRTY PIG</p>
+      <h1>脏小猪</h1>
+      <p>让小猪跳进泥坑，盖好猪舍，躲开大雨、农夫和闪电。</p>
+    </div>
+    <div id="connectionStatus" class="connection-status">准备连接</div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs">
+      <button id="hostModeButton" class="active">创建房间</button>
+      <button id="guestModeButton">加入房间</button>
+    </div>
+    <div id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">HOST A FARM</p><h2>建立一座小猪农场</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>人数
+        <select id="playerCountSelect"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+      </label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </div>
+    <div id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN A FARM</p><h2>加入朋友的农场</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 P1G8"></label>
+      <button id="joinRoomButton" class="primary">加入房间</button>
+    </div>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside class="sidebar">
+      <div class="panel room-card">
+        <p class="eyebrow">ROOM CODE</p>
+        <div id="roomCodeDisplay" class="room-code">----</div>
+        <div id="hostTools" class="host-tools hidden">
+          <label>本房人数
+            <select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+          </label>
+          <button id="startGameButton" class="primary">开始游戏</button>
+          <button id="restartGameButton" class="primary hidden">再玩一局</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+      </div>
+      <div class="panel rule-card">
+        <p class="eyebrow">HOW TO WIN</p>
+        <h2>全部变脏就获胜</h2>
+        <p>支持2～6人。猪舍防雨，封门防农夫，避雷针防闪电。每回合出一张牌并补回三张。</p>
+        <p>任何牌都能无效果弃掉；仅当三张牌都无法合法使用时，才能公开并全部更换。</p>
+      </div>
+      <div class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">FARM NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
+        <div id="logList" class="log"></div>
+      </div>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <div id="exchangeReveal" class="exchange-reveal hidden" role="status" aria-live="polite"></div>
+
+      <div class="panel farm-table">
+        <div class="table-head">
+          <span>牌库 <b id="deckCount">0</b></span>
+          <span>弃牌 <b id="discardCount">0</b> · <b id="discardTop">空</b></span>
+        </div>
+        <div class="mud-patch" aria-hidden="true"><span>快乐泥坑</span></div>
+        <div id="players" class="players"></div>
+      </div>
+
+      <section class="panel action-panel">
+        <div class="section-head">
+          <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+          <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+        </div>
+        <p id="actionHint" class="action-hint"></p>
+        <div id="actionButtons" class="action-buttons"></div>
+      </section>
+
+      <section class="panel hand-panel">
+        <div class="section-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
+        <div id="hand" class="hand"></div>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
