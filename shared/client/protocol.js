@@ -6,7 +6,8 @@ export const MESSAGE_KINDS = Object.freeze({
   ACTION: "action",
   VIEW: "view",
   REJECTED: "rejected",
-  KICKED: "kicked"
+  KICKED: "kicked",
+  ROOM_EXPIRED: "room_expired"
 });
 
 export class HttpError extends Error {

@@ -8,6 +8,10 @@ const { URL } = require("url");
 const { createMemoryRoomStore, SCHEMA_VERSION } = require("./memory-room-store");
 
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MEMBER_ROLES = Object.freeze({
+  PLAYER: "player",
+  SPECTATOR: "spectator"
+});
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -28,6 +32,8 @@ module.exports = function startAuthoritativeGameServer({
   protocolVersion = 3,
   defaultPort = 8787,
   roomIdleMs = 0.5 * 60 * 60 * 1000,
+  spectatorsEnabled = process.env.SPECTATORS_ENABLED === "1",
+  spectatorLimit = process.env.SPECTATOR_LIMIT || 10,
   roomStore = null
 }) {
   if (!engine?.createLobby || !engine?.applyAction || !engine?.buildView) {
@@ -35,6 +41,15 @@ module.exports = function startAuthoritativeGameServer({
   }
 
   const port = Number(process.env.PORT || defaultPort);
+  const spectatorsSupported = engine.SUPPORTS_SPECTATORS === true
+    && typeof engine.buildSpectatorView === "function"
+    && typeof engine.canChangeSeats === "function"
+    && typeof engine.vacateSeat === "function";
+  const spectatorsActive = spectatorsSupported && spectatorsEnabled === true;
+  const resolvedSpectatorLimit = Number(spectatorLimit);
+  if (!Number.isInteger(resolvedSpectatorLimit) || resolvedSpectatorLimit < 1 || resolvedSpectatorLimit > 100) {
+    throw new TypeError("spectatorLimit must be an integer between 1 and 100");
+  }
   const resolvedGameRoot = path.resolve(gameRoot);
   const resolvedSharedRoot = path.resolve(sharedRoot);
   const store = roomStore || createMemoryRoomStore();
@@ -51,6 +66,7 @@ module.exports = function startAuthoritativeGameServer({
       : room.state;
     const state = structuredClone(serializedState);
     for (const player of state.players || []) player.connected = false;
+    const playerIds = new Set((state.players || []).map((player) => String(player.id)));
     return {
       schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION,
       protocolVersion,
@@ -58,12 +74,15 @@ module.exports = function startAuthoritativeGameServer({
       members: [...room.members.entries()].map(([id, member]) => ({
         id,
         ...structuredClone(member),
+        role: playerIds.has(String(id)) ? MEMBER_ROLES.PLAYER : MEMBER_ROLES.SPECTATOR,
         connected: false
       })),
       state,
       version: room.version,
       createdAt: room.createdAt,
-      updatedAt: room.updatedAt
+      updatedAt: room.updatedAt,
+      lastPlayerActivityAt: room.lastPlayerActivityAt,
+      allowSpectators: room.allowSpectators
     };
   }
 
@@ -89,8 +108,10 @@ module.exports = function startAuthoritativeGameServer({
       throw new Error(`Room ${roomCode} could not restore its game state`);
     }
     for (const player of state.players) player.connected = false;
+    const playerIds = new Set(state.players.map((player) => String(player.id)));
     const members = new Map(snapshot.members.map(({ id, ...member }) => [String(id), {
       ...member,
+      role: playerIds.has(String(id)) ? MEMBER_ROLES.PLAYER : MEMBER_ROLES.SPECTATOR,
       connected: false,
       actionIds: Array.isArray(member.actionIds) ? member.actionIds.slice(-100) : []
     }]));
@@ -104,7 +125,11 @@ module.exports = function startAuthoritativeGameServer({
       version: Number(snapshot.version) || 1,
       timer: null,
       createdAt: Number(snapshot.createdAt) || Date.now(),
-      updatedAt: Number(snapshot.updatedAt) || Date.now()
+      updatedAt: Number(snapshot.updatedAt) || Date.now(),
+      lastPlayerActivityAt: Number(snapshot.lastPlayerActivityAt)
+        || Number(snapshot.updatedAt)
+        || Date.now(),
+      allowSpectators: snapshot.allowSpectators !== false
     };
   }
 
@@ -165,6 +190,53 @@ module.exports = function startAuthoritativeGameServer({
   const createToken = () => crypto.randomBytes(32).toString("base64url");
   const clientKey = (roomCode, playerId) => `${roomCode}:${playerId}`;
   const getMember = (room, playerId) => room?.members.get(String(playerId || ""));
+  const isPlayer = (member) => member?.role === MEMBER_ROLES.PLAYER;
+  const isSpectator = (member) => member?.role === MEMBER_ROLES.SPECTATOR;
+
+  function spectatorMembers(room) {
+    return [...room.members.entries()]
+      .filter(([, member]) => isSpectator(member) && !member.kicked)
+      .map(([id, member]) => ({ id, name: member.name, connected: Boolean(member.connected) }));
+  }
+
+  function normalizeMemberName(name, fallback = "旁观者") {
+    const normalized = String(name || "").trim().replace(/\s+/g, " ").slice(0, 20);
+    return normalized || fallback;
+  }
+
+  function roomAllowsSpectators(room) {
+    return spectatorsActive && room.allowSpectators !== false;
+  }
+
+  function assertSpectatorAdmission(room) {
+    if (!spectatorsActive) {
+      const error = new Error("当前游戏尚未开放旁观功能。");
+      error.status = 409;
+      error.code = "spectators_unavailable";
+      throw error;
+    }
+    if (!roomAllowsSpectators(room)) {
+      const error = new Error("房主已关闭旁观者加入。");
+      error.status = 403;
+      error.code = "spectators_disabled";
+      throw error;
+    }
+    if (spectatorMembers(room).length >= resolvedSpectatorLimit) {
+      const error = new Error("旁观席人数已满。");
+      error.status = 409;
+      error.code = "spectator_limit_reached";
+      throw error;
+    }
+  }
+
+  function canChangeSeats(room) {
+    return spectatorsActive && engine.canChangeSeats(room.state) === true;
+  }
+
+  function markPlayerActivity(room, now = Date.now()) {
+    room.lastPlayerActivityAt = now;
+    room.updatedAt = now;
+  }
 
   function authenticate(room, playerId, resumeToken) {
     const member = getMember(room, playerId);
@@ -189,16 +261,56 @@ module.exports = function startAuthoritativeGameServer({
     }
   }
 
+  function closeClient(roomCode, memberId) {
+    const key = clientKey(roomCode, memberId);
+    const client = clients.get(key);
+    if (!client) return;
+    clearInterval(client.heartbeat);
+    clients.delete(key);
+    client.response.end();
+  }
+
+  function buildRoomView(room, memberId) {
+    const member = getMember(room, memberId);
+    if (!member || member.kicked) {
+      const error = new Error("成员身份无效。");
+      error.status = 403;
+      error.code = "invalid_session";
+      throw error;
+    }
+    if (isSpectator(member) && !spectatorsSupported) {
+      const error = new Error("当前游戏无法恢复旁观身份。");
+      error.status = 409;
+      error.code = "spectators_unavailable";
+      throw error;
+    }
+    const baseView = isSpectator(member)
+      ? engine.buildSpectatorView(room.state)
+      : engine.buildView(room.state, memberId);
+    const spectators = spectatorMembers(room);
+    return {
+      ...baseView,
+      roomRole: member.role,
+      spectators,
+      spectatorCount: spectators.length,
+      spectatorLimit: resolvedSpectatorLimit,
+      allowSpectators: roomAllowsSpectators(room)
+    };
+  }
+
   function sendView(roomCode, room, playerId) {
+    if (!clients.has(clientKey(roomCode, playerId))) return false;
     return push(roomCode, playerId, {
       kind: "view",
       version: room.version,
-      view: engine.buildView(room.state, playerId)
+      view: buildRoomView(room, playerId)
     });
   }
 
   function broadcastViews(roomCode, room) {
-    for (const player of room.state.players) sendView(roomCode, room, player.id);
+    for (const [memberId, member] of room.members) {
+      if (!member.kicked) sendView(roomCode, room, memberId);
+    }
   }
 
   function clearRoomTimer(room) {
@@ -224,12 +336,13 @@ module.exports = function startAuthoritativeGameServer({
           ...room,
           state: nextState,
           version: room.version + 1,
-          updatedAt: now
+          updatedAt: now,
+          lastPlayerActivityAt: now
         };
         persistRoom(roomCode, candidate);
         room.state = nextState;
         room.version = candidate.version;
-        room.updatedAt = now;
+        markPlayerActivity(room, now);
         broadcastViews(roomCode, room);
         scheduleRoomTimer(roomCode, room);
       } catch (error) {
@@ -287,7 +400,10 @@ module.exports = function startAuthoritativeGameServer({
         actionSeconds: engine.ACTION_SECONDS,
         persistence: store.kind || "custom",
         durable: Boolean(store.durable),
-        schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION
+        schemaVersion: Number(store.schemaVersion) || SCHEMA_VERSION,
+        spectatorsSupported,
+        spectatorsEnabled: spectatorsActive,
+        spectatorLimit: resolvedSpectatorLimit
       });
     }
 
@@ -303,6 +419,12 @@ module.exports = function startAuthoritativeGameServer({
         throw error;
       }
       const member = authenticate(room, playerId, resumeToken);
+      if (isSpectator(member) && !spectatorsSupported) {
+        const error = new Error("当前游戏无法恢复旁观身份。");
+        error.status = 409;
+        error.code = "spectators_unavailable";
+        throw error;
+      }
       response.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-store",
@@ -318,13 +440,18 @@ module.exports = function startAuthoritativeGameServer({
         previous.response.end();
       }
       clients.set(key, { response, heartbeat });
-      const changed = engine.setPresence(room.state, playerId, true, {
-        now: Date.now(), announce: member.everConnected
-      });
+      const now = Date.now();
+      const wasConnected = member.connected;
+      const changed = isPlayer(member)
+        ? engine.setPresence(room.state, playerId, true, {
+          now, announce: member.everConnected
+        })
+        : false;
       member.connected = true;
       member.everConnected = true;
-      room.updatedAt = Date.now();
-      if (changed) {
+      room.updatedAt = now;
+      if (isPlayer(member)) room.lastPlayerActivityAt = now;
+      if (changed || !wasConnected) {
         room.version += 1;
         try { persistRoom(roomCode, room); }
         catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
@@ -336,11 +463,18 @@ module.exports = function startAuthoritativeGameServer({
         if (active?.response !== response) return;
         clearInterval(active.heartbeat);
         clients.delete(key);
-        member.connected = false;
+        const closingMember = getMember(room, playerId);
+        if (!closingMember?.connected) return;
+        closingMember.connected = false;
         if (shuttingDown) return;
-        if (engine.setPresence(room.state, playerId, false, { now: Date.now() })) {
+        const now = Date.now();
+        const presenceChanged = isPlayer(closingMember)
+          ? engine.setPresence(room.state, playerId, false, { now })
+          : false;
+        room.updatedAt = now;
+        if (isPlayer(closingMember)) room.lastPlayerActivityAt = now;
+        if (presenceChanged || isPlayer(closingMember) || isSpectator(closingMember)) {
           room.version += 1;
-          room.updatedAt = Date.now();
           try { persistRoom(roomCode, room); }
           catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
           broadcastViews(roomCode, room);
@@ -368,6 +502,7 @@ module.exports = function startAuthoritativeGameServer({
         hostId,
         members: new Map([[hostId, {
           name: state.players[0].name,
+          role: MEMBER_ROLES.PLAYER,
           resumeToken,
           connected: false,
           everConnected: false,
@@ -378,7 +513,9 @@ module.exports = function startAuthoritativeGameServer({
         version: 1,
         timer: null,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        lastPlayerActivityAt: Date.now(),
+        allowSpectators: true
       };
       persistRoom(roomCode, room);
       rooms.set(roomCode, room);
@@ -388,8 +525,9 @@ module.exports = function startAuthoritativeGameServer({
         clientId: hostId,
         resumeToken,
         role: "host",
+        memberRole: MEMBER_ROLES.PLAYER,
         version: room.version,
-        view: engine.buildView(state, hostId),
+        view: buildRoomView(room, hostId),
         protocolVersion
       });
     }
@@ -411,8 +549,16 @@ module.exports = function startAuthoritativeGameServer({
         throw error;
       }
       const playerId = String(data.clientId);
+      const requestedIntent = data.intent == null ? "play" : String(data.intent);
+      if (requestedIntent !== "play" && requestedIntent !== "spectate") {
+        const error = new Error("加入身份必须是 play 或 spectate。");
+        error.status = 400;
+        error.code = "invalid_join_intent";
+        throw error;
+      }
       let member = getMember(room, playerId);
       let resumed = false;
+      let assignmentReason = null;
       if (member && data.resumeToken && member.resumeToken === data.resumeToken && !member.kicked) {
         resumed = true;
       } else if (member) {
@@ -422,14 +568,35 @@ module.exports = function startAuthoritativeGameServer({
         throw error;
       } else {
         const resumeToken = createToken();
+        const now = Date.now();
         const nextState = structuredClone(room.state);
-        const player = engine.addPlayer(nextState, {
-          id: playerId,
-          name: data.name,
-          connected: false
-        }, { now: Date.now() });
+        let player = null;
+        let assignedRole = MEMBER_ROLES.PLAYER;
+        if (requestedIntent === "spectate") {
+          assertSpectatorAdmission(room);
+          assignedRole = MEMBER_ROLES.SPECTATOR;
+          assignmentReason = "requested_spectator";
+        } else if (spectatorsActive && !canChangeSeats(room)) {
+          assertSpectatorAdmission(room);
+          assignedRole = MEMBER_ROLES.SPECTATOR;
+          assignmentReason = "game_in_progress";
+        } else {
+          try {
+            player = engine.addPlayer(nextState, {
+              id: playerId,
+              name: data.name,
+              connected: false
+            }, { now });
+          } catch (error) {
+            if (!spectatorsActive || error?.code !== "room_full") throw error;
+            assertSpectatorAdmission(room);
+            assignedRole = MEMBER_ROLES.SPECTATOR;
+            assignmentReason = "player_seats_full";
+          }
+        }
         const nextMember = {
-          name: player.name,
+          name: player?.name || normalizeMemberName(data.name),
+          role: assignedRole,
           resumeToken,
           connected: false,
           everConnected: false,
@@ -438,19 +605,22 @@ module.exports = function startAuthoritativeGameServer({
         };
         const nextMembers = new Map(room.members);
         nextMembers.set(playerId, nextMember);
-        const now = Date.now();
         const candidate = {
           ...room,
           members: nextMembers,
           state: nextState,
           version: room.version + 1,
-          updatedAt: now
+          updatedAt: now,
+          lastPlayerActivityAt: assignedRole === MEMBER_ROLES.PLAYER
+            ? now
+            : room.lastPlayerActivityAt
         };
         persistRoom(roomCode, candidate);
         room.state = nextState;
-        room.members.set(playerId, nextMember);
+        room.members = nextMembers;
         room.version = candidate.version;
         room.updatedAt = now;
+        room.lastPlayerActivityAt = candidate.lastPlayerActivityAt;
         member = nextMember;
         broadcastViews(roomCode, room);
       }
@@ -461,8 +631,14 @@ module.exports = function startAuthoritativeGameServer({
         resumeToken: member.resumeToken,
         resumed,
         role: playerId === room.hostId ? "host" : "guest",
+        memberRole: member.role,
+        requestedIntent,
+        assignmentReason,
+        autoSpectated: !resumed
+          && requestedIntent === "play"
+          && isSpectator(member),
         version: room.version,
-        view: engine.buildView(room.state, playerId),
+        view: buildRoomView(room, playerId),
         protocolVersion
       });
     }
@@ -479,6 +655,12 @@ module.exports = function startAuthoritativeGameServer({
       }
       const playerId = String(data.playerId || "");
       const member = authenticate(room, playerId, data.resumeToken || "");
+      if (isSpectator(member)) {
+        const error = new Error("旁观者不能提交游戏操作。");
+        error.status = 403;
+        error.code = "spectator_cannot_act";
+        throw error;
+      }
       const actionId = String(data.actionId || "").slice(0, 100);
       if (!actionId) {
         const error = new Error("缺少操作编号。");
@@ -507,16 +689,163 @@ module.exports = function startAuthoritativeGameServer({
         members: nextMembers,
         state: nextState,
         version: room.version + 1,
-        updatedAt: now
+        updatedAt: now,
+        lastPlayerActivityAt: now
       };
       persistRoom(roomCode, candidate);
       room.state = nextState;
       member.actionIds = nextActionIds;
       room.version = candidate.version;
-      room.updatedAt = now;
+      markPlayerActivity(room, now);
       scheduleRoomTimer(roomCode, room);
       broadcastViews(roomCode, room);
       return sendJson(response, 200, { ok: true, version: room.version, protocolVersion });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/seat") {
+      const data = await readBody(request);
+      const roomCode = String(data.roomCode || "").toUpperCase();
+      const room = rooms.get(roomCode);
+      if (!room) {
+        const error = new Error("房间不存在或已经失效。");
+        error.status = 404;
+        error.code = "room_not_found";
+        throw error;
+      }
+      if (!spectatorsActive) {
+        const error = new Error("当前游戏尚未开放旁观功能。");
+        error.status = 409;
+        error.code = "spectators_unavailable";
+        throw error;
+      }
+      const memberId = String(data.playerId || "");
+      const member = authenticate(room, memberId, data.resumeToken || "");
+      const intent = String(data.intent || "");
+      if (intent !== "play" && intent !== "spectate") {
+        const error = new Error("座位意图必须是 play 或 spectate。");
+        error.status = 400;
+        error.code = "invalid_seat_intent";
+        throw error;
+      }
+      const desiredRole = intent === "play" ? MEMBER_ROLES.PLAYER : MEMBER_ROLES.SPECTATOR;
+      if (member.role === desiredRole) {
+        return sendJson(response, 200, {
+          ok: true,
+          unchanged: true,
+          memberRole: member.role,
+          version: room.version,
+          view: buildRoomView(room, memberId),
+          protocolVersion
+        });
+      }
+      if (!canChangeSeats(room)) {
+        const error = new Error("当前阶段不能切换玩家席和旁观席。");
+        error.status = 409;
+        error.code = "seat_change_unavailable";
+        throw error;
+      }
+      if (intent === "spectate" && memberId === room.hostId) {
+        const error = new Error("房主不能转入旁观席。");
+        error.status = 403;
+        error.code = "host_must_remain_player";
+        throw error;
+      }
+
+      const now = Date.now();
+      const nextState = structuredClone(room.state);
+      if (intent === "spectate") {
+        assertSpectatorAdmission(room);
+        engine.vacateSeat(nextState, memberId, { now });
+      } else {
+        engine.addPlayer(nextState, {
+          id: memberId,
+          name: member.name,
+          connected: member.connected
+        }, { now });
+      }
+      const nextMembers = new Map(room.members);
+      nextMembers.set(memberId, { ...member, role: desiredRole, actionIds: [] });
+      const candidate = {
+        ...room,
+        state: nextState,
+        members: nextMembers,
+        version: room.version + 1,
+        updatedAt: now,
+        lastPlayerActivityAt: now
+      };
+      persistRoom(roomCode, candidate);
+      room.state = nextState;
+      room.members = nextMembers;
+      room.version = candidate.version;
+      markPlayerActivity(room, now);
+      broadcastViews(roomCode, room);
+      return sendJson(response, 200, {
+        ok: true,
+        memberRole: desiredRole,
+        version: room.version,
+        view: buildRoomView(room, memberId),
+        protocolVersion
+      });
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/room-settings") {
+      const data = await readBody(request);
+      const roomCode = String(data.roomCode || "").toUpperCase();
+      const room = rooms.get(roomCode);
+      if (!room) {
+        const error = new Error("房间不存在或已经失效。");
+        error.status = 404;
+        error.code = "room_not_found";
+        throw error;
+      }
+      const hostId = String(data.hostId || "");
+      authenticate(room, hostId, data.resumeToken || "");
+      if (room.hostId !== hostId) {
+        const error = new Error("只有房主可以修改旁观设置。");
+        error.status = 403;
+        error.code = "host_required";
+        throw error;
+      }
+      if (!spectatorsActive) {
+        const error = new Error("当前游戏尚未开放旁观功能。");
+        error.status = 409;
+        error.code = "spectators_unavailable";
+        throw error;
+      }
+      if (typeof data.allowSpectators !== "boolean") {
+        const error = new Error("allowSpectators 必须是布尔值。");
+        error.status = 400;
+        error.code = "invalid_room_settings";
+        throw error;
+      }
+      if (room.allowSpectators === data.allowSpectators) {
+        return sendJson(response, 200, {
+          ok: true,
+          unchanged: true,
+          allowSpectators: roomAllowsSpectators(room),
+          version: room.version,
+          protocolVersion
+        });
+      }
+      const now = Date.now();
+      const candidate = {
+        ...room,
+        allowSpectators: data.allowSpectators,
+        version: room.version + 1,
+        updatedAt: now,
+        lastPlayerActivityAt: now
+      };
+      persistRoom(roomCode, candidate);
+      room.allowSpectators = data.allowSpectators;
+      room.version = candidate.version;
+      markPlayerActivity(room, now);
+      broadcastViews(roomCode, room);
+      return sendJson(response, 200, {
+        ok: true,
+        allowSpectators: roomAllowsSpectators(room),
+        version: room.version,
+        protocolVersion
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/api/kick") {
@@ -529,15 +858,17 @@ module.exports = function startAuthoritativeGameServer({
         error.code = "room_not_found";
         throw error;
       }
-      authenticate(room, data.hostId, data.resumeToken || "");
-      if (room.hostId !== data.hostId) {
+      const hostId = String(data.hostId || "");
+      authenticate(room, hostId, data.resumeToken || "");
+      if (room.hostId !== hostId) {
         const error = new Error("只有房主可以移出玩家。");
         error.status = 403;
         error.code = "host_required";
         throw error;
       }
       const target = getMember(room, data.playerId);
-      if (!target || target.kicked) {
+      const targetId = String(data.playerId || "");
+      if (!target || target.kicked || targetId === room.hostId) {
         const error = new Error("无法移出该玩家。");
         error.status = 400;
         error.code = "invalid_kick_target";
@@ -545,23 +876,24 @@ module.exports = function startAuthoritativeGameServer({
       }
       const now = Date.now();
       const nextState = structuredClone(room.state);
-      engine.removePlayer(nextState, data.hostId, data.playerId, { now });
+      if (isPlayer(target)) engine.removePlayer(nextState, hostId, targetId, { now });
       const nextMembers = new Map(room.members);
-      nextMembers.set(String(data.playerId), { ...target, kicked: true, connected: false });
+      nextMembers.set(targetId, { ...target, kicked: true, connected: false });
       const candidate = {
         ...room,
         members: nextMembers,
         state: nextState,
         version: room.version + 1,
-        updatedAt: now
+        updatedAt: now,
+        lastPlayerActivityAt: now
       };
       persistRoom(roomCode, candidate);
       room.state = nextState;
-      target.kicked = true;
-      target.connected = false;
-      push(roomCode, data.playerId, { kind: "kicked" });
+      room.members = nextMembers;
+      push(roomCode, targetId, { kind: "kicked" });
+      closeClient(roomCode, targetId);
       room.version = candidate.version;
-      room.updatedAt = now;
+      markPlayerActivity(room, now);
       broadcastViews(roomCode, room);
       return sendJson(response, 200, { ok: true, version: room.version, protocolVersion });
     }
@@ -578,7 +910,7 @@ module.exports = function startAuthoritativeGameServer({
         throw new Error(`Invalid or duplicate persisted room code: ${entry.roomCode}`);
       }
       const room = restoreRoom(roomCode, entry.snapshot);
-      if (now - room.updatedAt >= roomIdleMs) {
+      if (now - room.lastPlayerActivityAt >= roomIdleMs) {
         store.deleteRoom(roomCode);
         continue;
       }
@@ -613,9 +945,16 @@ module.exports = function startAuthoritativeGameServer({
   const cleanup = setInterval(() => {
     const now = Date.now();
     for (const [roomCode, room] of rooms) {
-      const online = [...room.members.values()].some((member) => member.connected && !member.kicked);
-      if (online || now - room.updatedAt < roomIdleMs) continue;
+      const playerOnline = [...room.members.values()].some((member) => (
+        isPlayer(member) && member.connected && !member.kicked
+      ));
+      if (playerOnline || now - room.lastPlayerActivityAt < roomIdleMs) continue;
       try {
+        for (const [memberId, member] of room.members) {
+          if (member.kicked) continue;
+          push(roomCode, memberId, { kind: "room_expired" });
+          closeClient(roomCode, memberId);
+        }
         store.deleteRoom(roomCode);
         clearRoomTimer(room);
         rooms.delete(roomCode);

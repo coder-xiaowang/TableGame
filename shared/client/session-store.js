@@ -29,6 +29,9 @@ export function createSessionStore({ gameId, storage = globalThis.localStorage }
         resumeToken: String(session.resumeToken),
         name: String(session.name ?? "")
       };
+      if (session.memberRole === "player" || session.memberRole === "spectator") {
+        value.memberRole = session.memberRole;
+      }
       storage.setItem(keyFor(roomCode), JSON.stringify(value));
       return value;
     },

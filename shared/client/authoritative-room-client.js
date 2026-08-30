@@ -13,17 +13,26 @@ export function createAuthoritativeRoomClient({
   handlers = {}
 } = {}) {
   let role = null;
+  let memberRole = null;
   let roomCode = "";
   let playerId = "";
   let hostId = "";
   let resumeToken = "";
   let playerName = "";
   let version = 0;
+  let assignmentReason = null;
+  let autoSpectated = false;
 
   function acceptView(view, nextVersion = 0) {
     const numericVersion = Number(nextVersion) || 0;
     if (numericVersion && numericVersion < version) return;
     version = Math.max(version, numericVersion);
+    if (view?.roomRole === "player" || view?.roomRole === "spectator") {
+      memberRole = view.roomRole;
+      if (roomCode && playerId && resumeToken) {
+        sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName, memberRole });
+      }
+    }
     handlers.onView?.(view, version);
   }
 
@@ -38,6 +47,10 @@ export function createAuthoritativeRoomClient({
         sessionStore?.clear(roomCode);
         channel.close();
         handlers.onKicked?.();
+      } else if (payload?.kind === MESSAGE_KINDS.ROOM_EXPIRED) {
+        sessionStore?.clear(roomCode);
+        channel.close();
+        handlers.onRoomExpired?.();
       } else {
         handlers.onUnknownMessage?.(payload, message);
       }
@@ -77,14 +90,17 @@ export function createAuthoritativeRoomClient({
     });
     roomCode = result.roomCode;
     resumeToken = result.resumeToken;
+    memberRole = result.memberRole || "player";
+    assignmentReason = null;
+    autoSpectated = false;
     version = Number(result.version) || 0;
-    sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName });
+    sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName, memberRole });
     acceptView(result.view, result.version);
     await channel.open(eventsUrl());
     return snapshot();
   }
 
-  async function joinRoom({ code, name, id } = {}) {
+  async function joinRoom({ code, name, id, intent = "play" } = {}) {
     const normalizedCode = normalizeRoomCode(code);
     if (!isValidRoomCode(normalizedCode)) throw new TypeError("请输入四位房间号");
     roomCode = normalizedCode;
@@ -95,14 +111,18 @@ export function createAuthoritativeRoomClient({
       roomCode,
       clientId: playerId,
       resumeToken: saved?.resumeToken,
-      name: saved ? "" : playerName
+      name: saved ? "" : playerName,
+      intent
     });
     playerId = result.clientId;
     hostId = result.hostId;
     resumeToken = result.resumeToken;
     role = result.role;
+    memberRole = result.memberRole || "player";
+    assignmentReason = result.assignmentReason || null;
+    autoSpectated = Boolean(result.autoSpectated);
     version = Number(result.version) || 0;
-    sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName });
+    sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName, memberRole });
     acceptView(result.view, result.version);
     await channel.open(eventsUrl());
     return { ...snapshot(), resumed: Boolean(result.resumed) };
@@ -134,15 +154,43 @@ export function createAuthoritativeRoomClient({
     });
   }
 
+  async function changeSeat(intent) {
+    if (!roomCode || !playerId || !resumeToken) throw new Error("尚未建立房间会话");
+    const result = await post("/api/seat", {
+      roomCode,
+      playerId,
+      resumeToken,
+      intent
+    });
+    memberRole = result.memberRole || memberRole;
+    assignmentReason = null;
+    autoSpectated = false;
+    version = Math.max(version, Number(result.version) || 0);
+    sessionStore?.save(roomCode, { playerId, resumeToken, name: playerName, memberRole });
+    if (result.view) acceptView(result.view, result.version);
+    return snapshot();
+  }
+
+  function setRoomSettings({ allowSpectators } = {}) {
+    if (role !== "host") throw new Error("只有房主可以修改房间设置");
+    return post("/api/room-settings", {
+      roomCode,
+      hostId: playerId,
+      resumeToken,
+      allowSpectators
+    });
+  }
+
   function snapshot() {
     return Object.freeze({
-      role, roomCode, playerId, hostId, resumeToken, name: playerName, version
+      role, memberRole, roomCode, playerId, hostId, resumeToken, name: playerName, version,
+      assignmentReason, autoSpectated
     });
   }
 
   function close() { channel.close(); }
 
   return Object.freeze({
-    checkServer, createRoom, joinRoom, submitAction, kick, close, snapshot
+    checkServer, createRoom, joinRoom, submitAction, kick, changeSeat, setRoomSettings, close, snapshot
   });
 }

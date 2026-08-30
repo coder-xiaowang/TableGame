@@ -31,6 +31,8 @@ test("sessions are isolated by game and room", () => {
   game9.save("ab12", session);
   assert.deepEqual(game9.load("AB12"), session);
   assert.equal(another.load("AB12"), null);
+  game9.save("SP10", { ...session, memberRole: "spectator" });
+  assert.equal(game9.load("SP10").memberRole, "spectator");
   game9.clear("AB12");
   assert.equal(game9.load("AB12"), null);
 });
@@ -76,6 +78,7 @@ test("authoritative client sends every role action to the server with a state ve
         clientId: "host_1",
         resumeToken: "secure-token",
         role: "host",
+        memberRole: "player",
         version: 4,
         view: initialView,
         protocolVersion: 3
@@ -94,12 +97,65 @@ test("authoritative client sends every role action to the server with a state ve
     EventSourceImpl: FakeEventSource,
     handlers: { onView: (view, version) => views.push({ view, version }) }
   });
-  await client.createRoom({ name: "房主", capacity: 3, id: "host_1" });
+  const created = await client.createRoom({ name: "房主", capacity: 3, id: "host_1" });
   await client.submitAction({ type: "start" });
 
+  assert.equal(created.role, "host");
+  assert.equal(created.memberRole, "player");
   assert.deepEqual(views, [{ view: initialView, version: 4 }]);
   assert.equal(requests[1].path, "/api/actions");
   assert.equal(requests[1].data.playerId, "host_1");
   assert.equal(requests[1].data.expectedVersion, 4);
   assert.deepEqual(requests[1].data.action, { type: "start" });
+});
+
+test("authoritative client sends join intent and persists role changes returned by the seat API", async () => {
+  class FakeEventSource {
+    constructor() {
+      this.listeners = new Map();
+      queueMicrotask(() => this.listeners.get("open")?.({ type: "open" }));
+    }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    close() {}
+  }
+  const requests = [];
+  async function fetchImpl(path, options = {}) {
+    const data = JSON.parse(options.body);
+    requests.push({ path, data });
+    const payload = path === "/api/join"
+      ? {
+        roomCode: "ABCD", hostId: "host", clientId: "watch", resumeToken: "watch-token",
+        role: "guest", memberRole: "spectator", assignmentReason: "requested_spectator",
+        autoSpectated: false, version: 2, view: { roomRole: "spectator" }, protocolVersion: 3
+      }
+      : {
+        ok: true, memberRole: "player", version: 3,
+        view: { roomRole: "player" }, protocolVersion: 3
+      };
+    return new Response(JSON.stringify(payload), {
+      status: 200, headers: { "Content-Type": "application/json" }
+    });
+  }
+  const storage = memoryStorage();
+  const sessions = createSessionStore({ gameId: "spectator-client", storage });
+  const client = createAuthoritativeRoomClient({
+    protocolVersion: 3,
+    sessionStore: sessions,
+    fetchImpl,
+    EventSourceImpl: FakeEventSource
+  });
+  const joined = await client.joinRoom({
+    code: "ABCD", name: "旁观者", id: "watch", intent: "spectate"
+  });
+  assert.equal(joined.memberRole, "spectator");
+  assert.equal(joined.assignmentReason, "requested_spectator");
+  assert.equal(requests[0].data.intent, "spectate");
+  assert.equal(sessions.load("ABCD").memberRole, "spectator");
+
+  const seated = await client.changeSeat("play");
+  assert.equal(seated.memberRole, "player");
+  assert.equal(seated.assignmentReason, null);
+  assert.equal(requests[1].path, "/api/seat");
+  assert.equal(requests[1].data.intent, "play");
+  assert.equal(sessions.load("ABCD").memberRole, "player");
 });
