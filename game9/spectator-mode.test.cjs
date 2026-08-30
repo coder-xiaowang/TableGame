@@ -92,6 +92,7 @@ test("game9 supports voluntary spectators and safe lobby seat changes", async (c
   assert.equal(observer.memberRole, "spectator");
   assert.equal(observer.view.selfId, null);
   assert.equal(observer.view.roomRole, "spectator");
+  assert.equal(observer.view.canChangeSeats, true);
   assert.equal(observer.view.players.every((item) => item.chips === null), true);
 
   const hostAttempt = await post(running.base, "/api/seat", auth(host, { intent: "spectate" }));
@@ -149,6 +150,7 @@ test("game9 full rooms and games in progress admit only redacted spectators", as
   assert.equal(late.payload.memberRole, "spectator");
   assert.equal(late.payload.assignmentReason, "game_in_progress");
   assert.equal(late.payload.view.phase, "playing");
+  assert.equal(late.payload.view.canChangeSeats, false);
   assert.equal(late.payload.view.players.every((player) => player.chips === null), true);
   assert.deepEqual(late.payload.view.removed, []);
   assert.equal(late.payload.view.selfId, null);
@@ -268,15 +270,23 @@ test("game9 page exposes spectator controls and collapses the list on mobile", (
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
+  const sharedScript = fs.readFileSync(path.join(__dirname, "../shared/client/spectator-ui.js"), "utf8");
+  const sharedStyles = fs.readFileSync(path.join(__dirname, "../shared/styles/spectator.css"), "utf8");
   assert.match(html, /name="joinIntent" value="play"/);
   assert.match(html, /name="joinIntent" value="spectate"/);
   assert.match(html, /id="roomRoleBanner"/);
   assert.match(html, /id="spectatorList"/);
   assert.match(html, /id="seatActionButton"/);
   assert.match(html, /id="spectatorSettingButton"/);
-  assert.match(script, /room\.changeSeat\(intent\)/);
-  assert.match(script, /setRoomSettings/);
+  assert.match(html, /shared\/styles\/spectator\.css/);
+  assert.match(script, /createSpectatorUi/);
+  assert.match(script, /spectatorUi\.render\(view\)/);
+  assert.match(script, /spectatorUi\.applyConfig/);
   assert.match(script, /spectator-action-note/);
-  assert.match(script, /spectatorPanel\.removeAttribute\("open"\)/);
-  assert.match(styles, /@media \(max-width: 720px\)/);
+  assert.doesNotMatch(script, /async function changeSeat/);
+  assert.match(sharedScript, /room\.changeSeat\(model\.seatIntent\)/);
+  assert.match(sharedScript, /setRoomSettings/);
+  assert.match(sharedScript, /removeAttribute\?\.\("open"\)/);
+  assert.match(sharedStyles, /@media \(max-width: 720px\)/);
+  assert.match(styles, /spectator-action-note/);
 });

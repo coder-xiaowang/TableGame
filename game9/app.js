@@ -7,6 +7,7 @@ import {
   createCountdown,
   createLogEntry,
   createSessionStore,
+  createSpectatorUi,
   escapeHtml,
   renderConnectionStatus,
   renderCountdown,
@@ -32,7 +33,7 @@ const E = Object.fromEntries([
 
 let mode = "host";
 let view = null;
-let serverConfig = { spectatorsEnabled: false, spectatorLimit: 10 };
+let spectatorUi = null;
 const sessions = createSessionStore({ gameId: "no-thanks" });
 const countdown = createCountdown({
   onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); }
@@ -49,14 +50,31 @@ const room = createAuthoritativeRoomClient({
       render();
     },
     onKicked() {
-      alert("你已被房主移出房间。");
-      location.reload();
+      spectatorUi?.handleSessionEnded("kicked");
     },
     onRoomExpired() {
-      alert("房间长时间没有正式玩家在线，已经自动关闭。");
-      location.reload();
+      spectatorUi?.handleSessionEnded("room_expired");
     }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView: () => view,
+  elements: {
+    joinIntentField: E.joinIntentField,
+    roomRoleBanner: E.roomRoleBanner,
+    roomRoleTitle: E.roomRoleTitle,
+    roomRoleHint: E.roomRoleHint,
+    seatActionButton: E.seatActionButton,
+    spectatorSettingButton: E.spectatorSettingButton,
+    spectatorPanel: E.spectatorPanel,
+    spectatorCountBadge: E.spectatorCountBadge,
+    spectatorList: E.spectatorList
+  },
+  notify: (message) => alert(message),
+  confirmAction: (message) => confirm(message),
+  onSessionEnded: () => location.reload()
 });
 
 function enterRoom() {
@@ -81,19 +99,12 @@ async function createGameRoom() {
 async function joinGameRoom() {
   E.joinRoomButton.disabled = true;
   try {
-    const intent = document.querySelector('input[name="joinIntent"]:checked')?.value || "play";
     const result = await room.joinRoom({
       code: E.roomCodeInput.value,
       name: E.guestNameInput.value,
-      intent
+      intent: spectatorUi.getJoinIntent()
     });
-    if (result.autoSpectated) {
-      const reason = result.assignmentReason === "game_in_progress" ? "游戏已经开始" : "玩家席已满";
-      alert(`${reason}，你已进入旁观席。`);
-    }
-    E.connectionStatus.textContent = result.resumed
-      ? `身份已恢复：${result.memberRole === "spectator" ? "旁观者" : "玩家"}`
-      : result.memberRole === "spectator" ? "已进入旁观席" : "已加入玩家席";
+    E.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`加入房间失败：${error.message}`);
   } finally {
@@ -101,39 +112,13 @@ async function joinGameRoom() {
   }
 }
 
-async function kickMember(memberId, memberName, memberRole = "player") {
-  if (memberRole === "player" && view?.phase !== "lobby") return alert("游戏开始后不能移出正式玩家。");
-  if (!confirm(`确定将 ${memberName} 移出房间吗？`)) return;
+async function kickPlayer(playerId, playerName) {
+  if (view?.phase !== "lobby") return alert("游戏开始后不能移出正式玩家。");
+  if (!confirm(`确定将 ${playerName} 移出房间吗？`)) return;
   try {
-    await room.kick(memberId);
+    await room.kick(playerId);
   } catch (error) {
     alert(`移出失败：${error.message}`);
-  }
-}
-
-async function changeSeat() {
-  const currentRole = view?.roomRole || room.snapshot().memberRole;
-  const intent = currentRole === "spectator" ? "play" : "spectate";
-  if (intent === "spectate" && !confirm("转入旁观席后将不计入开局人数，确定继续吗？")) return;
-  E.seatActionButton.disabled = true;
-  try {
-    await room.changeSeat(intent);
-  } catch (error) {
-    alert(`切换座位失败：${error.message}`);
-  } finally {
-    E.seatActionButton.disabled = false;
-  }
-}
-
-async function toggleSpectatorSetting() {
-  if (!view?.permissions?.canManage) return;
-  E.spectatorSettingButton.disabled = true;
-  try {
-    await room.setRoomSettings({ allowSpectators: !view.allowSpectators });
-  } catch (error) {
-    alert(`修改旁观设置失败：${error.message}`);
-  } finally {
-    E.spectatorSettingButton.disabled = false;
   }
 }
 
@@ -227,7 +212,8 @@ function createVisualTestView(playerCount) {
 
 function render() {
   if (!view) return;
-  const memberRole = view.roomRole || room.snapshot().memberRole || "player";
+  const spectatorModel = spectatorUi.render(view);
+  const memberRole = spectatorModel.memberRole;
   const me = view.players.find((player) => player.id === view.selfId);
   const current = view.players[view.currentIndex];
   const myTurn = memberRole === "player" && view.phase === "playing" && current?.id === view.selfId;
@@ -246,29 +232,6 @@ function render() {
   E.activeCard.classList.toggle("empty", view.activeCard == null);
   E.activeCard.style.setProperty("--tilt", `${((Number(view.activeCard) || 0) % 7) - 3}deg`);
 
-  E.roomRoleBanner.dataset.role = memberRole;
-  E.roomRoleTitle.textContent = memberRole === "spectator" ? "你正在旁观" : "你在玩家席";
-  E.roomRoleHint.textContent = memberRole === "spectator"
-    ? "你只能看到公开信息，不参与行动、计分和胜负"
-    : "你是本局正式玩家，会计入开局人数";
-  const canChangeNow = view.phase === "lobby";
-  const isHost = room.snapshot().role === "host";
-  const spectatorSeatFull = view.spectatorCount >= view.spectatorLimit;
-  const playerSeatFull = view.players.length >= view.capacity;
-  const showSeatAction = canChangeNow && (memberRole === "spectator" || !isHost);
-  setHidden(E.seatActionButton, !showSeatAction);
-  E.seatActionButton.textContent = memberRole === "spectator" ? "进入玩家席" : "转入旁观席";
-  E.seatActionButton.disabled = memberRole === "spectator"
-    ? playerSeatFull
-    : !view.allowSpectators || spectatorSeatFull;
-  E.seatActionButton.title = E.seatActionButton.disabled
-    ? memberRole === "spectator" ? "玩家席已满" : "旁观席未开放或人数已满"
-    : "";
-  setHidden(E.spectatorSettingButton, !serverConfig.spectatorsEnabled || !view.permissions?.canManage);
-  setHidden(E.spectatorPanel, !serverConfig.spectatorsEnabled && !(view.spectatorCount > 0));
-  E.spectatorSettingButton.textContent = view.allowSpectators ? "旁观：开放" : "旁观：关闭";
-  E.spectatorSettingButton.setAttribute("aria-pressed", String(Boolean(view.allowSpectators)));
-
   E.playerList.innerHTML = view.players.map((player, index) => `
     <article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${!player.connected ? "player-offline" : ""} ${view.phase === "playing" && index === view.currentIndex ? "player-current" : ""}">
       <div><span class="status-dot"></span><b>${escapeHtml(player.name)}</b>${player.isHost ? '<em>房主</em>' : ""}</div>
@@ -278,18 +241,7 @@ function render() {
     </article>`).join("");
   E.playerList.querySelectorAll("[data-kick-player]").forEach((button) => {
     const player = view.players.find((item) => item.id === button.dataset.kickPlayer);
-    button.onclick = () => player && kickMember(player.id, player.name, "player");
-  });
-
-  E.spectatorCountBadge.textContent = `${view.spectatorCount || 0} / ${view.spectatorLimit || serverConfig.spectatorLimit}`;
-  E.spectatorList.innerHTML = view.spectators?.length ? view.spectators.map((spectator) => `
-    <article class="spectator-item ${spectator.connected ? "" : "spectator-offline"}">
-      <div><span class="status-dot"></span><b>${escapeHtml(spectator.name)}</b></div>
-      ${view.permissions?.canManage ? `<button type="button" data-kick-spectator="${escapeHtml(spectator.id)}">移出</button>` : ""}
-    </article>`).join("") : '<p class="muted">暂无旁观者</p>';
-  E.spectatorList.querySelectorAll("[data-kick-spectator]").forEach((button) => {
-    const spectator = view.spectators.find((item) => item.id === button.dataset.kickSpectator);
-    button.onclick = () => spectator && kickMember(spectator.id, spectator.name, "spectator");
+    button.onclick = () => player && kickPlayer(player.id, player.name);
   });
 
   if (memberRole === "spectator" && view.phase === "lobby") E.notice.textContent = "你正在旁观准备阶段，可在有空位时主动进入玩家席";
@@ -354,8 +306,7 @@ async function init() {
   };
   E.createRoomButton.onclick = createGameRoom;
   E.joinRoomButton.onclick = joinGameRoom;
-  E.seatActionButton.onclick = changeSeat;
-  E.spectatorSettingButton.onclick = toggleSpectatorSetting;
+  spectatorUi.bind();
   E.roomPlayerCountSelect.onchange = changeCapacity;
   E.startGameButton.onclick = startGame;
   E.endGameButton.onclick = endGameEarly;
@@ -364,7 +315,6 @@ async function init() {
     E.logList.classList.toggle("collapsed");
     E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起";
   };
-  if (matchMedia("(max-width: 720px)").matches) E.spectatorPanel.removeAttribute("open");
   setModeVisibility(mode, E);
   const visualPlayers = Number(new URLSearchParams(location.search).get("visualTest"));
   if (visualPlayers === 6 || visualPlayers === 7) {
@@ -377,8 +327,7 @@ async function init() {
     return;
   }
   try {
-    serverConfig = await room.checkServer();
-    setHidden(E.joinIntentField, !serverConfig.spectatorsEnabled);
+    spectatorUi.applyConfig(await room.checkServer());
   }
   catch { E.connectionStatus.title = "请运行 node game9/signal-server.js"; }
 }
