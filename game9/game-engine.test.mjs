@@ -2,14 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ACTION_SECONDS,
+  SUPPORTS_SPECTATORS,
   GameRuleError,
   addPlayer,
   applyAction,
+  buildSpectatorView,
   buildView,
+  canChangeSeats,
   createLobby,
   handleTimeout,
   removePlayer,
-  setPresence
+  setPresence,
+  vacateSeat
 } from "./server/game-engine.mjs";
 
 const host = { id: "host", name: "房主" };
@@ -107,4 +111,43 @@ test("presence belongs to server state", () => {
   assert.equal(setPresence(state, "p2", false, { now: 20 }), true);
   assert.equal(state.players.find((player) => player.id === "p2").connected, false);
   assert.match(state.logs[0].text, /暂时离线/);
+});
+
+test("spectator view exposes public table data without borrowing any player's private chips", () => {
+  const state = readyState();
+  applyAction(state, "host", { type: "start" }, { now: 1000, random: () => 0 });
+  const current = state.players[state.currentIndex];
+  applyAction(state, current.id, { type: "take" }, { now: 2000 });
+  const view = buildSpectatorView(state);
+  assert.equal(SUPPORTS_SPECTATORS, true);
+  assert.equal(view.selfId, null);
+  assert.equal(view.activeCard, state.activeCard);
+  assert.equal(view.pot, state.pot);
+  assert.equal(view.deckCount, state.deck.length);
+  assert.deepEqual(view.players.map((player) => player.cards), state.players.map((player) => player.cards));
+  assert.equal(view.players.every((player) => player.chips === null), true);
+  assert.deepEqual(view.removed, []);
+  assert.deepEqual(view.permissions, {
+    canManage: false, canKick: false, canStart: false, canEnd: false, canRestart: false
+  });
+});
+
+test("game9 seats can change only in the real lobby and never vacate the host", () => {
+  const state = readyState();
+  assert.equal(canChangeSeats(state), true);
+  const removed = vacateSeat(state, "p2", { now: 20 });
+  assert.equal(removed.id, "p2");
+  assert.equal(state.players.some((player) => player.id === "p2"), false);
+  assert.throws(
+    () => vacateSeat(state, "host", { now: 21 }),
+    (error) => error.code === "invalid_seat_target"
+  );
+  addPlayer(state, { id: "p2", name: "二号" }, { now: 22 });
+  setPresence(state, "p2", true, { announce: false });
+  applyAction(state, "host", { type: "start" }, { now: 1000, random: () => 0 });
+  assert.equal(canChangeSeats(state), false);
+  assert.throws(
+    () => vacateSeat(state, "p2", { now: 23 }),
+    (error) => error.code === "seat_change_unavailable"
+  );
 });

@@ -3,6 +3,7 @@ import { cardScore, finalScore, startingChips } from "../rules.js";
 export const ACTION_SECONDS = 30;
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 7;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -175,6 +176,24 @@ export function removePlayer(state, actorId, playerId, { now = Date.now() } = {}
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId, { now = Date.now() } = {}) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "游戏开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === playerId);
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该玩家不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
+  addLog(state, `${target.name} 转入了旁观席`, now);
+  return target;
+}
+
 export function setPresence(state, playerId, connected, {
   now = Date.now(),
   announce = true
@@ -281,9 +300,7 @@ export function handleTimeout(state, { now = Date.now() } = {}) {
   return true;
 }
 
-export function buildView(state, viewerId) {
-  const viewer = state.players.find((player) => player.id === viewerId);
-  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个游戏房间。", 403);
+function buildPublicState(state, { viewerId = null, permissions }) {
   const reveal = state.phase === "ended";
   return {
     selfId: viewerId,
@@ -297,13 +314,7 @@ export function buildView(state, viewerId) {
     winners: [...state.winners],
     removed: reveal ? [...state.removed] : [],
     logs: state.logs.map((entry) => ({ ...entry })),
-    permissions: {
-      canManage: viewer.isHost,
-      canKick: viewer.isHost && state.phase === "lobby",
-      canStart: viewer.isHost && state.phase === "lobby",
-      canEnd: viewer.isHost && state.phase === "playing",
-      canRestart: viewer.isHost && state.phase === "ended"
-    },
+    permissions,
     players: state.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -315,6 +326,34 @@ export function buildView(state, viewerId) {
       finalScore: reveal ? finalScore(player) : null
     }))
   };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = state.players.find((player) => player.id === viewerId);
+  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个游戏房间。", 403);
+  return buildPublicState(state, {
+    viewerId,
+    permissions: {
+      canManage: viewer.isHost,
+      canKick: viewer.isHost && state.phase === "lobby",
+      canStart: viewer.isHost && state.phase === "lobby",
+      canEnd: viewer.isHost && state.phase === "playing",
+      canRestart: viewer.isHost && state.phase === "ended"
+    }
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicState(state, {
+    viewerId: null,
+    permissions: {
+      canManage: false,
+      canKick: false,
+      canStart: false,
+      canEnd: false,
+      canRestart: false
+    }
+  });
 }
 
 export function getDeadline(state) {

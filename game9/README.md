@@ -36,14 +36,27 @@ GAME9_DB_PATH=/var/lib/tablegame/game9/game9.sqlite node game9/signal-server.js
 
 如果服务恢复时发现行动期限已经过去，只结算当前玩家的一次超时操作，下一位玩家会获得完整的 30 秒，不会因为服务器停机而连续处罚多位玩家。
 
-空房间在全部玩家离线两小时后由服务端清理。
+空房间按照共享服务器配置的保留时间清理。旁观者在线不会阻止房间过期。
+
+## 旁观模式样板
+
+game9 已实现第一套完整旁观能力：主动旁观、满房自动旁观、开局后旁观、准备阶段主动换席、房主旁观开关、房主移出旁观者和独立公共视图。旁观者可以看到公开数字牌、牌面分、当前牌、筹码池、牌库数量、倒计时和公开日志，但结算前看不到任何玩家剩余筹码，也看不到秘密移除的九张牌。
+
+代码能力默认不会自动开放。需要在 game9 的服务环境中明确设置：
+
+```ini
+SPECTATORS_ENABLED=1
+SPECTATOR_LIMIT=10
+```
+
+关闭 `SPECTATORS_ENABLED` 后不会接受新的旁观者和换席请求，但已经保存的旁观身份仍可安全恢复公共视图，便于线上快速关闭功能。
 
 ## 测试
 
 在项目根目录运行：
 
 ```text
-node --test shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs game9/rules.test.js game9/game-engine.test.mjs game9/authoritative-server.test.cjs game9/persistence.test.cjs
+node --test shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs game9/rules.test.js game9/game-engine.test.mjs game9/authoritative-server.test.cjs game9/persistence.test.cjs game9/spectator-mode.test.cjs
 ```
 
 ## 首次部署持久化版本
@@ -66,6 +79,8 @@ sudo systemctl edit tablegame@game9
 ```ini
 [Service]
 Environment=GAME9_DB_PATH=/var/lib/tablegame/game9/game9.sqlite
+Environment=SPECTATORS_ENABLED=1
+Environment=SPECTATOR_LIMIT=10
 ```
 
 然后更新、测试并重启：
@@ -74,7 +89,7 @@ Environment=GAME9_DB_PATH=/var/lib/tablegame/game9/game9.sqlite
 cd /srv/tablegame
 git pull --ff-only
 node -e "require('node:sqlite'); console.log('SQLite ready')"
-node --test shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs game9/rules.test.js game9/game-engine.test.mjs game9/authoritative-server.test.cjs game9/persistence.test.cjs
+node --test shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs game9/rules.test.js game9/game-engine.test.mjs game9/authoritative-server.test.cjs game9/persistence.test.cjs game9/spectator-mode.test.cjs
 sudo systemctl daemon-reload
 sudo systemctl restart tablegame@game9
 sudo systemctl status tablegame@game9 --no-pager

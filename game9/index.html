@@ -45,6 +45,11 @@
         <div id="guestSetup" class="setup-form hidden">
           <label>你的名字<input id="guestNameInput" maxlength="12" placeholder="玩家"></label>
           <label>四位房间号<input id="roomCodeInput" maxlength="4" autocomplete="off" placeholder="ABCD"></label>
+          <fieldset id="joinIntentField" class="join-intent hidden">
+            <legend>加入身份</legend>
+            <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+            <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只查看公开牌局信息，不参与行动</small></span></label>
+          </fieldset>
           <button id="joinRoomButton" class="primary" type="button">加入游戏</button>
         </div>
         <p class="setup-note">3–7 人 · 单局制 · 最低分获胜</p>
@@ -59,15 +64,25 @@
             <option value="3">3</option><option value="4">4</option><option value="5">5</option>
             <option value="6">6</option><option value="7">7</option>
           </select></label>
+          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
           <button id="startGameButton" class="primary" type="button">开始游戏</button>
           <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
         </div>
       </div>
 
+      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+        <button id="seatActionButton" type="button" class="hidden"></button>
+      </div>
+
       <div class="game-grid">
         <aside class="players-panel panel">
-          <div class="panel-title"><span>玩家</span><b id="playerCountBadge">0 / 4</b></div>
+          <div class="panel-title"><span>玩家席</span><b id="playerCountBadge">0 / 4</b></div>
           <div id="playerList" class="player-list"></div>
+          <details id="spectatorPanel" class="spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
         </aside>
 
         <section class="table-panel panel">
@@ -100,7 +115,7 @@
         </aside>
       </div>
 
-      <section class="my-area panel">
+      <section id="myArea" class="my-area panel">
         <div class="my-summary">
           <div><span>我的筹码</span><b id="myChips">—</b></div>
           <div><span>当前牌面分</span><b id="myCardScore">0</b></div>
