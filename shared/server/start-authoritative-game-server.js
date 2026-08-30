@@ -294,7 +294,8 @@ module.exports = function startAuthoritativeGameServer({
       spectators,
       spectatorCount: spectators.length,
       spectatorLimit: resolvedSpectatorLimit,
-      allowSpectators: roomAllowsSpectators(room)
+      allowSpectators: roomAllowsSpectators(room),
+      canChangeSeats: canChangeSeats(room)
     };
   }
 

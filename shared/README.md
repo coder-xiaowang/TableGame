@@ -9,10 +9,12 @@
 - `client/session-store.js`：按游戏和房间隔离的断线恢复身份。
 - `client/protocol.js`：HTTP、协议版本以及公共消息类型。
 - `client/sse-channel.js`：SSE 生命周期和初次连接超时。
+- `client/spectator-ui.js`：旁观加入、身份提示、换席、旁观席、房主设置和统一错误信息。
 - `client/host-timer.js`：房主权威计时器和客户端显示倒计时。
 - `client/ui.js`：少量无主题 DOM 工具。
 - `client/utils.js`：ID、房间号、昵称、转义、洗牌和日志工具。
 - `styles/base.css`：可选的最小公共样式。
+- `styles/spectator.css`：可按游戏主题变量覆盖的通用旁观界面样式。
 
 公共层不维护游戏 `state`，也不实现动作校验、阶段推进、隐私视图、胜负结算或游戏界面。
 
@@ -59,13 +61,34 @@ SPECTATOR_LIMIT=10
   spectators,
   spectatorCount,
   spectatorLimit,
-  allowSpectators
+  allowSpectators,
+  canChangeSeats
 }
 ```
 
 旁观者通过 `buildSpectatorView(state)` 获得独立公共视图，并由共享服务器在进入游戏规则前拒绝其 `/api/actions` 请求。座位切换使用 `POST /api/seat`，房主旁观设置使用 `POST /api/room-settings`；共享客户端分别提供 `changeSeat(intent)` 和 `setRoomSettings({ allowSpectators })`。
 
 房间快照使用 `lastPlayerActivityAt` 管理生命周期。只有正式玩家活动会刷新这个时间，因此只有旁观者在线时，过期房间仍会关闭SSE连接并从内存及持久化存储中删除。
+
+## 通用旁观前端
+
+已经完成旁观引擎能力的游戏可以引入：
+
+```js
+import { createSpectatorUi } from "/shared/client/index.js";
+```
+
+游戏向它传入共享权威客户端、当前视图读取函数和页面挂载元素。通用模块负责：
+
+- 根据 `/api/config` 开关加入身份选择；
+- 统一解释旁观相关错误码和自动旁观原因；
+- 渲染当前 `player` / `spectator` 身份；
+- 渲染旁观席和在线状态；
+- 调用 `changeSeat()`、`setRoomSettings()` 和旁观者移出接口；
+- 根据服务端提供的 `canChangeSeats` 决定是否显示换席按钮；
+- 在移动端默认折叠旁观席。
+
+通用模块不会决定真实权限，也不会裁剪游戏隐藏信息。座位权限仍由共享服务器最终校验，公共旁观视图仍必须由每个游戏自己的 `buildSpectatorView()` 生成。
 
 ## 新游戏接入示例
 

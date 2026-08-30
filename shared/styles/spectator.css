@@ -1,0 +1,100 @@
+.join-intent {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--spectator-line, #d8d0bf);
+  border-radius: 11px;
+}
+.join-intent legend {
+  padding: 0 5px;
+  color: var(--spectator-muted, #777267);
+  font-size: .75rem;
+  font-weight: 700;
+}
+.join-intent label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--spectator-soft, #f5efe3);
+  cursor: pointer;
+}
+.join-intent input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: var(--spectator-accent, #19614c);
+}
+.join-intent span { display: grid; gap: 2px; }
+.join-intent small { color: var(--spectator-muted, #777267); font-weight: 400; }
+
+.room-role-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--spectator-player-line, #bcd7cc);
+  border-radius: 14px;
+  background: var(--spectator-player-bg, #edf7f2);
+}
+.room-role-banner > div { display: grid; gap: 2px; }
+.room-role-banner span { color: var(--spectator-muted, #5f756c); font-size: .75rem; }
+.room-role-banner[data-role="spectator"] {
+  border-color: var(--spectator-watch-line, #e5c873);
+  background: var(--spectator-watch-bg, #fff8dc);
+}
+.room-role-banner[data-role="spectator"] > div b { color: var(--spectator-watch-ink, #7b5a00); }
+.room-role-banner button {
+  flex: none;
+  color: white;
+  border-color: var(--spectator-accent, #19614c);
+  background: var(--spectator-accent, #19614c);
+}
+
+.spectator-panel {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--spectator-line, #d8d0bf);
+}
+.spectator-panel summary {
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.spectator-list { display: grid; gap: 7px; margin-top: 10px; }
+.spectator-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: var(--spectator-soft, #f0eadf);
+  font-size: .72rem;
+}
+.spectator-item > div { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.spectator-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spectator-item button {
+  min-height: 26px;
+  padding: 2px 7px;
+  color: var(--spectator-danger, #a52a1d);
+  font-size: .64rem;
+}
+.spectator-status-dot {
+  width: 8px;
+  flex: none;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--spectator-online, #29a36a);
+}
+.spectator-offline .spectator-status-dot { background: var(--spectator-offline, #aaa); }
+
+@media (max-width: 720px) {
+  .room-role-banner { align-items: stretch; flex-direction: column; }
+}
