@@ -11,6 +11,7 @@ import {
 
 export const ACTION_SECONDS = 90;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 const CHANGE_NOTICE_MS = 8000;
 
 export class GameRuleError extends Error {
@@ -298,6 +299,24 @@ export function removePlayer(state, actorId, playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId, { now = Date.now() } = {}) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "比赛开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该玩家不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
+  addLog(state, `${target.name} 转入了旁观席。`, now);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = playerById(state, playerId);
   if (!player || player.connected === Boolean(connected)) return false;
@@ -390,12 +409,10 @@ export function getDeadline(state) {
   return state.phase === "playing" ? Number(state.deadline) || 0 : 0;
 }
 
-export function buildView(state, viewerId) {
-  const viewer = requireActor(state, viewerId);
+function buildPublicView(state, { viewer = null, permissions } = {}) {
   const current = currentPlayer(state);
-  const myTurn = state.phase === "playing" && current?.id === viewer.id;
   return {
-    selfId: viewer.id,
+    selfId: viewer?.id || null,
     phase: state.phase,
     capacity: state.capacity,
     totalGames: state.totalGames,
@@ -420,7 +437,17 @@ export function buildView(state, viewerId) {
       id: player.id, name: player.name, isHost: player.isHost, connected: player.connected,
       handCount: player.hand.length, opened: player.opened, score: player.score, wins: player.wins
     })),
-    hand: viewer.hand.map((tile) => ({ ...tile })),
+    hand: (viewer?.hand || []).map((tile) => ({ ...tile })),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = requireActor(state, viewerId);
+  const current = currentPlayer(state);
+  const myTurn = state.phase === "playing" && current?.id === viewer.id;
+  return buildPublicView(state, {
+    viewer,
     permissions: {
       canManage: viewer.isHost,
       canKick: viewer.isHost,
@@ -433,7 +460,25 @@ export function buildView(state, viewerId) {
       canDraw: myTurn && state.pool.length > 0,
       canPassEmpty: myTurn && state.pool.length === 0
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    viewer: null,
+    permissions: {
+      canManage: false,
+      canKick: false,
+      canSetCapacity: false,
+      canStart: false,
+      canNextGame: false,
+      canRestartMatch: false,
+      canEnd: false,
+      canAct: false,
+      canDraw: false,
+      canPassEmpty: false
+    }
+  });
 }
 
 export function validateState(state) {

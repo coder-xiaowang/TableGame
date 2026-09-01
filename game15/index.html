@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>拉密 · 服务器权威联机版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,22 +27,36 @@
       <div><p class="eyebrow">JOIN A TABLE</p><h2>加入朋友的牌桌</h2></div>
       <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
       <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 R8K2"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只查看已经确认的公共牌桌</small></span></label>
+      </fieldset>
       <button id="joinRoomButton" class="primary">加入房间</button>
     </div>
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
+    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+      <button id="seatActionButton" type="button" class="hidden"></button>
+    </div>
     <aside class="sidebar">
       <div class="panel room-card">
         <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
         <div id="hostTools" class="host-tools hidden">
           <label>本房人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
           <button id="startGameButton" class="primary">开始比赛</button>
           <button id="nextGameButton" class="primary hidden">开始下一局</button>
           <button id="restartMatchButton" class="primary hidden">开始新比赛</button>
           <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
         </div>
       </div>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
       <div class="panel score-card">
         <p class="eyebrow">MATCH SCORE</p><h2>比赛积分</h2><div id="scoreboard" class="scoreboard"></div>
       </div>
@@ -59,7 +74,7 @@
     <section class="game-area">
       <div id="notice" class="notice">等待玩家加入。</div>
 
-      <section id="controlDock" class="panel control-dock" data-expanded="false">
+      <section id="controlDock" class="panel control-dock" data-expanded="false" data-role="player">
         <div class="action-zone">
           <div class="section-head">
             <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
@@ -68,7 +83,7 @@
           <p id="actionHint" class="action-hint"></p>
           <div id="actionButtons" class="action-buttons"></div>
         </div>
-        <div class="hand-zone">
+        <div class="hand-zone" id="handZone">
           <div class="hand-head"><div><p class="eyebrow">YOUR RACK</p><h2>我的牌架</h2></div><span id="handHint">开局获得14张牌</span></div>
           <div id="hand" class="hand drop-hand" data-drop-hand="true"></div>
         </div>

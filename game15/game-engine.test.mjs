@@ -161,3 +161,40 @@ test("views expose only the viewer rack while the table is public", () => {
   assert.equal(hostView.players.some((player) => "hand" in player), false);
   assert.equal(hostView.players[1].handCount, 14);
 });
+
+test("spectator view exposes only the committed table and rack counts", () => {
+  const state = startedState();
+  const beforeTable = structuredClone(state.table);
+  engine.applyAction(state, "p1", { type: "beginEdit" }, { now: 2000 });
+  const spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.selfId, null);
+  assert.equal(spectator.turnEdited, true);
+  assert.deepEqual(spectator.table, beforeTable);
+  assert.deepEqual(spectator.hand, []);
+  assert.ok(spectator.players.every((player) => !("hand" in player) && player.handCount === 14));
+  assert.deepEqual(spectator.permissions, {
+    canManage: false,
+    canKick: false,
+    canSetCapacity: false,
+    canStart: false,
+    canNextGame: false,
+    canRestartMatch: false,
+    canEnd: false,
+    canAct: false,
+    canDraw: false,
+    canPassEmpty: false
+  });
+});
+
+test("only non-host players can vacate seats in the real lobby", () => {
+  const state = engine.createLobby({ capacity: 3, host: { id: "p1", name: "甲", connected: true } });
+  engine.addPlayer(state, { id: "p2", name: "乙", connected: true });
+  assert.equal(engine.canChangeSeats(state), true);
+  assert.throws(() => engine.vacateSeat(state, "p1"), (error) => error.code === "invalid_seat_target");
+  assert.equal(engine.vacateSeat(state, "p2", { now: 2000 }).id, "p2");
+  engine.addPlayer(state, { id: "p2", name: "乙", connected: true });
+  engine.applyAction(state, "p1", { type: "setCapacity", capacity: 2 });
+  engine.applyAction(state, "p1", { type: "start" }, { now: 3000, random: noShuffle });
+  assert.equal(engine.canChangeSeats(state), false);
+  assert.throws(() => engine.vacateSeat(state, "p2"), (error) => error.code === "seat_change_unavailable");
+});

@@ -96,6 +96,41 @@ test("game3 views expose public scores but only the current player may act", () 
   assert.equal(guestView.permissions.canEnd, false);
 });
 
+test("game3 spectator view keeps all public dice and scores without an acting identity", () => {
+  const state = readyLobby();
+  engine.applyAction(state, "host", { type: "start" });
+  engine.applyAction(state, "host", { type: "roll" }, { random: () => 0.5 });
+  engine.applyAction(state, "host", { type: "hold", index: 0 });
+  const playerView = engine.buildView(state, "p2");
+  const spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.selfId, null);
+  assert.equal(spectator.capacity, 2);
+  assert.deepEqual(spectator.dice, playerView.dice);
+  assert.deepEqual(spectator.held, playerView.held);
+  assert.deepEqual(spectator.players, playerView.players);
+  assert.deepEqual(spectator.permissions, {
+    canManage: false,
+    canKick: false,
+    canSetCapacity: false,
+    canStart: false,
+    canEnd: false,
+    canRestart: false
+  });
+});
+
+test("game3 seats can change only in the lobby and never vacate the host", () => {
+  const state = engine.createLobby({ capacity: 3, host: { id: "host", name: "Host", connected: true } });
+  engine.addPlayer(state, { id: "p2", name: "Player 2", connected: true });
+  assert.equal(engine.canChangeSeats(state), true);
+  assert.throws(() => engine.vacateSeat(state, "host"), (error) => error.code === "invalid_seat_target");
+  assert.equal(engine.vacateSeat(state, "p2").id, "p2");
+  engine.addPlayer(state, { id: "p2", name: "Player 2", connected: true });
+  engine.applyAction(state, "host", { type: "setCapacity", capacity: 2 });
+  engine.applyAction(state, "host", { type: "start" });
+  assert.equal(engine.canChangeSeats(state), false);
+  assert.throws(() => engine.vacateSeat(state, "p2"), (error) => error.code === "seat_change_unavailable");
+});
+
 test("game3 persisted state is cloned and version checked", () => {
   const state = readyLobby();
   const serialized = engine.serializeState(state);

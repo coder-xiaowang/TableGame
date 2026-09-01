@@ -4,6 +4,7 @@ export const ACTION_SECONDS = 0;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -121,6 +122,23 @@ export function removePlayer(state, actorId, playerId) {
   }
   state.players.splice(index, 1);
   if (state.phase !== "lobby") resetToLobby(state);
+  return target;
+}
+
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "比赛开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该玩家不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
   return target;
 }
 
@@ -270,17 +288,16 @@ export function restoreState(serializedState) {
   return structuredClone(serializedState);
 }
 
-export function buildView(state, viewerId) {
-  const viewer = state.players.find((player) => player.id === String(viewerId));
-  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个房间。", 403);
+function buildPublicView(state, { viewerId = null, permissions } = {}) {
   const round = state.phase === "lobby"
     ? 0
     : state.phase === "ended"
       ? CATEGORIES.length
       : Math.floor(state.completedTurns / state.players.length) + 1;
   return {
-    selfId: viewer.id,
+    selfId: viewerId,
     phase: state.phase,
+    capacity: state.capacity,
     playerCount: state.capacity,
     currentPlayerId: state.phase === "playing" ? currentPlayer(state)?.id || null : null,
     currentPlayerIndex: state.currentPlayerIndex,
@@ -294,12 +311,36 @@ export function buildView(state, viewerId) {
       scorecard: { ...player.scorecard },
       totals: totals(player)
     })),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = state.players.find((player) => player.id === String(viewerId));
+  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个房间。", 403);
+  return buildPublicView(state, {
+    viewerId: viewer.id,
     permissions: {
       canManage: viewer.isHost,
       canKick: viewer.isHost,
+      canSetCapacity: viewer.isHost && state.phase === "lobby",
       canStart: viewer.isHost && state.phase === "lobby",
       canEnd: viewer.isHost && state.phase === "playing",
       canRestart: viewer.isHost && state.phase === "ended"
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    viewerId: null,
+    permissions: {
+      canManage: false,
+      canKick: false,
+      canSetCapacity: false,
+      canStart: false,
+      canEnd: false,
+      canRestart: false
+    }
+  });
 }

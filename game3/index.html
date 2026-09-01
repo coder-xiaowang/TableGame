@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>快艇骰子</title>
+    <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -39,11 +40,20 @@
           <div><p class="eyebrow">JOIN A TABLE</p><h2>加入好友房间</h2></div>
           <label>你的昵称<input id="guestNameInput" maxlength="12" autocomplete="off" value="玩家"></label>
           <label>四位房间号<input id="roomCodeInput" maxlength="4" autocomplete="off" placeholder="例如 A7K2"></label>
+          <fieldset id="joinIntentField" class="join-intent hidden">
+            <legend>加入身份</legend>
+            <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+            <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>查看公开骰子和计分表，不参与操作</small></span></label>
+          </fieldset>
           <button class="primary" id="joinRoomButton" type="button">加入房间</button>
         </div>
       </section>
 
       <section class="room-layout hidden" id="roomPanel">
+        <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+          <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+          <button id="seatActionButton" type="button" class="hidden"></button>
+        </div>
         <aside class="sidebar">
           <div class="panel room-card">
             <p class="eyebrow">ROOM CODE</p>
@@ -54,6 +64,7 @@
                 <option value="4">4 人</option><option value="5">5 人</option>
                 <option value="6">6 人</option>
               </select></label>
+              <button class="small full-width hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
               <button class="primary full-width" id="startGameButton" type="button">开始比赛</button>
               <button class="danger full-width hidden" id="endGameButton" type="button">结束当前游戏</button>
             </div>
@@ -62,6 +73,10 @@
             <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
             <div class="player-list" id="playerList"></div>
           </div>
+          <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
           <div class="panel rules-note">
             <p class="eyebrow">本房规则</p>
             <p>13 轮 · 每回合至多投掷 3 次<br>上半区 63 分奖励 35 分<br>额外快艇奖励 100 分</p>

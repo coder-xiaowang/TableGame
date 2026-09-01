@@ -5,6 +5,7 @@ import {
   cleanPlayerName,
   createAuthoritativeRoomClient,
   createSessionStore,
+  createSpectatorUi,
   escapeHtml,
   renderConnectionStatus,
   setHidden
@@ -21,12 +22,17 @@ const elements = {
   connectionStatus: $("connectionStatus"), setupPanel: $("setupPanel"), roomPanel: $("roomPanel"),
   hostModeButton: $("hostModeButton"), guestModeButton: $("guestModeButton"), hostSetup: $("hostSetup"), guestSetup: $("guestSetup"),
   hostNameInput: $("hostNameInput"), guestNameInput: $("guestNameInput"), playerCountSelect: $("playerCountSelect"),
-  createRoomButton: $("createRoomButton"), joinRoomButton: $("joinRoomButton"), roomCodeInput: $("roomCodeInput"),
+  createRoomButton: $("createRoomButton"), joinRoomButton: $("joinRoomButton"), roomCodeInput: $("roomCodeInput"), joinIntentField: $("joinIntentField"),
   roomCodeDisplay: $("roomCodeDisplay"), hostTools: $("hostTools"), roomPlayerCountSelect: $("roomPlayerCountSelect"),
+  spectatorSettingButton: $("spectatorSettingButton"), roomRoleBanner: $("roomRoleBanner"), roomRoleTitle: $("roomRoleTitle"),
+  roomRoleHint: $("roomRoleHint"), seatActionButton: $("seatActionButton"), spectatorPanel: $("spectatorPanel"),
+  spectatorCountBadge: $("spectatorCountBadge"), spectatorList: $("spectatorList"),
   startGameButton: $("startGameButton"), endGameButton: $("endGameButton"), playerList: $("playerList"), playerCountBadge: $("playerCountBadge"),
   gameNotice: $("gameNotice"), turnTitle: $("turnTitle"), roundBadge: $("roundBadge"), rollBadge: $("rollBadge"),
   diceTray: $("diceTray"), turnActions: $("turnActions"), scorePlayerSelect: $("scorePlayerSelect"), scoreSummary: $("scoreSummary"), scoreGrid: $("scoreGrid")
 };
+
+let spectatorUi = null;
 
 const sessions = createSessionStore({ gameId: "yahtzee" });
 const room = createAuthoritativeRoomClient({
@@ -42,11 +48,28 @@ const room = createAuthoritativeRoomClient({
       enterRoom();
       render();
     },
-    onKicked() {
-      alert("你已被房主移出房间。");
-      location.reload();
-    }
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView: () => view,
+  elements: {
+    joinIntentField: elements.joinIntentField,
+    roomRoleBanner: elements.roomRoleBanner,
+    roomRoleTitle: elements.roomRoleTitle,
+    roomRoleHint: elements.roomRoleHint,
+    seatActionButton: elements.seatActionButton,
+    spectatorSettingButton: elements.spectatorSettingButton,
+    spectatorPanel: elements.spectatorPanel,
+    spectatorCountBadge: elements.spectatorCountBadge,
+    spectatorList: elements.spectatorList
+  },
+  notify: (message) => alert(message),
+  confirmAction: (message) => confirm(message),
+  onSessionEnded: () => location.reload()
 });
 
 const roomInfo = () => room.snapshot();
@@ -84,10 +107,12 @@ async function createRoom() {
 
 async function joinRoom() {
   try {
-    await room.joinRoom({
+    const result = await room.joinRoom({
       code: elements.roomCodeInput.value,
-      name: cleanPlayerName(elements.guestNameInput.value, "玩家")
+      name: cleanPlayerName(elements.guestNameInput.value, "玩家"),
+      intent: spectatorUi.getJoinIntent()
     });
+    elements.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`无法加入房间：${error.message}`);
   }
@@ -139,6 +164,8 @@ function dieHtml(value, held, canHold, index) {
 
 function render() {
   if (!view) return;
+  const spectatorModel = spectatorUi.render(view);
+  const memberRole = spectatorModel.memberRole;
   const me = view.players.find((player) => player.id === view.selfId);
   const active = view.players.find((player) => player.id === view.currentPlayerId);
   const myTurn = view.phase === "playing" && view.currentPlayerId === view.selfId;
@@ -158,9 +185,9 @@ function render() {
     button.addEventListener("click", () => kickPlayer(button.dataset.playerId));
   });
 
-  setHidden(elements.hostTools, !isHost());
+  setHidden(elements.hostTools, !view.permissions?.canManage);
   elements.roomPlayerCountSelect.value = String(view.playerCount);
-  elements.roomPlayerCountSelect.disabled = view.phase !== "lobby";
+  elements.roomPlayerCountSelect.disabled = !view.permissions?.canSetCapacity;
   setHidden(elements.startGameButton, !view.permissions?.canStart);
   elements.startGameButton.disabled = !canStart;
   setHidden(elements.endGameButton, !view.permissions?.canEnd && !view.permissions?.canRestart);
@@ -169,7 +196,9 @@ function render() {
   elements.rollBadge.textContent = `投掷 ${view.rolls} / 3`;
 
   if (view.phase === "lobby") {
-    elements.gameNotice.textContent = view.players.length === view.playerCount
+    elements.gameNotice.textContent = memberRole === "spectator"
+      ? "你正在旁观准备阶段，可在有空位时主动进入玩家席。"
+      : view.players.length === view.playerCount
       ? "玩家已经到齐，房主可以开始比赛。"
       : `等待玩家加入，还差 ${view.playerCount - view.players.length} 人。`;
     elements.turnTitle.textContent = "等待比赛开始";
@@ -180,7 +209,9 @@ function render() {
     elements.gameNotice.textContent = `比赛结束！${winners} 以 ${best} 分获得最高分。`;
     elements.turnTitle.textContent = "最终排名";
   } else {
-    elements.gameNotice.textContent = myTurn
+    elements.gameNotice.textContent = memberRole === "spectator"
+      ? `旁观中：${active?.name || "玩家"} 正在投掷和选择计分。`
+      : myTurn
       ? "轮到你了：投骰、保留需要的骰子，然后选择一个计分格。"
       : `正在等待 ${active?.name || "玩家"} 完成本回合。`;
     elements.turnTitle.textContent = `${active?.name || "玩家"} 的回合`;
@@ -199,7 +230,9 @@ function render() {
     elements.turnActions.innerHTML = `<button class="primary" id="rollButton" type="button" ${view.rolls >= 3 ? "disabled" : ""}>${view.rolls === 0 ? "投掷骰子" : "重投未保留骰子"}</button>`;
     $("rollButton")?.addEventListener("click", () => submitAction({ type: "roll" }));
   } else {
-    elements.turnActions.innerHTML = view.phase === "playing"
+    elements.turnActions.innerHTML = memberRole === "spectator" && view.phase === "playing"
+      ? '<span class="player-meta spectator-action-note">旁观模式不提供投骰、保留骰子或计分操作。</span>'
+      : view.phase === "playing"
       ? "<span class=\"player-meta\">等待当前玩家操作…</span>"
       : "";
   }
@@ -210,7 +243,7 @@ function render() {
 }
 
 function renderScoreSelector() {
-  if (!view.players.some((player) => player.id === selectedScorePlayerId)) selectedScorePlayerId = view.selfId;
+  if (!view.players.some((player) => player.id === selectedScorePlayerId)) selectedScorePlayerId = view.selfId || view.players[0]?.id || "";
   elements.scorePlayerSelect.innerHTML = view.players.map((player) => (
     `<option value="${escapeHtml(player.id)}" ${player.id === selectedScorePlayerId ? "selected" : ""}>${escapeHtml(player.name)}${player.id === view.selfId ? "（我）" : ""}</option>`
   )).join("");
@@ -242,11 +275,12 @@ function renderScorecard(player, canScore) {
   });
 }
 
-function init() {
+async function init() {
   elements.hostModeButton.addEventListener("click", () => setMode("host"));
   elements.guestModeButton.addEventListener("click", () => setMode("guest"));
   elements.createRoomButton.addEventListener("click", createRoom);
   elements.joinRoomButton.addEventListener("click", joinRoom);
+  spectatorUi.bind();
   bindRoomCodeInput(elements.roomCodeInput);
   elements.roomPlayerCountSelect.addEventListener("change", changePlayerCount);
   elements.startGameButton.addEventListener("click", startGame);
@@ -256,7 +290,7 @@ function init() {
     render();
   });
   setMode("host");
-  room.checkServer().catch(() => {});
+  try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* join/create shows details */ }
 }
 
 init();

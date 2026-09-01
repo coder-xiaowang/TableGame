@@ -12,6 +12,10 @@
   --blue: #3673bd;
   --orange: #e28b24;
   --black: #30383a;
+  --spectator-accent: var(--green);
+  --spectator-line: var(--line);
+  --spectator-soft: #edf3e9;
+  --spectator-muted: var(--muted);
 }
 
 * { box-sizing: border-box; }
@@ -42,13 +46,16 @@ button { color: inherit; }
 button.danger { border-color: #b9564f; color: #a33d36; background: #fff5f1; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 .setup-card { display: grid; grid-template-columns: 1.4fr 1fr .7fr auto; gap: 16px; align-items: end; padding: 24px; }
+.setup-card .join-intent { grid-column: 1 / -2; align-self: stretch; }
 .setup-card h2, .sidebar h2, .table-head h2, .hand-head h2, .section-head h2 { margin: 0; }
 label { display: grid; gap: 6px; color: var(--muted); font-size: .85rem; font-weight: 750; }
 input, select { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 11px; background: #fff; padding: 8px 11px; color: var(--ink); }
 
 .room-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
+.room-layout > .room-role-banner { grid-column: 1 / -1; }
 .sidebar { display: grid; gap: 14px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding-bottom: 2px; }
 .sidebar .panel { padding: 18px; }
+.sidebar > .spectator-panel { margin-top: 0; padding: 18px; border-top-color: var(--line); }
 .room-code { margin: 4px 0 14px; color: var(--green-2); font: 700 2.5rem/1 Georgia, serif; letter-spacing: .14em; }
 .host-tools { display: grid; gap: 9px; }
 .rule-card p { margin: 8px 0 0; color: var(--muted); font-size: .86rem; line-height: 1.55; }
@@ -70,6 +77,9 @@ input, select { width: 100%; min-height: 42px; border: 1px solid var(--line); bo
 .game-area { min-width: 0; display: grid; gap: 14px; }
 .notice { min-height: 46px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,252,242,.9); font-weight: 750; }
 .control-dock { position: sticky; top: 8px; z-index: 30; display: grid; grid-template-columns: minmax(280px,.72fr) minmax(0,1.28fr); gap: 14px; padding: 14px; backdrop-filter: blur(16px); }
+.control-dock[data-role="spectator"] { grid-template-columns: 1fr; }
+.control-dock[data-role="spectator"] .action-zone { display: block; }
+.spectator-action-note { margin: 0; color: var(--muted); }
 .action-zone, .hand-zone { min-width: 0; padding: 12px; border-radius: 15px; background: rgba(255,255,255,.62); }
 .action-hint { min-height: 38px; margin: 8px 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -135,7 +145,9 @@ input, select { width: 100%; min-height: 42px; border: 1px solid var(--line); bo
   .connection-status { max-width: 48%; padding: 8px 10px; font-size: .68rem; text-align: center; }
   .setup-wrap { margin: 3vh auto; }
   .setup-card { grid-template-columns: 1fr; padding: 18px; }
+  .setup-card .join-intent { grid-column: auto; }
   .room-layout { display: block; }
+  .room-layout > .room-role-banner { margin-bottom: 10px; }
   .sidebar { position: static; max-height: none; overflow: visible; grid-template-columns: 1fr 1fr; margin-bottom: 10px; }
   .room-card, .score-card { grid-column: span 1; }
   .rule-card, .log-card { grid-column: 1/-1; }
