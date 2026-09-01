@@ -6,6 +6,7 @@ import {
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -262,6 +263,24 @@ export function removePlayer(state, actorId, playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId, {now=Date.now()}={}) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "游戏开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该玩家不能转入旁观席。", 403);
+  }
+  state.players.splice(index,1);
+  addLog(state,`${target.name} 转入了旁观席`,now);
+  return target;
+}
+
 export function setPresence(state, playerId, connected, {now=Date.now(),random=Math.random}={}) {
   const player = playerById(state,playerId);
   if (!player || player.connected === Boolean(connected)) return false;
@@ -357,10 +376,9 @@ export function handleTimeout(state, {now=Date.now(),random=Math.random}={}) {
 
 export function getDeadline(state) { return Number(state.deadline) || 0; }
 
-export function buildView(state, viewerId) {
-  const viewer = requireActor(state,viewerId);
+function buildPublicView(state, {viewerId=null,permissions}={}) {
   return {
-    selfId:viewer.id,phase:state.phase,capacity:state.capacity,round:state.round,turn:state.turn,
+    selfId:viewerId,phase:state.phase,capacity:state.capacity,round:state.round,turn:state.turn,
     rows:state.rows.map((row) => [...row]),
     revealedPlays:state.revealedPlays.map((play) => ({...play})),
     pendingPlayerId:state.pendingPlayerId,pendingCard:state.pendingCard,
@@ -368,9 +386,17 @@ export function buildView(state, viewerId) {
     deadline:state.deadline,logs:state.logs.map((entry) => ({...entry})),winners:[...state.winners],
     players:state.players.map((player) => ({
       id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,
-      score:player.score,captured:[...player.captured],hand:player.id === viewer.id ? [...player.hand] : player.hand.map(() => null),
-      hasSelected:player.selectedCard != null,selectedCard:player.id === viewer.id ? player.selectedCard : null
+      score:player.score,captured:[...player.captured],hand:player.id === viewerId ? [...player.hand] : player.hand.map(() => null),
+      hasSelected:player.selectedCard != null,selectedCard:player.id === viewerId ? player.selectedCard : null
     })),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = requireActor(state,viewerId);
+  return buildPublicView(state,{
+    viewerId:viewer.id,
     permissions:{
       canManage:viewer.isHost,canKick:viewer.isHost,
       canSetCapacity:viewer.isHost && state.phase === "lobby",
@@ -379,7 +405,17 @@ export function buildView(state, viewerId) {
       canSelect:state.phase === "selecting" && viewer.selectedCard == null,
       canChooseRow:state.phase === "choosingRow" && state.pendingPlayerId === viewer.id
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state,{
+    viewerId:null,
+    permissions:{
+      canManage:false,canKick:false,canSetCapacity:false,canStart:false,
+      canEnd:false,canSelect:false,canChooseRow:false
+    }
+  });
 }
 
 export function serializeState(state) { return structuredClone(state); }

@@ -2,6 +2,8 @@
 
 game6 已升级为协议 v3 的可持久化服务端权威模式。牌堆、所有玩家手牌、秘密选牌、从小到大的落牌结算、收列罚分、倒计时与胜负判定全部由 Node.js 服务端执行；浏览器只提交操作，并接收服务器为当前玩家单独生成的脱敏视图。
 
+game6 已完成旁观模式迁移，但仍由服务器环境变量控制是否对外开放。旁观者拥有独立公共视图：可以看到玩家名单、每人的手牌数量、牛头罚分、公开牌列、全员锁牌后的公开出牌、动画和公共日志；不能看到任何手牌牌值，也不能看到尚未公开的锁定牌。
+
 ## 启动
 
 ```text
@@ -33,6 +35,9 @@ node -e "require('node:sqlite'); console.log('SQLite ready')"
 - 选牌阶段超时或断线时，服务器从该玩家真实手牌中随机代打。
 - 每个可操作及演示阶段的绝对截止时间、待处理队列、当前动画与完整私密状态都写入 SQLite；服务重启后可恢复并继续计时。
 - 房主只有开始下一局、结束游戏、调整大厅人数和移出玩家的管理权限，不会收到额外的秘密牌面。
+- 旁观者不计入开局人数、回合顺序、计分和胜负，服务器会拒绝旁观者伪造的游戏行动。
+- 非房主玩家只可在 `lobby` 准备阶段转入旁观席；旁观者也只可在该阶段且有空位时主动进入玩家席。房主始终留在玩家席。
+- 满房或已经开局后，以玩家身份加入的新成员会自动进入旁观席；房主可以关闭后续旁观加入或移出旁观者。
 
 游戏进行中移出玩家会取消当前对局并让剩余玩家返回大厅，这是为了避免改变人数后继续使用已经发出的牌造成规则不一致。
 
@@ -54,7 +59,7 @@ selecting → revealing → placing → [choosingRow → placing] → turnEnding
 ## 测试
 
 ```text
-node --test game6/rules.test.mjs game6/game-engine.test.mjs game6/authoritative-server.test.cjs game6/persistence.test.cjs
+node --test game6/rules.test.mjs game6/game-engine.test.mjs game6/authoritative-server.test.cjs game6/persistence.test.cjs game6/spectator-mode.test.cjs
 ```
 
 完整仓库回归：
@@ -78,6 +83,7 @@ sudo systemctl edit tablegame@game6
 [Service]
 Environment=GAME6_DB_PATH=/var/lib/tablegame/game6/game6.sqlite
 Environment=PORT=8792
+Environment=SPECTATORS_ENABLED=1
 ```
 
 更新并验证：
@@ -85,7 +91,7 @@ Environment=PORT=8792
 ```text
 cd /srv/tablegame
 git pull --ff-only origin main
-node --test game6/rules.test.mjs game6/game-engine.test.mjs game6/authoritative-server.test.cjs game6/persistence.test.cjs
+node --test game6/rules.test.mjs game6/game-engine.test.mjs game6/authoritative-server.test.cjs game6/persistence.test.cjs game6/spectator-mode.test.cjs
 sudo systemctl daemon-reload
 sudo systemctl restart tablegame@game6
 sudo systemctl status tablegame@game6 --no-pager
@@ -93,4 +99,4 @@ curl http://127.0.0.1:8792/api/ready
 curl http://127.0.0.1:8792/api/config
 ```
 
-接口应显示 `persistence: "sqlite"`、`durable: true`、`authorityMode: "server"` 和 `protocolVersion: 3`。
+接口应显示 `persistence: "sqlite"`、`durable: true`、`authorityMode: "server"`、`protocolVersion: 3`、`spectatorsSupported: true` 和 `spectatorsEnabled: true`。首次灰度前应备份 game6 数据库；若旁观功能异常，只需移除或改为 `SPECTATORS_ENABLED=0` 后重启 game6，旧玩家功能仍保持可用。

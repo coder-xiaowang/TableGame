@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
+  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
   setModeVisibility
 } from "/shared/client/index.js";
 import {
@@ -14,14 +14,16 @@ const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
   "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
-  "joinRoomButton","roomCodeInput","roomCodeDisplay","hostTools","roomPlayerCountSelect",
+  "joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect",
+  "spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton",
   "startGameButton","endGameButton","playerCountBadge","playerList","notice","roundBadge",
   "turnBadge","revealPanel","revealProgress","revealedPlays","rows","turnConsole","actionTitle","actionArea","timerText","timerBar","handCount","hand",
-  "selectionState","logList","toggleLogButton"
+  "turnHandPanel","selectionState","logList","toggleLogButton","spectatorPanel","spectatorCountBadge","spectatorList"
 ].map((id) => [id,$(id)]));
 
 let mode = "host";
 let view = null;
+let spectatorUi = null;
 const sessions = createSessionStore({gameId:"bullheads"});
 const countdown = createCountdown({
   onTick(value) { renderCountdown({textElement:E.timerText,barElement:E.timerBar},value); }
@@ -32,8 +34,28 @@ const room = createAuthoritativeRoomClient({
   onStatus(status) { renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode); },
   handlers:{
     onView(nextView) { view = nextView; enterRoom(); render(); },
-    onKicked() { alert("你已被房主移出房间。"); location.reload(); }
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView:() => view,
+  elements:{
+    joinIntentField:E.joinIntentField,
+    roomRoleBanner:E.roomRoleBanner,
+    roomRoleTitle:E.roomRoleTitle,
+    roomRoleHint:E.roomRoleHint,
+    seatActionButton:E.seatActionButton,
+    spectatorSettingButton:E.spectatorSettingButton,
+    spectatorPanel:E.spectatorPanel,
+    spectatorCountBadge:E.spectatorCountBadge,
+    spectatorList:E.spectatorList
+  },
+  notify:(message) => alert(message),
+  confirmAction:(message) => confirm(message),
+  onSessionEnded:() => location.reload()
 });
 
 function enterRoom() {
@@ -70,9 +92,10 @@ async function joinGameRoom() {
   try {
     const result = await room.joinRoom({
       code:E.roomCodeInput.value,
-      name:cleanPlayerName(E.guestNameInput.value,"玩家")
+      name:cleanPlayerName(E.guestNameInput.value,"玩家"),
+      intent:spectatorUi.getJoinIntent()
     });
-    if (result.resumed) E.connectionStatus.textContent = "身份已恢复，正在同步游戏";
+    E.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`加入房间失败：${error.message}`);
   } finally {
@@ -180,8 +203,13 @@ function renderNotice() {
   }
 }
 
-function renderAction(me) {
+function renderAction(me, memberRole) {
   E.actionArea.innerHTML = "";
+  if (memberRole === "spectator") {
+    E.actionTitle.textContent = view.phase === "lobby" ? "旁观准备阶段" : "正在旁观牌局";
+    E.actionArea.innerHTML = '<p class="spectator-action-note">旁观模式只显示公开牌局信息，不提供选牌或选列操作。</p>';
+    return;
+  }
   if (view.phase === "selecting") {
     E.actionTitle.textContent = me.hasSelected ? `已选择 ${me.selectedCard ?? ""}`.trim() : "选择一张手牌";
     E.actionArea.textContent = me.hasSelected ? "你的牌已经锁定，其他玩家看不到牌面。" : "点击下方手牌完成选择，提交后不能更改。";
@@ -288,6 +316,8 @@ function countdownDuration() {
 
 function render() {
   if (!view) return;
+  const spectatorModel = spectatorUi.render(view);
+  const memberRole = spectatorModel.memberRole;
   const me = view.players.find((player) => player.id === view.selfId);
   setHidden(E.hostTools,!view.permissions?.canManage);
   setHidden(E.startGameButton,!view.permissions?.canStart);
@@ -302,19 +332,20 @@ function render() {
   E.turnBadge.textContent = `第 ${view.turn} / 10 回合`;
   E.handCount.textContent = me?.hand.length || 0;
   E.turnConsole.dataset.phase = view.phase;
-  E.turnConsole.dataset.handExpanded = String(Boolean(view.phase === "selecting" && !me?.hasSelected && view.permissions?.canSelect));
+  E.turnConsole.dataset.handExpanded = String(Boolean(memberRole === "player" && view.phase === "selecting" && !me?.hasSelected && view.permissions?.canSelect));
+  setHidden(E.turnHandPanel,memberRole === "spectator");
   renderPlayers();
   renderRevealedPlays();
   renderRows();
   renderNotice();
-  renderAction(me);
+  renderAction(me,memberRole);
   E.hand.innerHTML = (me?.hand || []).map((card) => cardHtml(card,{
     button:true,disabled:!view.permissions?.canSelect,selected:me.selectedCard === card
   })).join("");
   E.hand.querySelectorAll("[data-card]").forEach((button) => {
     button.addEventListener("click",() => submit({type:"selectCard",card:Number(button.dataset.card)}));
   });
-  E.selectionState.textContent = view.phase === "selecting" ? (me.hasSelected ? "已锁定，等待其他玩家" : "请选择一张牌") : "";
+  E.selectionState.textContent = memberRole === "player" && view.phase === "selecting" ? (me?.hasSelected ? "已锁定，等待其他玩家" : "请选择一张牌") : "";
   setHidden(E.selectionState,!E.selectionState.textContent);
   E.logList.innerHTML = view.logs.map((item) => `<div class="log-item">${escapeHtml(item.text)}</div>`).join("");
   if (view.deadline) countdown.start(view.deadline,countdownDuration());
@@ -336,12 +367,13 @@ async function init() {
   E.guestModeButton.addEventListener("click",() => selectMode("guest"));
   E.createRoomButton.addEventListener("click",createGameRoom);
   E.joinRoomButton.addEventListener("click",joinGameRoom);
+  spectatorUi.bind();
   E.roomPlayerCountSelect.addEventListener("change",() => submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)}));
   E.startGameButton.addEventListener("click",() => submit({type:"start"}));
   E.endGameButton.addEventListener("click",endGame);
   E.toggleLogButton.addEventListener("click",() => E.logList.classList.toggle("collapsed"));
   selectMode("host");
-  try { await room.checkServer(); } catch { /* create/join presents the detailed error */ }
+  try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* create/join presents the detailed error */ }
 }
 
 init();

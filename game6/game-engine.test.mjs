@@ -22,6 +22,37 @@ test("server deals unique cards and redacts every other hand",() => {
   assert.equal("playQueue" in first,false);
 });
 
+test("spectator view independently redacts every hand and secret selection",() => {
+  const state = readyState();
+  const chosen = state.players[0].hand[0];
+  engine.applyAction(state,"p1",{type:"selectCard",card:chosen},{now:2000});
+  const spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.selfId,null);
+  assert.equal(spectator.players[0].hasSelected,true);
+  assert.equal(spectator.players[0].selectedCard,null);
+  assert.ok(spectator.players.every((player) => player.hand.every((card) => card === null)));
+  assert.equal("playQueue" in spectator,false);
+  assert.deepEqual(spectator.permissions,{
+    canManage:false,canKick:false,canSetCapacity:false,canStart:false,
+    canEnd:false,canSelect:false,canChooseRow:false
+  });
+});
+
+test("only a non-host player can voluntarily vacate a lobby seat",() => {
+  const state = engine.createLobby({capacity:3,host:{id:"p1",name:"甲",connected:true}});
+  engine.addPlayer(state,{id:"p2",name:"乙",connected:true});
+  assert.equal(engine.canChangeSeats(state),true);
+  assert.throws(() => engine.vacateSeat(state,"p1"),(error) => error.code === "invalid_seat_target");
+  const removed = engine.vacateSeat(state,"p2",{now:2000});
+  assert.equal(removed.id,"p2");
+  assert.deepEqual(state.players.map(({id}) => id),["p1"]);
+  engine.addPlayer(state,{id:"p2",name:"乙",connected:true});
+  engine.applyAction(state,"p1",{type:"setCapacity",capacity:2});
+  engine.applyAction(state,"p1",{type:"start"},{now:3000,random:() => 0.2});
+  assert.equal(engine.canChangeSeats(state),false);
+  assert.throws(() => engine.vacateSeat(state,"p2"),(error) => error.code === "seat_change_unavailable");
+});
+
 test("selected cards remain private until all players lock and server resolves in ascending order",() => {
   const state = readyState();
   state.turn = 10;
