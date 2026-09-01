@@ -5,6 +5,7 @@ import {
   cleanPlayerName,
   createAuthoritativeRoomClient,
   createSessionStore,
+  createSpectatorUi,
   escapeHtml,
   renderConnectionStatus,
   setHidden,
@@ -18,13 +19,16 @@ const $ = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
   "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
   "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
-  "roomCodeInput","joinRoomButton","hostTools","roomCodeDisplay","roomPlayerCountSelect",
+  "roomCodeInput","joinRoomButton","joinIntentField","hostTools","roomCodeDisplay","roomPlayerCountSelect",
+  "spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton",
+  "spectatorPanel","spectatorCountBadge","spectatorList",
   "startGameButton","endGameButton","returnLobbyButton","playerList","gameNotice","roundBadge",
   "wordBadge","scoreBoard","seatBoard","idiomValue","turnTitle","teamBadge","actionArea","logList"
 ].map((id) => [id,$(id)]));
 
 let mode = "host";
 let view = null;
+let spectatorUi = null;
 const sessions = createSessionStore({gameId:"idiom"});
 const room = createAuthoritativeRoomClient({
   protocolVersion:PROTOCOL_VERSION,
@@ -38,11 +42,28 @@ const room = createAuthoritativeRoomClient({
       enterRoom();
       render();
     },
-    onKicked() {
-      alert("你已被房主移出房间。");
-      location.reload();
-    }
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView:() => view,
+  elements:{
+    joinIntentField:elements.joinIntentField,
+    roomRoleBanner:elements.roomRoleBanner,
+    roomRoleTitle:elements.roomRoleTitle,
+    roomRoleHint:elements.roomRoleHint,
+    seatActionButton:elements.seatActionButton,
+    spectatorSettingButton:elements.spectatorSettingButton,
+    spectatorPanel:elements.spectatorPanel,
+    spectatorCountBadge:elements.spectatorCountBadge,
+    spectatorList:elements.spectatorList
+  },
+  notify:(message) => alert(message),
+  confirmAction:(message) => confirm(message),
+  onSessionEnded:() => location.reload()
 });
 
 function enterRoom() {
@@ -82,9 +103,10 @@ async function joinGameRoom() {
   try {
     const result = await room.joinRoom({
       code:elements.roomCodeInput.value,
-      name:cleanPlayerName(elements.guestNameInput.value,"玩家")
+      name:cleanPlayerName(elements.guestNameInput.value,"玩家"),
+      intent:spectatorUi.getJoinIntent()
     });
-    if (result.resumed) elements.connectionStatus.textContent = "身份已恢复，正在同步游戏";
+    elements.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`加入房间失败：${error.message}`);
   } finally {
@@ -122,6 +144,8 @@ function returnToLobby() { submit({type:"restart"}); }
 
 function render() {
   if (!view) return;
+  const spectatorModel = spectatorUi.render(view);
+  const memberRole = spectatorModel.memberRole;
   setHidden(elements.hostTools,!view.permissions?.canManage);
   setHidden(elements.startGameButton,!view.permissions?.canStart);
   setHidden(elements.endGameButton,!view.permissions?.canEnd);
@@ -133,7 +157,9 @@ function render() {
     || !seatsFull
     || view.players.some((player) => !player.connected);
   elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
-  elements.gameNotice.textContent = view.notice;
+  elements.gameNotice.textContent = memberRole === "spectator" && view.phase === "lobby"
+    ? "你正在旁观准备阶段，可在玩家席和队伍席位都有空位时加入游戏。"
+    : view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
   elements.wordBadge.textContent = `第 ${view.wordNumber} 题`;
   elements.turnTitle.textContent = view.turnLabel;
@@ -178,9 +204,10 @@ function renderSeats() {
     const team = teamIndexForSeat(seat.index) + 1;
     const mine = seat.playerId === view.selfId;
     const current = view.phase === "playing" && seat.playerId === view.currentActorId;
-    const button = view.phase === "lobby" && !seat.playerId
+    const canChooseTeamSeat = view.roomRole !== "spectator" && Boolean(view.selfId);
+    const button = canChooseTeamSeat && view.phase === "lobby" && !seat.playerId
       ? `<button data-sit="${seat.index}" type="button">落座</button>`
-      : view.phase === "lobby" && mine ? '<button data-leave="1" type="button">离座</button>' : "";
+      : canChooseTeamSeat && view.phase === "lobby" && mine ? '<button data-leave="1" type="button">离开队伍席位</button>' : "";
     return `
       <div class="seat-card ${current ? "current" : ""}">
         <div class="seat-head"><strong>第 ${team} 队</strong><span class="role-chip role-${role}">${roleText(role)}</span></div>
@@ -199,13 +226,15 @@ function renderSeats() {
 function renderIdiom() {
   elements.idiomValue.classList.toggle("hidden-word",view.idiomHidden);
   if (view.phase === "lobby") elements.idiomValue.textContent = "尚未开始";
-  else if (view.idiomHidden) elements.idiomValue.textContent = "队员不可见";
+  else if (view.idiomHidden) elements.idiomValue.textContent = view.roomRole === "spectator" ? "旁观者不可见" : "队员不可见";
   else elements.idiomValue.textContent = view.idiom || "等待完整队伍";
 }
 
 function renderActions() {
   if (view.phase === "lobby") {
-    elements.actionArea.innerHTML = '<p class="muted">自由落座中。所有席位坐满后，由房主开始游戏。</p>';
+    elements.actionArea.innerHTML = view.roomRole === "spectator"
+      ? '<p class="muted spectator-action-note">旁观者不占玩家名额和队伍席位；进入玩家席后还需选择一个队伍席位。</p>'
+      : '<p class="muted">自由落座中。所有席位坐满后，由房主开始游戏。</p>';
     return;
   }
   if (view.phase === "ended") {
@@ -222,7 +251,10 @@ function renderActions() {
   if (!view.permissions?.canDescribe && !view.permissions?.canGuess) {
     const description = view.currentDescription
       ? `<div class="notice"><strong>当前描述：</strong>${escapeHtml(view.currentDescription)}</div>` : "";
-    elements.actionArea.innerHTML = `${description}<p class="muted">等待当前队伍行动。</p>`;
+    const waiting = view.roomRole === "spectator"
+      ? '<p class="muted spectator-action-note">旁观模式只能查看已经公开的描述、猜词记录和比分，当前成语答案不会显示。</p>'
+      : '<p class="muted">等待当前队伍行动。</p>';
+    elements.actionArea.innerHTML = `${description}${waiting}`;
     return;
   }
   if (view.permissions.canDescribe) {
@@ -249,12 +281,13 @@ async function init() {
   elements.guestModeButton.addEventListener("click",() => selectMode("guest"));
   elements.createRoomButton.addEventListener("click",createGameRoom);
   elements.joinRoomButton.addEventListener("click",joinGameRoom);
+  spectatorUi.bind();
   elements.roomPlayerCountSelect.addEventListener("change",changeCapacity);
   elements.startGameButton.addEventListener("click",startGame);
   elements.endGameButton.addEventListener("click",finishGame);
   elements.returnLobbyButton.addEventListener("click",returnToLobby);
   selectMode("host");
-  try { await room.checkServer(); } catch { /* create/join shows the detailed error */ }
+  try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* create/join shows the detailed error */ }
 }
 
 init();

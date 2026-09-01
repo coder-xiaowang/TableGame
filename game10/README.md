@@ -2,6 +2,10 @@
 
 game10 使用协议 v3 的可持久化服务端权威模式。首位玩家、物理骰子随机种子和最终骰面、合法组合、临时与永久进度、路线占领、回合推进以及 30 秒超时均由 Node.js 服务端裁决。浏览器只提交操作、复播物理骰子动画并显示权威视图。
 
+## 旁观模式
+
+game10 已接入共享旁观系统。旁观者可以查看公开骰子、合法组合、临时推进、永久进度、路线占领和公开日志，但不能投骰、选择组合或扎营。准备阶段允许非房主玩家在玩家席与旁观席之间切换；游戏开始后锁定席位。房主可关闭新旁观者加入，房主本人不能转入旁观席。
+
 ## 本地启动
 
 在项目根目录运行：
@@ -31,7 +35,7 @@ node -e "require('node:sqlite'); console.log('SQLite ready')"
 ## 测试
 
 ```text
-node --test game10/rules.test.js game10/dice-physics.test.js game10/game-engine.test.mjs game10/authoritative-server.test.cjs game10/persistence.test.cjs shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs
+node --test game10/rules.test.js game10/dice-physics.test.js game10/game-engine.test.mjs game10/authoritative-server.test.cjs game10/persistence.test.cjs game10/spectator-mode.test.cjs shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs
 ```
 
 ## 首次部署
@@ -48,6 +52,8 @@ sudo systemctl edit tablegame@game10
 ```ini
 [Service]
 Environment=GAME10_DB_PATH=/var/lib/tablegame/game10/game10.sqlite
+Environment=SPECTATORS_ENABLED=1
+Environment=SPECTATOR_LIMIT=10
 ```
 
 部署：
@@ -56,7 +62,7 @@ Environment=GAME10_DB_PATH=/var/lib/tablegame/game10/game10.sqlite
 cd /srv/tablegame
 git pull --ff-only origin main
 node -e "require('node:sqlite'); console.log('SQLite ready')"
-node --test game10/rules.test.js game10/dice-physics.test.js game10/game-engine.test.mjs game10/authoritative-server.test.cjs game10/persistence.test.cjs shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs
+node --test game10/rules.test.js game10/dice-physics.test.js game10/game-engine.test.mjs game10/authoritative-server.test.cjs game10/persistence.test.cjs game10/spectator-mode.test.cjs shared/server/room-store.test.cjs shared/server/authoritative-persistence.test.cjs
 sudo systemctl daemon-reload
 sudo systemctl restart tablegame@game10
 sudo systemctl status tablegame@game10 --no-pager

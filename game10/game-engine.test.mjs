@@ -144,3 +144,20 @@ test("game10 persisted state is cloned and version checked", () => {
     /Unsupported game10 state version/
   );
 });
+
+test("game10 spectator view is public and lobby seat changes are safe", () => {
+  const state = readyLobby(2);
+  const publicView = engine.buildSpectatorView(state);
+  assert.equal(publicView.selfId, null);
+  assert.equal(publicView.permissions.canManage, false);
+  assert.deepEqual(publicView.players, engine.buildView(state, "host").players);
+  assert.equal(engine.canChangeSeats(state), true);
+  assert.throws(() => engine.vacateSeat(state, "host"), (error) => error.code === "invalid_seat_change");
+  const removed = engine.vacateSeat(state, "p2", { now: 500 });
+  assert.equal(removed.id, "p2");
+  assert.equal(state.players.length, 1);
+  engine.addPlayer(state, { id: "p2", name: "乙", connected: true });
+  engine.applyAction(state, "host", { type: "start" }, { now: 1_000, random: () => 0 });
+  assert.equal(engine.canChangeSeats(state), false);
+  assert.throws(() => engine.vacateSeat(state, "p2"), (error) => error.code === "seat_change_unavailable");
+});

@@ -9,6 +9,7 @@ import {
 
 export const ACTION_SECONDS = 0;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -265,6 +266,23 @@ export function removePlayer(state, actorId, playerId, {now = Date.now()} = {}) 
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "大局开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_change", "房主必须留在玩家席。", 403);
+  }
+  state.players.splice(index,1);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = playerById(state,playerId);
   if (!player || player.connected === Boolean(connected)) return false;
@@ -419,14 +437,12 @@ export function applyAction(state, actorId, action, {now = Date.now(), random = 
 export function handleTimeout() { return false; }
 export function getDeadline() { return 0; }
 
-export function buildView(state, viewerId) {
-  const viewer = requireActor(state,viewerId);
-  const seatIndex = viewer.seatIndex;
+function buildPublicView(state, {viewer = null, showIdiom = false, permissions}) {
+  const seatIndex = viewer?.seatIndex;
   const role = Number.isInteger(seatIndex) ? roleForSeat(seatIndex) : null;
   const actorId = currentActorId(state);
-  const showIdiom = state.phase === "ended" || (state.phase === "playing" && role === "captain");
   return {
-    selfId:viewer.id,
+    selfId:viewer?.id || null,
     phase:state.phase,
     capacity:state.capacity,
     playerCount:state.capacity,
@@ -450,6 +466,17 @@ export function buildView(state, viewerId) {
     log:state.log.map((entry) => ({...entry})),
     notice:noticeFor(state),
     turnLabel:turnLabelFor(state),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = requireActor(state,viewerId);
+  const role = Number.isInteger(viewer.seatIndex) ? roleForSeat(viewer.seatIndex) : null;
+  const actorId = currentActorId(state);
+  return buildPublicView(state, {
+    viewer,
+    showIdiom: state.phase === "ended" || (state.phase === "playing" && role === "captain"),
     permissions:{
       canManage:viewer.isHost,
       canKick:viewer.isHost,
@@ -460,7 +487,24 @@ export function buildView(state, viewerId) {
       canDescribe:state.phase === "playing" && actorId === viewer.id && state.turnPhase === "describe",
       canGuess:state.phase === "playing" && actorId === viewer.id && state.turnPhase === "guess"
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    viewer:null,
+    showIdiom:state.phase === "ended",
+    permissions:{
+      canManage:false,
+      canKick:false,
+      canSetCapacity:false,
+      canStart:false,
+      canEnd:false,
+      canRestart:false,
+      canDescribe:false,
+      canGuess:false
+    }
+  });
 }
 
 export function serializeState(state) { return structuredClone(state); }

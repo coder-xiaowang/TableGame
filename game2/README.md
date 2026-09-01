@@ -34,10 +34,14 @@ PORT=8788 GAME2_DB_PATH=/var/lib/tablegame/game2/game2.sqlite node game2/signal-
 
 所有队长可看到当前答案，所有队员和未落座玩家看不到；房主没有额外答案权限。完整成语牌堆始终留在服务端。游戏结束后最后一题答案公开。
 
+## 旁观模式与秘密边界
+
+game2 已接入共享旁观系统。旁观者可以查看队伍席位、比分、已经提交的描述、猜词记录和公开结果，但进行中的成语答案始终隐藏；只有大局结束后最后一题答案才公开。房间玩家身份与队伍席位是两层独立概念：旁观者进入玩家席后仍需选择队伍席位，玩家转入旁观席时会同时释放原队伍席位。游戏开始后锁定两层席位。
+
 ## 测试
 
 ```text
-node --test game2/rules.test.mjs game2/game-engine.test.mjs game2/authoritative-server.test.cjs game2/persistence.test.cjs
+node --test game2/rules.test.mjs game2/game-engine.test.mjs game2/authoritative-server.test.cjs game2/persistence.test.cjs game2/spectator-mode.test.cjs
 ```
 
 测试覆盖成语数据、落座和权限、队长/队员差异化视图、轮换计分、掉线恢复、HTTP/SSE 联机、SQLite 重启恢复和操作去重。
@@ -57,6 +61,8 @@ sudo systemctl edit tablegame@game2
 [Service]
 Environment=GAME2_DB_PATH=/var/lib/tablegame/game2/game2.sqlite
 Environment=PORT=8788
+Environment=SPECTATORS_ENABLED=1
+Environment=SPECTATOR_LIMIT=10
 ```
 
 更新并重启：
@@ -64,7 +70,7 @@ Environment=PORT=8788
 ```text
 cd /srv/tablegame
 git pull --ff-only origin main
-node --test game2/rules.test.mjs game2/game-engine.test.mjs game2/authoritative-server.test.cjs game2/persistence.test.cjs
+node --test game2/rules.test.mjs game2/game-engine.test.mjs game2/authoritative-server.test.cjs game2/persistence.test.cjs game2/spectator-mode.test.cjs
 sudo systemctl daemon-reload
 sudo systemctl restart tablegame@game2
 sudo systemctl status tablegame@game2 --no-pager

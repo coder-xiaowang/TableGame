@@ -162,3 +162,25 @@ test("game2 persisted secret state is cloned and version checked", () => {
     /Unsupported game2 state version/
   );
 });
+
+test("game2 spectator view hides the live idiom and releases both room and team seats", () => {
+  const lobby = readyLobby(4);
+  assert.equal(engine.canChangeSeats(lobby), true);
+  assert.equal(lobby.players.find((player) => player.id === "p2").seatIndex, 0);
+  const removed = engine.vacateSeat(lobby, "p2");
+  assert.equal(removed.id, "p2");
+  assert.equal(engine.buildSpectatorView(lobby).seats[0].playerId, null);
+  engine.addPlayer(lobby, { id: "p2", name: "玩家2", connected: true });
+  engine.applyAction(lobby, "p2", { type: "sit", seatIndex: 0 });
+  engine.applyAction(lobby, "p1", { type: "start" }, { now: 1_000, random: () => 0 });
+  const spectator = engine.buildSpectatorView(lobby);
+  assert.equal(spectator.selfId, null);
+  assert.equal(spectator.idiom, "");
+  assert.equal(spectator.idiomHidden, true);
+  assert.equal(spectator.mySeatIndex, -1);
+  assert.equal(spectator.myRole, null);
+  assert.ok(Object.values(spectator.permissions).every((allowed) => allowed === false));
+  assert.throws(() => engine.vacateSeat(lobby, "p2"), (error) => error.code === "seat_change_unavailable");
+  engine.applyAction(lobby, "p1", { type: "end" }, { now: 2_000 });
+  assert.equal(engine.buildSpectatorView(lobby).idiom, lobby.idiom);
+});

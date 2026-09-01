@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我话你猜</title>
+    <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -56,12 +57,21 @@
               房间号
               <input id="roomCodeInput" autocomplete="off" maxlength="4" placeholder="例如 A7K2">
             </label>
+            <fieldset id="joinIntentField" class="join-intent hidden">
+              <legend>加入身份</legend>
+              <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>进入玩家席后还需在队伍席位落座；满员后自动旁观</small></span></label>
+              <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>查看公开描述、猜词记录与比分，不查看当前答案</small></span></label>
+            </fieldset>
             <button class="primary full-width" id="joinRoomButton" type="button">加入房间</button>
           </div>
         </div>
       </section>
 
       <section class="room-panel hidden" id="roomPanel">
+        <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+          <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+          <button id="seatActionButton" type="button" class="hidden"></button>
+        </div>
         <aside class="sidebar">
           <div class="panel host-tools hidden" id="hostTools">
             <h2>房主面板</h2>
@@ -75,6 +85,7 @@
                 <option value="8">8 人 / 4 队</option>
               </select>
             </label>
+            <button class="full-width hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
             <button class="primary full-width" id="startGameButton" type="button">开始游戏</button>
             <button class="danger-button full-width hidden" id="endGameButton" type="button">结束大局</button>
             <button class="primary full-width hidden" id="returnLobbyButton" type="button">返回大厅</button>
@@ -84,6 +95,10 @@
             <h2>玩家</h2>
             <div class="player-list" id="playerList"></div>
           </div>
+          <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
         </aside>
 
         <section class="table-area">

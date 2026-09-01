@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Can't Stop · 联机版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -30,6 +31,11 @@
         <div id="guestSetup" class="setup-form hidden">
           <label>你的名字<input id="guestNameInput" maxlength="12" placeholder="玩家"></label>
           <label>四位房间号<input id="roomCodeInput" maxlength="4" autocomplete="off" placeholder="ABCD"></label>
+          <fieldset id="joinIntentField" class="join-intent hidden">
+            <legend>加入身份</legend>
+            <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时参与攀登；满员后自动旁观</small></span></label>
+            <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>查看公开骰子与路线，不参与操作</small></span></label>
+          </fieldset>
           <button id="joinRoomButton" class="primary" type="button">加入游戏</button>
         </div>
         <p class="setup-note">2–4 人 · 率先占领三条路线获胜</p>
@@ -37,10 +43,15 @@
     </section>
 
     <section id="roomPanel" class="room-shell hidden">
+      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+        <button id="seatActionButton" type="button" class="hidden"></button>
+      </div>
       <div class="room-toolbar">
         <div><span class="muted">房间</span><strong id="roomCodeDisplay">----</strong></div>
         <div id="hostTools" class="host-tools">
           <label>人数<select id="roomPlayerCountSelect"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
           <button id="startGameButton" class="primary" type="button">开始游戏</button>
           <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
         </div>
@@ -50,6 +61,10 @@
         <aside class="side-panel panel">
           <div class="panel-title"><span>登山队</span><b id="playerCountBadge">0 / 3</b></div>
           <div id="playerList" class="player-list"></div>
+          <details id="spectatorPanel" class="spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
           <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>本回合</span></div>
         </aside>
 

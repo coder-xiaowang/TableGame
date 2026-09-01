@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, escapeHtml, renderConnectionStatus,
+  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { COLUMN_LENGTHS } from "./rules.js";
@@ -11,13 +11,14 @@ import { createDicePhysics, simulateDiceRoll } from "./dice-physics.js";
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 30;
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let view = null;
 let dicePhysics = null;
 let dicePhysicsPromise = null;
 let activePhysicsRollId = 0;
+let spectatorUi = null;
 const simulationCache = new Map();
 const sessions = createSessionStore({ gameId: "cant-stop" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -27,8 +28,22 @@ const room = createAuthoritativeRoomClient({
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
     onView(nextView) { view = nextView; enterRoom(); render(); },
-    onKicked() { alert("你已被房主移出房间。"); location.reload(); }
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView: () => view,
+  elements: {
+    joinIntentField: E.joinIntentField, roomRoleBanner: E.roomRoleBanner, roomRoleTitle: E.roomRoleTitle,
+    roomRoleHint: E.roomRoleHint, seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton,
+    spectatorPanel: E.spectatorPanel, spectatorCountBadge: E.spectatorCountBadge, spectatorList: E.spectatorList
+  },
+  notify: (message) => alert(message),
+  confirmAction: (message) => confirm(message),
+  onSessionEnded: () => location.reload()
 });
 
 function currentView() { return view; }
@@ -46,7 +61,10 @@ async function createGameRoom() {
 }
 async function joinGameRoom() {
   E.joinRoomButton.disabled = true;
-  try { await room.joinRoom({ code: E.roomCodeInput.value, name: cleanPlayerName(E.guestNameInput.value, "玩家") }); }
+  try {
+    const result = await room.joinRoom({ code: E.roomCodeInput.value, name: cleanPlayerName(E.guestNameInput.value, "玩家"), intent: spectatorUi.getJoinIntent() });
+    E.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
+  }
   catch (error) { alert(`加入房间失败：${error.message}`); }
   finally { E.joinRoomButton.disabled = false; }
 }
@@ -56,7 +74,7 @@ function kickPlayer(playerId) {
   room.kick(playerId).catch((error) => alert(`移出失败：${error.message}`));
 }
 function changeCapacity() {
-  if (!view || view.phase !== "lobby") return;
+  if (!view?.permissions?.canManage || view.phase !== "lobby") return;
   const capacity = Number(E.roomPlayerCountSelect.value);
   if (capacity < view.players.length) { E.roomPlayerCountSelect.value = String(view.capacity); return alert("人数不能少于当前已加入的玩家数。"); }
   submit({ type: "setCapacity", capacity });
@@ -137,15 +155,16 @@ function renderPhysicsDice(view) {
 }
 function render() {
   const view = currentView(); if (!view) return;
+  const spectatorModel = spectatorUi.render(view); const memberRole = spectatorModel.memberRole;
   const current = view.players[view.currentIndex]; const myTurn = view.phase === "playing" && current?.id === view.selfId;
-  E.roomCodeDisplay.textContent = room.snapshot().roomCode; E.roomPlayerCountSelect.value = String(view.capacity); E.roomPlayerCountSelect.disabled = view.phase !== "lobby";
-  setHidden(E.hostTools, !isHost());
+  E.roomCodeDisplay.textContent = room.snapshot().roomCode; E.roomPlayerCountSelect.value = String(view.capacity); E.roomPlayerCountSelect.disabled = !view.permissions?.canManage || view.phase !== "lobby";
+  setHidden(E.hostTools, !view.permissions?.canManage);
   E.playerCountBadge.textContent = `${view.players.length} / ${view.capacity}`; E.startGameButton.disabled = !view.permissions?.canStart || view.players.length !== view.capacity || view.players.some((p) => !p.connected);
   setHidden(E.startGameButton, !view.permissions?.canStart); setHidden(E.endGameButton, !view.permissions?.canEnd && !view.permissions?.canRestart); E.endGameButton.textContent = view.phase === "ended" ? "返回大厅" : "结束本局";
   E.phaseBadge.textContent = { lobby: "准备阶段", playing: "攀登中", ended: "登顶完成" }[view.phase]; E.turnLabel.textContent = view.phase === "playing" ? `${current.name} 的回合` : view.phase === "ended" ? "游戏结束" : "等待开始";
   E.playerList.innerHTML = view.players.map((player, index) => `<article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${index === view.currentIndex && view.phase === "playing" ? "player-current" : ""} ${!player.connected ? "player-offline" : ""}" style="--player:${player.color}"><div><i class="player-color"></i><b>${escapeHtml(player.name)}</b>${player.isHost ? "<em>房主</em>" : ""}</div><span>已占领 ${player.claimed.length} / 3</span><small>${player.claimed.length ? player.claimed.join("、") + " 号路线" : "尚未占领路线"}</small>${view.permissions?.canKick && !player.isHost ? `<button data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</article>`).join("");
   E.playerList.querySelectorAll("[data-kick]").forEach((button) => { button.onclick = () => kickPlayer(button.dataset.kick); });
-  if (view.phase === "lobby") E.notice.textContent = `等待 ${view.capacity} 位玩家到齐后，由房主开始游戏`;
+  if (view.phase === "lobby") E.notice.textContent = memberRole === "spectator" ? "你正在旁观准备阶段，可在有空位时进入玩家席。" : `等待 ${view.capacity} 位玩家到齐后，由房主开始游戏`;
   else if (view.phase === "ended") E.notice.textContent = "三座峰顶已经被同一位玩家占领";
   else if (view.turnStage === "preparing") E.notice.textContent = `${current.name} 正在将骰子撒入投掷盘……`;
   else if (view.turnStage === "rolling") E.notice.textContent = `${current.name} 的骰子正在投掷盘中碰撞翻滚……`;
@@ -160,6 +179,7 @@ function render() {
   if (myTurn && view.turnStage === "roll") E.actionArea.innerHTML = '<button class="primary big-action" data-action="roll">掷骰子</button>';
   if (myTurn && view.turnStage === "choose") E.actionArea.innerHTML = view.options.map((option) => `<button class="choice-action" data-choice="${option.key}"><span>${option.pair.join(" + ")}</span><small>推进 ${option.moves.join("、")}</small></button>`).join("");
   if (myTurn && view.turnStage === "decision") E.actionArea.innerHTML = '<button class="primary big-action" data-action="roll">继续掷骰</button><button class="stop-action" data-action="stop">扎营收手</button>';
+  if (memberRole === "spectator" && view.phase === "playing") E.actionArea.innerHTML = '<p class="muted spectator-action-note">旁观模式可查看公开骰子、路线和攀登进度，但不能投骰或选择路线。</p>';
   E.actionArea.querySelectorAll("[data-action]").forEach((button) => { button.onclick = () => submit({ type: button.dataset.action }); }); E.actionArea.querySelectorAll("[data-choice]").forEach((button) => { button.onclick = () => submit({ type: "choose", key: button.dataset.choice }); });
   E.logList.innerHTML = view.logs.map((entry) => `<p>${escapeHtml(entry.text)}</p>`).join("") || '<p class="muted">暂无记录</p>';
   if (view.phase === "playing" && view.deadline) countdown.start(view.deadline, ACTION_SECONDS * 1000); else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
@@ -168,9 +188,10 @@ function render() {
 
 async function init() {
   bindRoomCodeInput(E.roomCodeInput); E.hostModeButton.onclick = () => { mode = "host"; renderEntryMode(); }; E.guestModeButton.onclick = () => { mode = "guest"; renderEntryMode(); };
+  spectatorUi.bind();
   E.createRoomButton.onclick = createGameRoom; E.joinRoomButton.onclick = joinGameRoom; E.roomPlayerCountSelect.onchange = changeCapacity; E.startGameButton.onclick = startGame; E.endGameButton.onclick = endGameEarly; E.playAgainButton.onclick = playAgain;
   E.toggleLogButton.onclick = () => { E.logList.classList.toggle("collapsed"); E.toggleLogButton.textContent = E.logList.classList.contains("collapsed") ? "展开" : "收起"; };
   renderEntryMode();
-  try { await room.checkServer(); } catch { E.connectionStatus.title = "请运行 node game10/signal-server.js"; }
+  try { spectatorUi.applyConfig(await room.checkServer()); } catch { E.connectionStatus.title = "请运行 node game10/signal-server.js"; }
 }
 init();
