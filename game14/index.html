@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>脏小猪 · 服务器权威联机版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -35,11 +36,20 @@
       <div><p class="eyebrow">JOIN A FARM</p><h2>加入朋友的农场</h2></div>
       <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
       <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 P1G8"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只查看公开农场信息，不参与出牌</small></span></label>
+      </fieldset>
       <button id="joinRoomButton" class="primary">加入房间</button>
     </div>
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
+    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+      <button id="seatActionButton" type="button" class="hidden"></button>
+    </div>
     <aside class="sidebar">
       <div class="panel room-card">
         <p class="eyebrow">ROOM CODE</p>
@@ -48,11 +58,16 @@
           <label>本房人数
             <select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
           </label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
           <button id="startGameButton" class="primary">开始游戏</button>
           <button id="restartGameButton" class="primary hidden">再玩一局</button>
           <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
         </div>
       </div>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
       <div class="panel rule-card">
         <p class="eyebrow">HOW TO WIN</p>
         <h2>全部变脏就获胜</h2>
@@ -69,7 +84,7 @@
       <div id="notice" class="notice">等待玩家加入。</div>
       <div id="exchangeReveal" class="exchange-reveal hidden" role="status" aria-live="polite"></div>
 
-      <section class="panel control-dock">
+      <section class="panel control-dock" id="controlDock" data-role="player">
         <div class="action-zone">
           <div class="section-head">
             <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
@@ -78,7 +93,7 @@
           <p id="actionHint" class="action-hint"></p>
           <div id="actionButtons" class="action-buttons"></div>
         </div>
-        <div class="hand-zone">
+        <div class="hand-zone" id="handZone">
           <div class="hand-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
           <div id="hand" class="hand"></div>
         </div>

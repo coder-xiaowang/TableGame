@@ -14,6 +14,7 @@ import {
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 2;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -330,6 +331,24 @@ export function removePlayer(state, actorId, playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId, { now = Date.now() } = {}) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "游戏开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该玩家不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
+  addLog(state, `${target.name} 转入了旁观席。`, now);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = playerById(state, playerId);
   if (!player || player.connected === Boolean(connected)) return false;
@@ -398,12 +417,11 @@ function publicPig(pig) {
   };
 }
 
-export function buildView(state, viewerId) {
-  const viewer = requireActor(state, viewerId);
+function buildPublicView(state, { viewer = null, permissions } = {}) {
   const current = currentPlayer(state);
-  const myTurn = state.phase === "playing" && current?.id === viewer.id;
+  const myTurn = Boolean(viewer && state.phase === "playing" && current?.id === viewer.id);
   return {
-    selfId: viewer.id,
+    selfId: viewer?.id || null,
     phase: state.phase,
     capacity: state.capacity,
     currentPlayerId: current?.id || null,
@@ -422,13 +440,23 @@ export function buildView(state, viewerId) {
       handCount: player.hand.length,
       pigs: player.pigs.map(publicPig)
     })),
-    hand: viewer.hand.map((card) => ({
+    hand: (viewer?.hand || []).map((card) => ({
       id: card.id,
       type: card.type,
       label: CARD_LABELS[card.type],
       playable: myTurn && cardCanPlay(state, viewer, card),
       legalTargets: myTurn ? legalTargets(state, viewer, card.type) : []
     })),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = requireActor(state, viewerId);
+  const current = currentPlayer(state);
+  const myTurn = state.phase === "playing" && current?.id === viewer.id;
+  return buildPublicView(state, {
+    viewer,
     permissions: {
       canManage: viewer.isHost,
       canKick: viewer.isHost,
@@ -439,7 +467,23 @@ export function buildView(state, viewerId) {
       canAct: myTurn,
       canExchange: myTurn && canExchangeHand(state, viewer)
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    viewer: null,
+    permissions: {
+      canManage: false,
+      canKick: false,
+      canSetCapacity: false,
+      canStart: false,
+      canEnd: false,
+      canRestart: false,
+      canAct: false,
+      canExchange: false
+    }
+  });
 }
 
 export function validateState(state) {

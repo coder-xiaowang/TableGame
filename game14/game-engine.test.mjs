@@ -49,6 +49,37 @@ test("server owns all action cards and sends each player only their own hand", (
   assert.equal(hostView.players[1].handCount, 3);
 });
 
+test("spectator view has no private hand or action permission", () => {
+  const state = startedState();
+  const spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.selfId, null);
+  assert.deepEqual(spectator.hand, []);
+  assert.ok(spectator.players.every((player) => !("hand" in player) && player.handCount === 3));
+  assert.deepEqual(spectator.permissions, {
+    canManage: false,
+    canKick: false,
+    canSetCapacity: false,
+    canStart: false,
+    canEnd: false,
+    canRestart: false,
+    canAct: false,
+    canExchange: false
+  });
+});
+
+test("only non-host players can vacate seats in the lobby", () => {
+  const state = engine.createLobby({ capacity: 3, host: { id: "p1", name: "甲", connected: true } });
+  engine.addPlayer(state, { id: "p2", name: "乙", connected: true });
+  assert.equal(engine.canChangeSeats(state), true);
+  assert.throws(() => engine.vacateSeat(state, "p1"), (error) => error.code === "invalid_seat_target");
+  assert.equal(engine.vacateSeat(state, "p2", { now: 2000 }).id, "p2");
+  engine.addPlayer(state, { id: "p2", name: "乙", connected: true });
+  engine.applyAction(state, "p1", { type: "setCapacity", capacity: 2 });
+  engine.applyAction(state, "p1", { type: "start" }, { now: 3000, random: noShuffle });
+  assert.equal(engine.canChangeSeats(state), false);
+  assert.throws(() => engine.vacateSeat(state, "p2"), (error) => error.code === "seat_change_unavailable");
+});
+
 test("five and six player games use three pigs each and the 57-card expanded action deck", () => {
   for (const count of [5, 6]) {
     const state = startedStateFor(count);
@@ -173,6 +204,9 @@ test("three-card exchange is allowed only when every card has no legal effect an
   assert.equal(actor.hand.length, 3);
   assert.deepEqual(state.revealedExchange.cards.map((card) => card.id), before);
   assert.deepEqual(engine.buildView(state, "p2").revealedExchange.cards.map((card) => card.id), before);
+  const spectator = engine.buildSpectatorView(state);
+  assert.deepEqual(spectator.revealedExchange.cards.map((card) => card.id), before);
+  assert.deepEqual(spectator.hand, []);
 
   state.currentIndex = 1;
   const guest = state.players[1];
