@@ -18,6 +18,7 @@ export const REVEAL_SECONDS = 8;
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 8;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 const TEAMS = ["white", "black"];
 
@@ -257,6 +258,24 @@ export function removePlayer(state, actorId, playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "行动开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该成员不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
+  normalizeSeats(state, target.team);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = state.players.find((item) => item.id === String(playerId));
   if (!player || player.connected === Boolean(connected)) return false;
@@ -409,24 +428,22 @@ function cloneRecord(record) {
   };
 }
 
-export function buildView(state, viewerId) {
-  const viewer = state.players.find((player) => player.id === String(viewerId));
-  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个行动室。", 403);
+function buildPublicView(state, viewer = null) {
   const ended = state.phase === "ended";
   const reveal = state.phase === "reveal";
-  const guessRole = guessRoleFor(state, viewer.id);
+  const guessRole = viewer ? guessRoleFor(state, viewer.id) : null;
   const ownDraft = guessRole && state.guessDrafts[guessRole] ? [...state.guessDrafts[guessRole]] : null;
-  const tiebreakSubmitter = viewer.team ? submitterFor(state, viewer.team) : null;
+  const tiebreakSubmitter = viewer?.team ? submitterFor(state, viewer.team) : null;
   const teams = {};
   for (const team of TEAMS) {
     teams[team] = {
       interceptions: state.teams[team].interceptions,
       miscommunications: state.teams[team].miscommunications,
-      keywords: ended || viewer.team === team ? [...state.teams[team].keywords] : []
+      keywords: ended || viewer?.team === team ? [...state.teams[team].keywords] : []
     };
   }
   return {
-    selfId: viewer.id,
+    selfId: viewer?.id || null,
     phase: state.phase,
     capacity: state.capacity,
     players: state.players.map((player) => ({
@@ -436,13 +453,13 @@ export function buildView(state, viewerId) {
       connected: player.connected,
       team: player.team,
       seat: player.seat,
-      ...(player.id === viewer.id ? { usedClues: [...player.usedClues] } : {})
+      ...(player.id === viewer?.id ? { usedClues: [...player.usedClues] } : {})
     })),
     teams,
     round: state.round,
     turnTeam: state.turnTeam,
     encryptorId: state.encryptorId,
-    code: ((viewer.id === state.encryptorId && state.phase === "clue") || reveal) && state.code
+    code: (((viewer?.id === state.encryptorId) && state.phase === "clue") || reveal) && state.code
       ? [...state.code]
       : null,
     clues: [...state.clues],
@@ -458,7 +475,7 @@ export function buildView(state, viewerId) {
       white: Boolean(state.tiebreakGuesses.white),
       black: Boolean(state.tiebreakGuesses.black)
     },
-    permissions: {
+    permissions: viewer ? {
       canManage: viewer.isHost,
       canKick: viewer.isHost && state.phase === "lobby",
       canStart: viewer.isHost && state.phase === "lobby",
@@ -470,8 +487,28 @@ export function buildView(state, viewerId) {
       canSubmitTiebreak: state.phase === "tiebreak"
         && tiebreakSubmitter?.id === viewer.id
         && !state.tiebreakGuesses[viewer.team]
+    } : {
+      canManage: false,
+      canKick: false,
+      canStart: false,
+      canEnd: false,
+      canSit: false,
+      canMove: false,
+      canSubmitClues: false,
+      guessRole: null,
+      canSubmitTiebreak: false
     }
   };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = state.players.find((player) => player.id === String(viewerId));
+  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个行动室。", 403);
+  return buildPublicView(state, viewer);
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state);
 }
 
 export function serializeState(state) {

@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
+  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
   setModeVisibility
 } from "/shared/client/index.js";
 import { isValidCode, validateClues } from "./rules.js";
@@ -12,13 +12,14 @@ const CLUE_SECONDS = 150;
 const GUESS_SECONDS = 100;
 const REVEAL_SECONDS = 8;
 const $ = (id) => document.getElementById(id);
-const ids = ["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","roomCodeDisplay","phaseBadge","roundText","timerWrap","timerText","timerBar","hostTools","startGameButton","endGameButton","notice","lobbyArea","gameArea","myTeamBadge","keywordRack","secretCode","operationTitle","encryptorName","clueComposer","clue1","clue2","clue3","submitCluesButton","clueDisplay","guessComposer","guessRoleText","guess1","guess2","guess3","submitGuessButton","waitingText","whiteScore","blackScore","historyList","resultPanel","winnerText","finalKeywords","finalRecords"];
+const ids = ["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton","spectatorSettingButton","spectatorPanel","spectatorCountBadge","spectatorList","phaseBadge","roundText","timerWrap","timerText","timerBar","hostTools","startGameButton","endGameButton","notice","lobbyArea","gameArea","myTeamBadge","keywordRack","secretCode","operationTitle","encryptorName","clueComposer","clue1","clue2","clue3","submitCluesButton","clueDisplay","guessComposer","guessRoleText","guess1","guess2","guess3","submitGuessButton","waitingText","whiteScore","blackScore","historyList","resultPanel","winnerText","finalKeywords","finalRecords"];
 const E = Object.fromEntries(ids.map((id) => [id, $(id)]));
 const TEAM_NAME = { white: "白队", black: "黑队" };
 
 let mode = "host";
 let view = null;
 let guessEditorKey = "";
+let spectatorUi = null;
 const sessions = createSessionStore({ gameId: "decrypto" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement:E.timerText, barElement:E.timerBar }, value); } });
 const room = createAuthoritativeRoomClient({
@@ -26,19 +27,32 @@ const room = createAuthoritativeRoomClient({
   sessionStore: sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
-    onView(nextView) { view = nextView; enterRoom(); render(); },
-    onKicked() { alert("你已被移出房间。"); location.reload(); }
+    onView(nextView) { view = nextView; if (nextView.roomRole === "spectator") guessEditorKey = ""; enterRoom(); render(); },
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
 });
 
+spectatorUi = createSpectatorUi({
+  room,
+  getView: () => view,
+  elements: {
+    joinIntentField:E.joinIntentField, roomRoleBanner:E.roomRoleBanner, roomRoleTitle:E.roomRoleTitle,
+    roomRoleHint:E.roomRoleHint, seatActionButton:E.seatActionButton,
+    spectatorSettingButton:E.spectatorSettingButton, spectatorPanel:E.spectatorPanel,
+    spectatorCountBadge:E.spectatorCountBadge, spectatorList:E.spectatorList
+  },
+  notify: (message) => alert(message),
+  confirmAction: (message) => confirm(message),
+  onSessionEnded: () => location.reload()
+});
+
 const currentView = () => view;
-const isHost = () => room.snapshot().role === "host";
 const sortedTeam = (players, team) => players.filter((player) => player.team === team).sort((a, b) => a.seat - b.seat);
 
 function enterRoom() {
   setHidden(E.setupPanel, true);
   setHidden(E.roomPanel, false);
-  setHidden(E.hostTools, !isHost());
   E.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }
 
@@ -63,10 +77,12 @@ async function createGameRoom() {
 async function joinGameRoom() {
   E.joinRoomButton.disabled = true;
   try {
-    await room.joinRoom({
+    const result = await room.joinRoom({
       code: E.roomCodeInput.value,
-      name: cleanPlayerName(E.guestNameInput.value, "译码员")
+      name: cleanPlayerName(E.guestNameInput.value, "译码员"),
+      intent: spectatorUi.getJoinIntent()
     });
+    E.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`加入失败：${error.message}`);
   } finally {
@@ -79,13 +95,13 @@ function endGameEarly() {
   if (confirm("确定结束行动并返回大厅吗？")) submit({ type: "end" });
 }
 
-function renderLobby(current) {
+function renderLobby(current, memberRole) {
   guessEditorKey = "";
   const me = current.players.find((player) => player.id === current.selfId);
   E.lobbyArea.innerHTML = ["white", "black"].map((team) => {
     const list = sortedTeam(current.players, team);
-    return `<div class="panel team-column ${team}"><div class="team-head"><h2>${TEAM_NAME[team]}</h2><button data-sit="${team}" ${current.permissions?.canSit ? "" : "disabled"}>${me.team === team ? "已入座" : "加入此队"}</button></div>${list.length ? list.map((player, index) => `<div class="seat"><i class="${player.connected ? "online" : "offline"}"></i><span><b>${index + 1}. ${escapeHtml(player.name)}</b>${player.isHost ? " · 房主" : ""}</span><span class="seat-actions">${player.id === current.selfId && current.permissions?.canMove ? '<button data-move="-1">↑</button><button data-move="1">↓</button>' : ""}</span></div>`).join("") : "<p>等待人员入座</p>"}</div>`;
-  }).join("") + `<div class="panel bench"><b>未入座</b><div class="bench-list">${current.players.filter((player) => !player.team).map((player) => `<span class="player-chip">${escapeHtml(player.name)}${player.id === current.selfId && current.permissions?.canSit ? ' <button data-sit="white">入座</button>' : ""}</span>`).join("") || "无"}</div></div>`;
+    return `<div class="panel team-column ${team}"><div class="team-head"><h2>${TEAM_NAME[team]}</h2><button data-sit="${team}" ${current.permissions?.canSit ? "" : "disabled"}>${me?.team === team ? "已入座" : "加入此队"}</button></div>${list.length ? list.map((player, index) => `<div class="seat"><i class="${player.connected ? "online" : "offline"}"></i><span><b>${index + 1}. ${escapeHtml(player.name)}</b>${player.isHost ? " · 房主" : ""}</span><span class="seat-actions">${player.id === current.selfId && current.permissions?.canMove ? '<button data-move="-1">↑</button><button data-move="1">↓</button>' : ""}</span></div>`).join("") : "<p>等待人员入座</p>"}</div>`;
+  }).join("") + `<div class="panel bench"><b>未入座</b><div class="bench-list">${current.players.filter((player) => !player.team).map((player) => `<span class="player-chip">${escapeHtml(player.name)}${player.id === current.selfId && current.permissions?.canSit ? ' <button data-sit="white">入座</button>' : ""}</span>`).join("") || "无"}</div>${memberRole === "spectator" ? '<p class="spectator-action-note">你在旁观席，不占队伍名额；进入玩家席后会先回到未分队状态，再自行选择队伍。</p>' : ""}</div>`;
   E.lobbyArea.querySelectorAll("[data-sit]").forEach((button) => { button.onclick = () => submit({ type:"sit", team:button.dataset.sit }); });
   E.lobbyArea.querySelectorAll("[data-move]").forEach((button) => { button.onclick = () => submit({ type:"move", direction:Number(button.dataset.move) }); });
 }
@@ -97,14 +113,14 @@ function scoreHtml(current, team) {
 
 function codeText(code) { return code?.length ? code.join(" - ") : "未提交"; }
 
-function renderGame(current) {
+function renderGame(current, memberRole) {
   const me = current.players.find((player) => player.id === current.selfId);
   const active = TEAM_NAME[current.turnTeam];
   const encryptor = current.players.find((player) => player.id === current.encryptorId);
-  const own = current.teams[me.team];
-  E.myTeamBadge.textContent = TEAM_NAME[me.team] || "观察员";
-  E.myTeamBadge.className = `team-badge ${me.team || ""}`;
-  E.keywordRack.innerHTML = own?.keywords.map((word, index) => `<div class="keyword"><b>${index+1}</b><span>${escapeHtml(word)}</span></div>`).join("") || "<p>你没有队伍关键词。</p>";
+  const own = me?.team ? current.teams[me.team] : null;
+  E.myTeamBadge.textContent = TEAM_NAME[me?.team] || "观察员";
+  E.myTeamBadge.className = `team-badge ${me?.team || ""}`;
+  E.keywordRack.innerHTML = own?.keywords.map((word, index) => `<div class="keyword"><b>${index+1}</b><span>${escapeHtml(word)}</span></div>`).join("") || `<p>${memberRole === "spectator" ? "双方关键词在行动结束前均对旁观者保密。" : "你没有队伍关键词。"}</p>`;
   setHidden(E.secretCode, !current.code);
   E.secretCode.textContent = current.code ? `本轮密码：${codeText(current.code)}` : "";
   E.operationTitle.textContent = `${active}传讯`;
@@ -128,7 +144,7 @@ function renderGame(current) {
   if (canGuess) {
     const roleText = guessRole === "decode"
       ? `你是${active}指定的提交者，请提交己方破译。`
-      : `你是${TEAM_NAME[me.team]}指定的提交者，请提交拦截猜测。`;
+      : `你是${TEAM_NAME[me?.team]}指定的提交者，请提交拦截猜测。`;
     E.guessRoleText.textContent = `${roleText}${current.guessDraft ? " 当前选择已保存，超时将自动锁定。" : " 修改选择后会自动保存；若不修改，请点击按钮确认当前选择。"}`;
   }
 
@@ -142,7 +158,7 @@ function renderGame(current) {
     }
   }
 
-  E.waitingText.textContent = statusText(current);
+  E.waitingText.innerHTML = `${escapeHtml(statusText(current))}${memberRole === "spectator" ? '<p class="spectator-action-note">旁观模式仅显示公开提示、提交状态和已揭晓记录；双方关键词、当前密码、猜码草稿与最终裁决答案不会提前显示。</p>' : ""}`;
   E.whiteScore.innerHTML = scoreHtml(current, "white");
   E.blackScore.innerHTML = scoreHtml(current, "black");
   renderHistory(current);
@@ -190,11 +206,13 @@ function noticeText(current) {
 function render() {
   const current = currentView();
   if (!current) return;
+  const spectatorModel = spectatorUi.render(current);
+  const memberRole = spectatorModel.memberRole;
   const lobby = current.phase === "lobby";
   const ended = current.phase === "ended";
   if (lobby && !E.guess1.isConnected) populateCodeSelects();
   E.roomCodeDisplay.textContent = room.snapshot().roomCode;
-  setHidden(E.hostTools, !isHost());
+  setHidden(E.hostTools, !current.permissions?.canManage);
   E.phaseBadge.textContent = {lobby:"等待部署",clue:"编写提示",guess:"猜码中",reveal:"密码公开",tiebreak:"最终裁决",ended:"行动结束"}[current.phase];
   E.roundText.textContent = `第 ${current.round} / 8 轮`;
   setHidden(E.lobbyArea, !lobby);
@@ -203,9 +221,13 @@ function render() {
   setHidden(E.startGameButton, !current.permissions?.canStart);
   E.startGameButton.disabled = !canStartView(current);
   setHidden(E.endGameButton, !current.permissions?.canEnd);
-  E.notice.textContent = lobby ? `当前 ${current.players.length} / ${current.capacity} 人；所有人入座且每队至少 2 人后开始。` : noticeText(current);
-  renderLobby(current);
-  if (!lobby) renderGame(current);
+  E.notice.textContent = lobby
+    ? memberRole === "spectator"
+      ? "你正在旁观部署阶段，可在玩家席有空位时切换身份。"
+      : `当前 ${current.players.length} / ${current.capacity} 人；所有人入座且每队至少 2 人后开始。`
+    : `${memberRole === "spectator" ? "正在旁观 · " : ""}${noticeText(current)}`;
+  renderLobby(current, memberRole);
+  if (!lobby) renderGame(current, memberRole);
   if (ended) renderResult(current);
   if (current.deadline) {
     const duration = current.phase === "clue" ? CLUE_SECONDS : current.phase === "reveal" ? REVEAL_SECONDS : GUESS_SECONDS;
@@ -234,7 +256,7 @@ function populateCodeSelects() {
 
 function saveGuessDraft() {
   const current = currentView();
-  if (current?.phase !== "guess") return;
+  if (current?.phase !== "guess" || !current.permissions?.guessRole) return;
   const code = [E.guess1.value,E.guess2.value,E.guess3.value].map(Number);
   if (!isValidCode(code)) {
     E.guessRoleText.textContent = "当前组合包含重复数字，尚未保存；超时仍会采用上一次合法选择。";
@@ -247,6 +269,7 @@ E.hostModeButton.onclick = () => { mode="host"; setModeVisibility(mode,{...E,hos
 E.guestModeButton.onclick = () => { mode="guest"; setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton}); };
 E.createRoomButton.onclick = createGameRoom;
 E.joinRoomButton.onclick = joinGameRoom;
+spectatorUi.bind();
 E.startGameButton.onclick = startGame;
 E.endGameButton.onclick = endGameEarly;
 E.submitCluesButton.onclick = () => {
@@ -270,4 +293,4 @@ E.submitGuessButton.onclick = () => {
 bindRoomCodeInput(E.roomCodeInput);
 populateCodeSelects();
 setModeVisibility(mode,{...E,hostButton:E.hostModeButton,guestButton:E.guestModeButton});
-room.checkServer().catch(()=>{});
+room.checkServer().then((config) => spectatorUi.applyConfig(config)).catch(()=>{});

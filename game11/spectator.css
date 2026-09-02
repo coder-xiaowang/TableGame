@@ -1,0 +1,21 @@
+#roomPanel > .room-role-banner {
+  margin-bottom: 12px;
+}
+
+#joinIntentField {
+  grid-column: 1 / -1;
+}
+
+#roomPanel > .spectator-panel {
+  margin: 0 0 12px;
+  padding: 14px 18px;
+}
+
+.spectator-action-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--amber);
+  color: #ece6d3;
+  background: #273034;
+  line-height: 1.55;
+}

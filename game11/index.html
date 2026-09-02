@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>截码战 · 联机版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./spectator.css">
 </head>
 <body>
   <main class="shell">
@@ -17,12 +19,14 @@
     <section id="setupPanel" class="panel setup-panel">
       <div class="mode-tabs"><button id="hostModeButton" class="active">创建行动室</button><button id="guestModeButton">加入行动室</button></div>
       <div id="hostSetup" class="setup-form"><label>代号<input id="hostNameInput" maxlength="12" value="情报主管"></label><label>总人数<select id="playerCountSelect"><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label><button id="createRoomButton" class="primary">建立加密频道</button></div>
-      <div id="guestSetup" class="setup-form hidden"><label>代号<input id="guestNameInput" maxlength="12" value="译码员"></label><label>房间号<input id="roomCodeInput" maxlength="4" autocomplete="off"></label><button id="joinRoomButton" class="primary">接入频道</button></div>
+      <div id="guestSetup" class="setup-form hidden"><label>代号<input id="guestNameInput" maxlength="12" value="译码员"></label><label>房间号<input id="roomCodeInput" maxlength="4" autocomplete="off"></label><fieldset id="joinIntentField" class="join-intent hidden"><legend>接入身份</legend><label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入行动席；满员后自动旁观</small></span></label><label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只能查看已经公开的情报</small></span></label></fieldset><button id="joinRoomButton" class="primary">接入频道</button></div>
       <aside class="brief"><b>任务目标</b><p>保护己方四个秘密关键词，同时从公开提示中截获对方密码。两次截获即胜；两次传讯失败即败。</p></aside>
     </section>
 
     <section id="roomPanel" class="hidden">
-      <div class="command-bar panel"><div><span id="phaseBadge" class="badge">等待部署</span><b id="roundText">第 0 / 8 轮</b></div><div id="timerWrap" class="timer"><span id="timerText">--</span><i><em id="timerBar"></em></i></div><div id="hostTools" class="actions"><button id="startGameButton" class="primary">开始行动</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button></div></div>
+      <div id="roomRoleBanner" class="room-role-banner" data-role="player"><div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div><button id="seatActionButton" type="button" class="hidden"></button></div>
+      <div class="command-bar panel"><div><span id="phaseBadge" class="badge">等待部署</span><b id="roundText">第 0 / 8 轮</b></div><div id="timerWrap" class="timer"><span id="timerText">--</span><i><em id="timerBar"></em></i></div><div id="hostTools" class="actions"><button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button><button id="startGameButton" class="primary">开始行动</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button></div></div>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open><summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary><div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div></details>
 
       <div id="notice" class="notice">请选择队伍入座。</div>
       <section id="lobbyArea" class="team-grid"></section>

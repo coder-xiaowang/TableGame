@@ -155,3 +155,62 @@ test("game11 persisted secret state is cloned and version checked", () => {
     /Unsupported game11 state version/
   );
 });
+
+test("game11 spectator phase matrix protects both teams and releases lobby seats safely", () => {
+  const lobby = readyLobby();
+  assert.equal(engine.SUPPORTS_SPECTATORS, true);
+  assert.equal(engine.canChangeSeats(lobby), true);
+  assert.throws(
+    () => engine.vacateSeat(lobby, "w1"),
+    (error) => error.code === "invalid_seat_target" && error.status === 403
+  );
+  const removed = engine.vacateSeat(lobby, "w2");
+  assert.equal(removed.team, "white");
+  assert.deepEqual(lobby.players.filter((player) => player.team === "white").map((player) => player.seat), [1]);
+
+  const state = startedGame();
+  let spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.selfId, null);
+  assert.deepEqual(spectator.teams.white.keywords, []);
+  assert.deepEqual(spectator.teams.black.keywords, []);
+  assert.equal(spectator.code, null);
+  assert.equal(spectator.guessDraft, null);
+  assert.ok(spectator.players.every((player) => !("usedClues" in player)));
+  assert.ok(Object.values(spectator.permissions).every((value) => value === false || value === null));
+  assert.equal(engine.canChangeSeats(state), false);
+
+  engine.applyAction(state, "w1", { type:"clues", clues:["alpha","bravo","charlie"] }, { now:2000 });
+  state.round = 2;
+  engine.applyAction(state, "w2", { type:"guessDraft", code:[1,2,3] });
+  engine.applyAction(state, "b2", { type:"guessDraft", code:[4,3,2] });
+  spectator = engine.buildSpectatorView(state);
+  assert.deepEqual(spectator.clues, ["alpha","bravo","charlie"]);
+  assert.equal(spectator.code, null);
+  assert.equal(spectator.guessDraft, null);
+  assert.deepEqual(spectator.guessStatus, { decode:false, intercept:false });
+  engine.applyAction(state, "w2", { type:"guess", code:[1,2,3] });
+  spectator = engine.buildSpectatorView(state);
+  assert.deepEqual(spectator.guessStatus, { decode:true, intercept:false });
+  assert.equal(spectator.guessDraft, null);
+  assert.equal(spectator.code, null);
+  engine.applyAction(state, "b2", { type:"guess", code:[4,3,2] }, { now:3000 });
+  spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.phase, "reveal");
+  assert.deepEqual(spectator.code, state.code);
+  assert.deepEqual(spectator.records[0].decodeGuess, [1,2,3]);
+  assert.deepEqual(spectator.records[0].interceptGuess, [4,3,2]);
+
+  state.phase = "tiebreak";
+  state.tiebreakGuesses = { white:null, black:null };
+  engine.applyAction(state, "w2", { type:"tiebreak", words:["甲","乙","丙","丁"] });
+  spectator = engine.buildSpectatorView(state);
+  assert.deepEqual(spectator.tiebreakStatus, { white:true, black:false });
+  assert.equal("tiebreakGuesses" in spectator, false);
+  assert.deepEqual(spectator.teams.white.keywords, []);
+  assert.deepEqual(spectator.teams.black.keywords, []);
+  engine.applyAction(state, "b2", { type:"tiebreak", words:["戊","己","庚","辛"] });
+  spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.phase, "ended");
+  assert.equal(spectator.teams.white.keywords.length, 4);
+  assert.equal(spectator.teams.black.keywords.length, 4);
+});
