@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>政变 COUP · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div><p class="eyebrow">SERVER AUTHORITATIVE · COUP</p><h1>政变</h1><p>隐藏你的影响力，质疑每一句谎言，成为最后的幸存者。</p></div>
+    <div id="connectionStatus" class="connection-status">准备连接</div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active">创建房间</button><button id="guestModeButton">加入房间</button></div>
+    <div id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">CREATE A COURT</p><h2>召集秘密议会</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>人数<select id="playerCountSelect"><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </div>
+    <div id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN THE COURT</p><h2>进入朋友的议会</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 C0UP"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>满员或已开局时自动进入旁观席</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只能看到公开的宫廷信息</small></span></label>
+      </fieldset>
+      <button id="joinRoomButton" class="primary">加入房间</button>
+    </div>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+      <button id="seatActionButton" type="button" class="hidden"></button>
+    </div>
+    <aside class="sidebar">
+      <div class="panel room-card">
+        <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
+        <div id="hostTools" class="host-tools hidden">
+          <label>本房人数<select id="roomPlayerCountSelect"><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始政变</button>
+          <button id="restartGameButton" class="primary hidden">再来一局</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+      </div>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
+      <div class="panel rule-card">
+        <p class="eyebrow">QUICK RULES</p><h2>角色能力</h2>
+        <dl class="roles-guide">
+          <div><dt>公爵</dt><dd>征税 +3；阻挡外援</dd></div>
+          <div><dt>刺客</dt><dd>支付 3 刺杀；可被女伯爵阻挡</dd></div>
+          <div><dt>船长</dt><dd>偷 2；船长或大使可阻挡</dd></div>
+          <div><dt>大使</dt><dd>抽 2 张并秘密交换</dd></div>
+          <div><dt>女伯爵</dt><dd>阻挡对自己的刺杀</dd></div>
+        </dl>
+        <p class="rule-note">7枚可政变；回合开始有10枚时必须政变。你可以宣称任何角色。</p>
+      </div>
+      <div class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">COURT RECORD</p><h2>宫廷记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
+        <div id="logList" class="log"></div>
+      </div>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <section class="court-panel">
+        <div class="court-center">
+          <span class="crown">♛</span><b>宫廷牌库</b><strong id="deckCount">15</strong><small>张角色牌</small>
+        </div>
+        <div id="players" class="players"></div>
+      </section>
+
+      <section id="controlDock" class="panel control-dock" data-role="player">
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div id="privateZone" class="private-zone">
+          <div class="private-head"><div><p class="eyebrow">YOUR INFLUENCE</p><h2>我的影响力</h2></div><span id="coinCount">0 枚金币</span></div>
+          <div id="myInfluences" class="my-influences"></div>
+        </div>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
