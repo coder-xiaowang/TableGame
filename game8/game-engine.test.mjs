@@ -148,8 +148,51 @@ test("game8 views expose market reserves but hide deck reserves and deck order",
     tier: "stage1"
   });
   assert.ok(ownView.game.decks.stage1.every((card) => card === null));
+  assert.equal("seed" in ownView.game, false);
   assert.equal("byId" in ownView.game, false);
   assert.equal("cardDB" in ownView.game, false);
+});
+
+test("game8 spectator view is public-only and seats can change only in the lobby", () => {
+  const lobby = readyLobby();
+  const lobbyView = engine.buildSpectatorView(lobby);
+  assert.equal(engine.SUPPORTS_SPECTATORS, true);
+  assert.equal(lobbyView.selfId, null);
+  assert.equal(lobbyView.viewerId, null);
+  assert.equal(lobbyView.permissions.canManage, false);
+  assert.equal(engine.canChangeSeats(lobby), true);
+  assert.throws(
+    () => engine.vacateSeat(lobby, "host"),
+    (error) => error.code === "invalid_seat_target" && error.status === 403
+  );
+  assert.equal(engine.vacateSeat(lobby, "p2").id, "p2");
+  assert.equal(lobby.players.length, 1);
+
+  const state = readyLobby();
+  engine.applyAction(state, "host", { type: "start" }, { random: () => 0.5 });
+  const actorSeat = state.game.turn;
+  const actorId = state.players[actorSeat].id;
+  engine.applyAction(state, actorId, { type: "reserve", target: { fromDeck: "stage1" } });
+  const spectator = engine.buildSpectatorView(state);
+  assert.equal(spectator.game.viewerId, null);
+  assert.equal("seed" in spectator.game, false);
+  assert.ok(spectator.game.decks.stage1.every((card) => card === null));
+  assert.deepEqual(spectator.game.players[actorSeat].reserve[0], { hidden: true, tier: "stage1" });
+  assert.deepEqual(spectator.game.players[actorSeat].reserveVisibility, {});
+  assert.ok(Object.values(spectator.permissions).every((allowed) => allowed === false));
+  assert.equal(engine.canChangeSeats(state), false);
+  assert.throws(
+    () => engine.vacateSeat(state, state.players.find((player) => !player.isHost).id),
+    (error) => error.code === "seat_change_unavailable" && error.status === 409
+  );
+
+  const publicState = readyLobby();
+  engine.applyAction(publicState, "host", { type: "start" }, { random: () => 0.51 });
+  const publicSeat = publicState.game.turn;
+  const publicActorId = publicState.players[publicSeat].id;
+  const publicCardId = publicState.game.field.stage1.find(Boolean);
+  engine.applyAction(publicState, publicActorId, { type: "reserve", target: { fromField: publicCardId } });
+  assert.equal(engine.buildSpectatorView(publicState).game.players[publicSeat].reserve[0], publicCardId);
 });
 
 test("game8 persistence strips and restores static card data", () => {

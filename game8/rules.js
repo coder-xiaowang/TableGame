@@ -896,6 +896,9 @@
   function redactFor(s, viewerId) {
     const { cardDB, byId: _b, megaDB, pokemartDB, ...dyn } = s;
     const v = JSON.parse(JSON.stringify(dyn));            // deep copy of dynamic state
+    // The seed can deterministically reconstruct every shuffled deck when combined
+    // with the public card database, so it is server-only information as well.
+    delete v.seed;
     if (v.decks) for (const t in v.decks) v.decks[t] = v.decks[t].map(() => null); // hide deck order, keep length
     v.players = v.players.map((p, i) => {
       if (i === viewerId) return p;                       // you see your OWN reserve ids

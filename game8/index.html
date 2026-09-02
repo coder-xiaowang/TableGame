@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>璀璨宝石 · 宝可梦版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -32,16 +33,26 @@
       <section id="guestSetup" class="panel setup-card hidden">
         <label>训练家名称<input id="guestNameInput" maxlength="12" value="训练家"></label>
         <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="ABCD"></label>
+        <fieldset id="joinIntentField" class="join-intent hidden">
+          <legend>加入身份</legend>
+          <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+          <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只查看公开市场和训练家信息</small></span></label>
+        </fieldset>
         <button id="joinRoomButton" class="primary wide">加入挑战</button>
       </section>
     </main>
 
     <main id="roomPanel" class="game hidden">
+      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+        <button id="seatActionButton" type="button" class="hidden"></button>
+      </div>
       <aside>
         <section class="panel room-card">
           <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
           <div id="hostTools">
             <label>房间人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+            <button id="spectatorSettingButton" class="small wide hidden" type="button" aria-pressed="true">旁观：开放</button>
             <button id="startGameButton" class="primary wide">开始挑战</button>
             <button id="endGameButton" class="danger wide">结束本局</button>
           </div>
@@ -51,6 +62,10 @@
             <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
             <div id="players" class="players"></div>
           </section>
+          <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
           <section class="panel rules">
             <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
             <div id="logList" class="log"></div>
@@ -75,7 +90,7 @@
             <div id="selectionSummary" class="selection"></div>
             <div id="actionArea" class="actions"></div>
           </section>
-          <section class="panel trainer-board">
+          <section id="trainerBoard" class="panel trainer-board">
             <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
             <div id="myResources" class="resource-strip"></div>
             <h3>已捕捉的宝可梦</h3><div id="myPokemon" class="owned-pokemon-list"></div>

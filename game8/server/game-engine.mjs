@@ -9,6 +9,7 @@ export const ACTION_SECONDS = 0;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 4;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -119,6 +120,23 @@ export function removePlayer(state, actorId, playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "游戏开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_target", "该训练家不能转入旁观席。", 403);
+  }
+  state.players.splice(index, 1);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = state.players.find((item) => item.id === String(playerId));
   if (!player || player.connected === Boolean(connected)) return false;
@@ -203,17 +221,27 @@ export function getDeadline() {
   return 0;
 }
 
+function buildPublicView(state, { viewer = null, seat = -1, permissions } = {}) {
+  const game = state.game ? Engine.redactFor(state.game, seat) : null;
+  if (game && !viewer) game.viewerId = null;
+  return {
+    selfId: viewer?.id ?? null,
+    viewerId: viewer?.id ?? null,
+    phase: state.phase,
+    capacity: state.capacity,
+    players: state.players.map((player) => ({ ...player })),
+    game,
+    permissions
+  };
+}
+
 export function buildView(state, viewerId) {
   const seat = state.players.findIndex((player) => player.id === String(viewerId));
   const viewer = state.players[seat];
   if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个房间。", 403);
-  return {
-    selfId: viewer.id,
-    viewerId: viewer.id,
-    phase: state.phase,
-    capacity: state.capacity,
-    players: state.players.map((player) => ({ ...player })),
-    game: state.game ? Engine.redactFor(state.game, seat) : null,
+  return buildPublicView(state, {
+    viewer,
+    seat,
     permissions: {
       canManage: viewer.isHost,
       canKick: viewer.isHost && state.phase === "lobby",
@@ -221,7 +249,20 @@ export function buildView(state, viewerId) {
       canEnd: viewer.isHost && state.phase === "playing",
       canRestart: viewer.isHost && state.phase === "ended"
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    seat: -1,
+    permissions: {
+      canManage: false,
+      canKick: false,
+      canStart: false,
+      canEnd: false,
+      canRestart: false
+    }
+  });
 }
 
 export function serializeState(state) {
