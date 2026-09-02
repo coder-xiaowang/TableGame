@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput,cleanPlayerName,createAuthoritativeRoomClient,createCountdown,
-  createSessionStore,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
+  createSessionStore,createSpectatorUi,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
 } from "/shared/client/index.js";
 import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
 
@@ -10,15 +10,16 @@ const PROTOCOL_VERSION=3;
 const $=(id)=>document.getElementById(id);
 const E=Object.fromEntries([
   "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
-  "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput",
-  "roomCodeDisplay","hostTools","roomPlayerCountSelect","startGameButton","endGameButton","notice","directionText",
+  "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField",
+  "roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
   "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
-  "actionArea","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
+  "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
 ].map((id)=>[id,$(id)]));
 
 let mode="host";
 let view=null;
 let pendingCardId=null;
+let spectatorUi=null;
 const sessions=createSessionStore({gameId:"uno"});
 const countdown=createCountdown({onTick(value){renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);}});
 const room=createAuthoritativeRoomClient({
@@ -26,8 +27,15 @@ const room=createAuthoritativeRoomClient({
   onStatus(status){renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode);},
   handlers:{
     onView(nextView){view=nextView;enterRoom();render();},
-    onKicked(){alert("你已被房主移出房间。");location.reload();}
+    onKicked(){spectatorUi?.handleSessionEnded("kicked");},
+    onRoomExpired(){spectatorUi?.handleSessionEnded("room_expired");}
   }
+});
+
+spectatorUi=createSpectatorUi({
+  room,getView:()=>view,
+  elements:{joinIntentField:E.joinIntentField,roomRoleBanner:E.roomRoleBanner,roomRoleTitle:E.roomRoleTitle,roomRoleHint:E.roomRoleHint,seatActionButton:E.seatActionButton,spectatorSettingButton:E.spectatorSettingButton,spectatorPanel:E.spectatorPanel,spectatorCountBadge:E.spectatorCountBadge,spectatorList:E.spectatorList},
+  notify:(message)=>alert(message),confirmAction:(message)=>confirm(message),onSessionEnded:()=>location.reload()
 });
 
 function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.hostTools,!view?.permissions?.canManage);E.roomCodeDisplay.textContent=room.snapshot().roomCode;}
@@ -40,7 +48,7 @@ async function createGameRoom(){
 }
 async function joinGameRoom(){
   E.joinRoomButton.disabled=true;
-  try{const result=await room.joinRoom({code:E.roomCodeInput.value,name:cleanPlayerName(E.guestNameInput.value,"玩家")});if(result.resumed)E.connectionStatus.textContent="身份已恢复，正在同步牌局";}
+  try{const result=await room.joinRoom({code:E.roomCodeInput.value,name:cleanPlayerName(E.guestNameInput.value,"玩家"),intent:spectatorUi.getJoinIntent()});E.connectionStatus.textContent=spectatorUi.handleJoinResult(result).statusText;}
   catch(error){alert(`加入房间失败：${error.message}`);}
   finally{E.joinRoomButton.disabled=false;}
 }
@@ -66,11 +74,16 @@ function renderPlayers(){
   </div>`).join("");
   E.players.querySelectorAll("[data-player-id]").forEach((button)=>button.addEventListener("click",()=>kickPlayer(button.dataset.playerId)));
 }
-function renderActions(){
+function renderActions(memberRole){
   const current=currentPlayer();
   const myTurn=view.phase==="playing"&&current?.id===view.selfId;
   E.actionTitle.textContent=view.phase==="ended"?"本局结束":view.phase==="lobby"?"等待开始":myTurn?"轮到你了":`等待 ${current?.name||"玩家"}`;
   E.actionArea.innerHTML="";
+  if(memberRole==="spectator"){
+    E.actionTitle.textContent=view.phase==="lobby"?"旁观准备阶段":"正在旁观牌局";
+    E.actionArea.innerHTML='<p class="muted spectator-action-note">旁观模式只显示公共牌桌、手牌数量和公开记录，不能摸牌、出牌、质疑或抓 UNO。</p>';
+    return;
+  }
   if(view.phase!=="playing")return;
   const addButton=(text,className,action)=>{const button=document.createElement("button");button.textContent=text;if(className)button.className=className;button.addEventListener("click",()=>submit(action));E.actionArea.append(button);};
   if(view.permissions.canCatchUno)addButton("抓 UNO！","challenge",{type:"catchUno"});
@@ -88,6 +101,7 @@ function chooseCard(card){
 }
 function render(){
   if(!view)return;
+  const spectatorModel=spectatorUi.render(view);const memberRole=spectatorModel.memberRole;
   const me=view.players.find((player)=>player.id===view.selfId);
   const current=currentPlayer();
   setHidden(E.hostTools,!view.permissions?.canManage);
@@ -105,9 +119,10 @@ function render(){
   E.currentColor.style.color={red:"#c92525",yellow:"#9a7200",green:"#168843",blue:"#176db7"}[view.currentColor]||"";
   setHidden(E.penaltyBanner,!view.pendingDraw);
   E.penaltyBanner.textContent=`累计罚牌 +${view.pendingDraw}：可继续叠加 +2 / +4`;
-  if(view.phase==="lobby")E.notice.textContent=view.players.length===view.capacity?"玩家已经到齐，房主可以开始。":`等待玩家加入：${view.players.length}/${view.capacity}`;
+  if(view.phase==="lobby")E.notice.textContent=memberRole==="spectator"?"你正在旁观准备阶段，可在有空位时进入玩家席。":view.players.length===view.capacity?"玩家已经到齐，房主可以开始。":`等待玩家加入：${view.players.length}/${view.capacity}`;
   else if(view.phase==="ended")E.notice.textContent=`${view.players.find((player)=>player.id===view.winnerId)?.name||"玩家"} 打完了所有牌，获得本局胜利！`;
   else E.notice.textContent=`轮到 ${current?.name||"玩家"}，每次行动限时15秒。`;
+  setHidden(E.handPanel,memberRole==="spectator");
   E.handCount.textContent=me?.hand.length||0;
   const playableIds=new Set(view.playableCardIds||[]);
   E.hand.innerHTML=(me?.hand||[]).map((card)=>cardHtml(card,{button:true,enabled:playableIds.has(card.id)})).join("");
@@ -117,14 +132,15 @@ function render(){
   E.unoButton.textContent=me?.unoCalled?"已喊 UNO！":"喊 UNO！";
   E.drawPile.disabled=!view.permissions?.canDraw;
   E.drawPile.onclick=view.permissions?.canDraw?()=>submit({type:"draw"}):null;
-  renderActions();
+  renderActions(memberRole);
   E.logList.innerHTML=view.logs.map((entry)=>`<div class="log-item">${escapeHtml(entry.text)}</div>`).join("");
-  if(pendingCardId&&!me?.hand.some((card)=>card.id===pendingCardId)){pendingCardId=null;setHidden(E.colorModal,true);}
+  if(memberRole==="spectator"||(pendingCardId&&!me?.hand.some((card)=>card.id===pendingCardId))){pendingCardId=null;setHidden(E.colorModal,true);}
   if(view.deadline)countdown.start(view.deadline,ACTION_SECONDS*1000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}
 }
 function endGame(){if(confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。"))submit({type:"end"});}
 async function init(){
   bindRoomCodeInput(E.roomCodeInput);
+  spectatorUi.bind();
   E.hostModeButton.addEventListener("click",()=>selectMode("host"));E.guestModeButton.addEventListener("click",()=>selectMode("guest"));
   E.createRoomButton.addEventListener("click",createGameRoom);E.joinRoomButton.addEventListener("click",joinGameRoom);
   E.roomPlayerCountSelect.addEventListener("change",()=>submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)}));
@@ -132,6 +148,6 @@ async function init(){
   E.unoButton.addEventListener("click",()=>submit({type:"callUno"}));E.toggleLogButton.addEventListener("click",()=>E.logList.classList.toggle("collapsed"));
   E.cancelColorButton.addEventListener("click",()=>{pendingCardId=null;setHidden(E.colorModal,true);});
   E.colorModal.querySelectorAll("[data-color]").forEach((button)=>button.addEventListener("click",()=>{if(pendingCardId)submit({type:"play",cardId:pendingCardId,color:button.dataset.color});pendingCardId=null;setHidden(E.colorModal,true);}));
-  selectMode("host");try{await room.checkServer();}catch{/* create/join presents details */}
+  selectMode("host");try{spectatorUi.applyConfig(await room.checkServer());}catch{/* create/join presents details */}
 }
 init();

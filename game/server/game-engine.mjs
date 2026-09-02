@@ -11,6 +11,7 @@ export const ACTION_SECONDS = 0;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 32;
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -249,6 +250,23 @@ export function removePlayer(state, actorId, playerId, { now = Date.now(), rando
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state, playerId) {
+  if (!canChangeSeats(state)) {
+    throw new GameRuleError("seat_change_unavailable", "游戏开始后不能转入旁观席。", 409);
+  }
+  const index = state.players.findIndex((player) => player.id === String(playerId));
+  const target = state.players[index];
+  if (!target || target.isHost) {
+    throw new GameRuleError("invalid_seat_change", "房主必须留在玩家席。", 403);
+  }
+  state.players.splice(index, 1);
+  return target;
+}
+
 export function setPresence(state, playerId, connected) {
   const player = state.players.find((item) => item.id === String(playerId));
   if (!player || player.connected === Boolean(connected)) return false;
@@ -414,12 +432,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
 export function handleTimeout() { return false; }
 export function getDeadline() { return 0; }
 
-export function buildView(state, viewerId) {
-  const viewer = state.players.find((player) => player.id === String(viewerId));
-  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个房间。", 403);
+function buildPublicView(state, { viewer = null, revealWords = false, permissions }) {
   const current = currentPlayer(state);
   return {
-    selfId:viewer.id,
+    selfId:viewer?.id || null,
     phase:state.phase,
     capacity:state.capacity,
     gameMode:state.gameMode,
@@ -436,8 +452,8 @@ export function buildView(state, viewerId) {
     words:state.players.map((player) => ({
       id:player.id,
       name:player.name,
-      word:player.id === viewer.id ? null : player.word,
-      trapWord:player.id === viewer.id ? null : player.trapWord,
+      word:revealWords && player.id !== viewer?.id ? player.word : null,
+      trapWord:revealWords && player.id !== viewer?.id ? player.trapWord : null,
       extra:player.wordExtra,
       status:player.status
     })),
@@ -445,6 +461,16 @@ export function buildView(state, viewerId) {
     log:state.log.map(cloneLog),
     winners:[...state.winners],
     notice:noticeFor(state),
+    permissions
+  };
+}
+
+export function buildView(state, viewerId) {
+  const viewer = state.players.find((player) => player.id === String(viewerId));
+  if (!viewer) throw new GameRuleError("not_a_player", "你不属于这个房间。", 403);
+  return buildPublicView(state, {
+    viewer,
+    revealWords:true,
     permissions:{
       canManage:viewer.isHost,
       canKick:viewer.isHost,
@@ -452,7 +478,15 @@ export function buildView(state, viewerId) {
       canStart:viewer.isHost && state.phase === "lobby",
       canEnd:viewer.isHost && state.phase !== "lobby"
     }
-  };
+  });
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state, {
+    viewer:null,
+    revealWords:false,
+    permissions:{canManage:false,canKick:false,canConfigure:false,canStart:false,canEnd:false}
+  });
 }
 
 export function serializeState(state) { return structuredClone(state); }

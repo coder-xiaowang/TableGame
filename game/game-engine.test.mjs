@@ -185,3 +185,30 @@ test("game persisted state is cloned and version checked", () => {
     /Unsupported game state version/
   );
 });
+
+test("game spectator view hides every live answer and submitted entry", () => {
+  const state = collectingWords({ playerWordMode:"trap", wordExtraMode:"forbidden" });
+  engine.applyAction(state,"p1",{type:"submitWord",word:"秘密答案甲",trapWord:"秘密陷阱甲",extra:"公开禁问甲"});
+  const collecting = engine.buildSpectatorView(state);
+  assert.deepEqual(collecting.submittedPlayerIds,["p1"]);
+  assert.equal(JSON.stringify(collecting).includes("秘密答案甲"),false);
+  assert.equal(JSON.stringify(collecting).includes("秘密陷阱甲"),false);
+  engine.applyAction(state,"p2",{type:"submitWord",word:"秘密答案乙",trapWord:"秘密陷阱乙",extra:"公开禁问乙"});
+  engine.applyAction(state,"p3",{type:"submitWord",word:"秘密答案丙",trapWord:"秘密陷阱丙",extra:"公开禁问丙"},{random:()=>0});
+  const playing = engine.buildSpectatorView(state);
+  assert.ok(playing.words.every((item)=>item.word===null&&item.trapWord===null));
+  assert.ok(playing.words.every((item)=>item.extra));
+  assert.ok(Object.values(playing.permissions).every((allowed)=>allowed===false));
+});
+
+test("game lobby seat changes keep the host and lock after word collection starts", () => {
+  const state=readyLobby(3);
+  assert.equal(engine.canChangeSeats(state),true);
+  assert.throws(()=>engine.vacateSeat(state,"p1"),(error)=>error.code==="invalid_seat_change");
+  assert.equal(engine.vacateSeat(state,"p2").id,"p2");
+  engine.addPlayer(state,{id:"p2",name:"玩家2",connected:true});
+  engine.applyAction(state,"p1",{type:"configure",gameMode:"playerWords",playerWordMode:"single",wordExtraMode:"none"});
+  engine.applyAction(state,"p1",{type:"start"});
+  assert.equal(engine.canChangeSeats(state),false);
+  assert.throws(()=>engine.vacateSeat(state,"p2"),(error)=>error.code==="seat_change_unavailable");
+});

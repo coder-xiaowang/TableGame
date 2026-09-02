@@ -143,3 +143,26 @@ test("serialized state preserves private draw and challenge data without exposin
   assert.equal(restored.pendingWild.wasLegal,true);
   const view=engine.buildView(restored,"p2");assert.equal(view.permissions.canChallenge,true);assert.equal(JSON.stringify(view).includes("wasLegal"),false);
 });
+
+test("spectator view exposes only hand counts and public UNO state",()=>{
+  const state=readyState();
+  state.drawnCardId=state.players[0].hand[0].id;
+  state.pendingWild={offenderId:"p2",wasLegal:false,amount:4};
+  const view=engine.buildSpectatorView(state);
+  assert.equal(view.selfId,null);
+  assert.equal(view.drawnCardId,null);
+  assert.deepEqual(view.playableCardIds,[]);
+  assert.ok(view.players.every((player)=>player.hand.every((item)=>item===null)));
+  assert.equal("pendingWild" in view,false);
+  assert.ok(Object.values(view.permissions).every((allowed)=>allowed===false));
+});
+
+test("only non-host players can vacate game5 lobby seats",()=>{
+  const state=engine.createLobby({capacity:2,host:{id:"p1",name:"甲",connected:true}});
+  engine.addPlayer(state,{id:"p2",name:"乙",connected:true});
+  assert.throws(()=>engine.vacateSeat(state,"p1"),(error)=>error.code==="invalid_seat_change");
+  assert.equal(engine.vacateSeat(state,"p2").id,"p2");
+  engine.addPlayer(state,{id:"p2",name:"乙",connected:true});
+  engine.applyAction(state,"p1",{type:"start"},{random:()=>.2});
+  assert.throws(()=>engine.vacateSeat(state,"p2"),(error)=>error.code==="seat_change_unavailable");
+});

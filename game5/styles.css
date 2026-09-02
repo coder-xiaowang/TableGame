@@ -719,3 +719,5 @@ select {
         grid-template-columns: 1fr 1fr
     }
 }
+.spectator-action-note{line-height:1.6}
+.layout>.room-role-banner{grid-column:1/-1}

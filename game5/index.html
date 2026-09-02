@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>UNO 联机版</title>
+    <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -39,11 +40,20 @@
                     <p class="eyebrow">JOIN A GAME</p>
                     <h2>加入好友房间</h2>
                 </div><label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label><label>房间号<input
-                        id="roomCodeInput" maxlength="4" placeholder="例如 A7K2"></label><button class="primary"
+                        id="roomCodeInput" maxlength="4" placeholder="例如 A7K2"></label>
+                <fieldset id="joinIntentField" class="join-intent hidden">
+                    <legend>加入身份</legend>
+                    <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时参与牌局；满员后自动旁观</small></span></label>
+                    <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>查看公共牌桌与手牌数量，不查看牌面</small></span></label>
+                </fieldset><button class="primary"
                     id="joinRoomButton">加入房间</button>
             </div>
         </section>
         <section class="layout hidden" id="roomPanel">
+            <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+                <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+                <button id="seatActionButton" type="button" class="hidden"></button>
+            </div>
             <aside>
                 <div class="panel">
                     <p class="eyebrow">ROOM CODE</p>
@@ -54,13 +64,17 @@
                                 <option>4</option>
                                 <option>5</option>
                                 <option>6</option>
-                            </select></label><button class="primary wide" id="startGameButton">开始游戏</button><button
+                            </select></label><button id="spectatorSettingButton" class="wide hidden" type="button" aria-pressed="true">旁观：开放</button><button class="primary wide" id="startGameButton">开始游戏</button><button
                             class="challenge wide hidden" id="endGameButton">结束当前游戏</button></div>
                 </div>
                 <div class="panel rules">
                     <p class="eyebrow">HOUSE RULES</p>
                     <p>单轮决胜 · 初始7张<br>+2 / +4 可混合叠加<br>主动喊UNO与抓UNO<br>每回合限时15秒</p>
                 </div>
+                <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+                    <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+                    <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+                </details>
             </aside>
             <section class="main">
                 <div class="notice" id="notice">等待玩家加入。</div>
@@ -91,7 +105,7 @@
                     </div>
                     <div class="actions" id="actionArea"></div>
                 </div>
-                <div class="panel hand-panel">
+                <div class="panel hand-panel" id="handPanel">
                     <div class="action-head">
                         <div>
                             <p class="eyebrow">YOUR HAND</p>

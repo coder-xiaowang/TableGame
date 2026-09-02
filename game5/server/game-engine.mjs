@@ -5,6 +5,7 @@ import {
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code,message,status=400) {
@@ -199,6 +200,15 @@ export function removePlayer(state,actorId,playerId,{now=Date.now(),random=Math.
   if (currentId===target.id) { state.drawnCardId=null; beginTurn(state,now); }
   return target;
 }
+export function canChangeSeats(state) { return state.phase==="lobby"; }
+export function vacateSeat(state,playerId) {
+  if(!canChangeSeats(state)) throw new GameRuleError("seat_change_unavailable","游戏开始后不能转入旁观席。",409);
+  const index=state.players.findIndex((player)=>player.id===String(playerId));
+  const target=state.players[index];
+  if(!target||target.isHost) throw new GameRuleError("invalid_seat_change","房主必须留在玩家席。",403);
+  state.players.splice(index,1);
+  return target;
+}
 export function setPresence(state,playerId,connected,{now=Date.now(),random=Math.random}={}) {
   const player=playerById(state,playerId);
   if (!player||player.connected===Boolean(connected)) return false;
@@ -261,10 +271,17 @@ export function handleTimeout(state,{now=Date.now(),random=Math.random}={}) {
   return timeoutCurrent(state,{now,random});
 }
 export function getDeadline(state) { return state.phase==="playing"?Number(state.deadline)||0:0; }
+function buildPublicView(state,{viewer=null,playableCardIds=[],permissions}) {
+  const current=currentPlayer(state); const ownTurn=state.phase==="playing"&&current?.id===viewer?.id;
+  return {selfId:viewer?.id||null,phase:state.phase,capacity:state.capacity,currentIndex:state.currentIndex,direction:state.direction,deckCount:state.deck.length,discard:topCard(state)?[{...topCard(state)}]:[],currentColor:state.currentColor,pendingDraw:state.pendingDraw,drawnCardId:ownTurn?state.drawnCardId:null,unoVulnerableId:state.unoVulnerableId,winnerId:state.winnerId,deadline:state.deadline,logs:state.logs.map((entry)=>({...entry})),playableCardIds,players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,unoCalled:player.unoCalled,hand:player.id===viewer?.id?player.hand.map((card)=>({...card})):player.hand.map(()=>null)})),permissions};
+}
 export function buildView(state,viewerId) {
   const viewer=requireActor(state,viewerId); const current=currentPlayer(state); const ownTurn=state.phase==="playing"&&current?.id===viewer.id;
   const playableCardIds=ownTurn?viewer.hand.filter((card)=>playable(state,card)).map((card)=>card.id):[];
-  return {selfId:viewer.id,phase:state.phase,capacity:state.capacity,currentIndex:state.currentIndex,direction:state.direction,deckCount:state.deck.length,discard:topCard(state)?[{...topCard(state)}]:[],currentColor:state.currentColor,pendingDraw:state.pendingDraw,drawnCardId:ownTurn?state.drawnCardId:null,unoVulnerableId:state.unoVulnerableId,winnerId:state.winnerId,deadline:state.deadline,logs:state.logs.map((entry)=>({...entry})),playableCardIds,players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,unoCalled:player.unoCalled,hand:player.id===viewer.id?player.hand.map((card)=>({...card})):player.hand.map(()=>null)})),permissions:{canManage:viewer.isHost,canKick:viewer.isHost,canSetCapacity:viewer.isHost&&state.phase==="lobby",canStart:viewer.isHost&&state.phase==="lobby",canEnd:viewer.isHost&&state.phase!=="lobby",canDraw:ownTurn&&!state.pendingDraw&&!state.drawnCardId,canPass:ownTurn&&Boolean(state.drawnCardId),canAcceptPenalty:ownTurn&&state.pendingDraw>0,canChallenge:ownTurn&&Boolean(state.pendingWild),canCatchUno:state.phase==="playing"&&Boolean(state.unoVulnerableId)&&state.unoVulnerableId!==viewer.id,canCallUno:ownTurn&&viewer.hand.length===2&&playableCardIds.length>0}};
+  return buildPublicView(state,{viewer,playableCardIds,permissions:{canManage:viewer.isHost,canKick:viewer.isHost,canSetCapacity:viewer.isHost&&state.phase==="lobby",canStart:viewer.isHost&&state.phase==="lobby",canEnd:viewer.isHost&&state.phase!=="lobby",canDraw:ownTurn&&!state.pendingDraw&&!state.drawnCardId,canPass:ownTurn&&Boolean(state.drawnCardId),canAcceptPenalty:ownTurn&&state.pendingDraw>0,canChallenge:ownTurn&&Boolean(state.pendingWild),canCatchUno:state.phase==="playing"&&Boolean(state.unoVulnerableId)&&state.unoVulnerableId!==viewer.id,canCallUno:ownTurn&&viewer.hand.length===2&&playableCardIds.length>0}});
+}
+export function buildSpectatorView(state) {
+  return buildPublicView(state,{viewer:null,playableCardIds:[],permissions:{canManage:false,canKick:false,canSetCapacity:false,canStart:false,canEnd:false,canDraw:false,canPass:false,canAcceptPenalty:false,canChallenge:false,canCatchUno:false,canCallUno:false}});
 }
 export function serializeState(state) { return structuredClone(state); }
 export function restoreState(serializedState) {

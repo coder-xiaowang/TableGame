@@ -5,6 +5,7 @@ import {
   cleanPlayerName,
   createAuthoritativeRoomClient,
   createSessionStore,
+  createSpectatorUi,
   escapeHtml,
   renderConnectionStatus,
   setHidden,
@@ -19,8 +20,8 @@ const elements = Object.fromEntries([
   "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton",
   "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "gameModeSelect",
   "topicSelectLabel", "topicSelect", "wordExtraModeLabel", "wordExtraModeSelect",
-  "playerWordModeLabel", "playerWordModeSelect", "createRoomButton", "roomCodeInput",
-  "joinRoomButton", "hostTools", "roomCodeDisplay", "startGameButton", "endGameButton",
+  "playerWordModeLabel", "playerWordModeSelect", "createRoomButton", "roomCodeInput", "joinIntentField",
+  "joinRoomButton", "hostTools", "roomCodeDisplay", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton",
   "playerList", "gameNotice", "wordBoard", "turnTitle", "roundBadge", "actionArea",
   "logPlayerFilter", "logList"
 ].map((id) => [id, $(id)]));
@@ -29,6 +30,7 @@ let mode = "host";
 let view = null;
 let logPlayerFilter = "all";
 let configuringRoom = false;
+let spectatorUi = null;
 const versionWaiters = new Set();
 const sessions = createSessionStore({ gameId: "guess-word" });
 const room = createAuthoritativeRoomClient({
@@ -44,11 +46,20 @@ const room = createAuthoritativeRoomClient({
       enterRoom();
       render();
     },
-    onKicked() {
-      alert("你已被房主移出房间。");
-      location.reload();
-    }
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView:() => view,
+  elements:{
+    joinIntentField:elements.joinIntentField,roomRoleBanner:elements.roomRoleBanner,roomRoleTitle:elements.roomRoleTitle,
+    roomRoleHint:elements.roomRoleHint,seatActionButton:elements.seatActionButton,spectatorSettingButton:elements.spectatorSettingButton,
+    spectatorPanel:elements.spectatorPanel,spectatorCountBadge:elements.spectatorCountBadge,spectatorList:elements.spectatorList
+  },
+  notify:(message) => alert(message),confirmAction:(message) => confirm(message),onSessionEnded:() => location.reload()
 });
 
 function waitForNewerView(previousVersion, timeoutMs = 2_000) {
@@ -132,9 +143,10 @@ async function joinGameRoom() {
   try {
     const result = await room.joinRoom({
       code: elements.roomCodeInput.value,
-      name: cleanPlayerName(elements.guestNameInput.value, "玩家")
+      name: cleanPlayerName(elements.guestNameInput.value, "玩家"),
+      intent:spectatorUi.getJoinIntent()
     });
-    if (result.resumed) elements.connectionStatus.textContent = "身份已恢复，正在同步游戏";
+    elements.connectionStatus.textContent = spectatorUi.handleJoinResult(result).statusText;
   } catch (error) {
     alert(`加入房间失败：${error.message}`);
   } finally {
@@ -170,19 +182,23 @@ function endCurrentGame() {
 
 function render() {
   if (!view) return;
+  const spectatorModel = spectatorUi.render(view);
+  const memberRole = spectatorModel.memberRole;
   setHidden(elements.hostTools, !view.permissions?.canManage);
   setHidden(elements.startGameButton, !view.permissions?.canStart);
   setHidden(elements.endGameButton, !view.permissions?.canEnd);
   elements.startGameButton.disabled = configuringRoom || view.players.length < 2 || view.players.some((player) => !player.connected);
   elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
-  elements.gameNotice.textContent = view.notice;
+  elements.gameNotice.textContent = memberRole === "spectator" && view.phase === "lobby"
+    ? "你正在旁观准备阶段，可在有空位时进入玩家席。"
+    : view.notice;
   elements.roundBadge.textContent = `第 ${view.round} 轮`;
   const current = view.players.find((player) => player.isCurrent);
   elements.turnTitle.textContent = current?.name
     || (view.phase === "collectingWords" ? "提交词语" : view.phase === "ended" ? "本局结束" : "未开始");
   renderPlayers();
-  renderWords();
-  renderActions();
+  renderWords(memberRole);
+  renderActions(memberRole);
   renderLog();
 }
 
@@ -215,16 +231,17 @@ function renderPlayers() {
   });
 }
 
-function renderWords() {
+function renderWords(memberRole) {
   elements.wordBoard.innerHTML = view.words.map((item) => {
     const mine = item.id === view.selfId;
     const value = item.status === "waiting" ? "待发牌"
+      : memberRole === "spectator" ? "答案对旁观者隐藏"
       : mine ? "你的词被服务器遮住" : item.word || "未分配";
     const extra = item.extra && ["playing", "ended"].includes(view.phase)
       ? `<div class="word-extra word-extra-${escapeHtml(view.wordExtraMode)}"><strong>${view.wordExtraMode === "forbidden" ? "禁问" : "提示"}：</strong>${escapeHtml(item.extra)}</div>`
       : "";
     const trap = view.playerWordMode === "trap" && item.status !== "waiting"
-      ? `<div class="trap-word ${mine ? "mine" : ""}"><strong>陷阱：</strong>${mine ? "你的陷阱词被服务器遮住" : escapeHtml(item.trapWord || "未分配")}</div>`
+      ? `<div class="trap-word ${mine ? "mine" : ""}"><strong>陷阱：</strong>${memberRole === "spectator" ? "对旁观者隐藏" : mine ? "你的陷阱词被服务器遮住" : escapeHtml(item.trapWord || "未分配")}</div>`
       : "";
     return `
       <div class="word-card">
@@ -235,12 +252,18 @@ function renderWords() {
   }).join("");
 }
 
-function renderActions() {
+function renderActions(memberRole) {
   const current = view.players.find((player) => player.isCurrent);
   const me = view.players.find((player) => player.id === view.selfId);
   const myWord = view.words.find((item) => item.id === view.selfId);
   const extraNotice = current?.id === view.selfId && myWord?.extra
     ? renderWordExtraNotice(view.wordExtraMode, myWord.extra) : "";
+  if (memberRole === "spectator") {
+    const question = view.currentQuestion
+      ? `<div class="current-question notice"><strong>${escapeHtml(view.currentQuestion.askerName)} 问：</strong>${escapeHtml(view.currentQuestion.text)}</div>` : "";
+    elements.actionArea.innerHTML = `${question}<p class="muted spectator-action-note">旁观模式可查看公开问答、进度和结算记录，但不会显示任何玩家的答案词、陷阱词，也不能提交词语或参与问答。</p>`;
+    return;
+  }
   if (view.phase === "lobby") {
     elements.actionArea.innerHTML = '<p class="muted">至少两名在线玩家落座后，由房主开始游戏。</p>';
     return;
@@ -393,6 +416,7 @@ function syncPlayerWordSettings() {
 
 async function init() {
   bindRoomCodeInput(elements.roomCodeInput);
+  spectatorUi.bind();
   for (const topic of Object.keys(TOPICS)) {
     const option = document.createElement("option");
     option.value = topic;
@@ -415,7 +439,7 @@ async function init() {
   syncPlayerWordSettings();
   selectMode("host");
   try {
-    await room.checkServer();
+    spectatorUi.applyConfig(await room.checkServer());
   } catch {
     // The setup remains usable and create/join will show a detailed error.
   }

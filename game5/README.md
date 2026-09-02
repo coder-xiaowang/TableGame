@@ -28,10 +28,14 @@ GAME5_DB_PATH=/var/lib/tablegame/game5/game5.sqlite PORT=8791 node game5/signal-
 
 游戏中移出玩家时，其手牌会由服务器秘密洗回摸牌堆。若移除当前玩家，服务器把行动权交给按当前方向的下一位玩家。
 
+## 旁观模式
+
+旁观者只能看到公共弃牌、当前颜色、罚牌累计、行动玩家、UNO 状态、每名玩家的手牌数量和公开日志。任何手牌牌面、刚摸到的牌标识、可出牌列表、待定胜者以及 `+4` 合法性都不会进入旁观视图。准备阶段允许非房主玩家切换玩家席和旁观席，开局后席位锁定。
+
 ## 测试
 
 ```text
-node --test game5/rules.test.mjs game5/game-engine.test.mjs game5/authoritative-server.test.cjs game5/persistence.test.cjs
+node --test game5/rules.test.mjs game5/game-engine.test.mjs game5/authoritative-server.test.cjs game5/persistence.test.cjs game5/spectator-mode.test.cjs
 node --test
 ```
 
@@ -48,12 +52,14 @@ sudo systemctl edit tablegame@game5
 [Service]
 Environment=GAME5_DB_PATH=/var/lib/tablegame/game5/game5.sqlite
 Environment=PORT=8791
+Environment=SPECTATORS_ENABLED=1
+Environment=SPECTATOR_LIMIT=10
 ```
 
 ```text
 cd /srv/tablegame
 git pull --ff-only origin main
-node --test game5/rules.test.mjs game5/game-engine.test.mjs game5/authoritative-server.test.cjs game5/persistence.test.cjs
+node --test game5/rules.test.mjs game5/game-engine.test.mjs game5/authoritative-server.test.cjs game5/persistence.test.cjs game5/spectator-mode.test.cjs
 sudo systemctl daemon-reload
 sudo systemctl restart tablegame@game5
 curl http://127.0.0.1:8791/api/ready
