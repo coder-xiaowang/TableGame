@@ -13,5 +13,10 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(html, /id="roomRoleBanner"/); assert.match(html, /id="spectatorList"/); assert.match(html, /id="privateZone"/);
   assert.match(script, /createSpectatorUi/); assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/);
+  assert.match(styles, /@media \(min-width: 761px\)/);
+  assert.match(styles, /@media \(max-width: 520px\)/);
+  assert.match(styles, /players\[data-count\] > \.player-seat:nth-child\(n\)/);
+  assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) auto/);
+  assert.match(styles, /env\(safe-area-inset-bottom\)/);
   for (const count of [3, 4, 5]) assert.match(styles, new RegExp(`players\\[data-count="${count}"\\]`));
 });
