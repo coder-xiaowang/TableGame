@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>股海纵横 · Stockpile</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div><p class="eyebrow">INSIDER TRADING · SERVER AUTHORITY</p><h1>股海纵横</h1><p>掌握内幕，构造市场，在公开竞价中隐藏真正的判断。</p></div>
+      <div id="connectionStatus" class="connection-status">正在检查服务</div>
+    </header>
+
+    <section id="setupPanel" class="setup-wrap">
+      <div class="mode-tabs"><button id="hostModeButton" class="active">创建交易室</button><button id="guestModeButton">加入交易室</button></div>
+      <div id="hostSetup" class="setup-card panel">
+        <label>你的称呼<input id="hostNameInput" maxlength="12" placeholder="房主"></label>
+        <label>玩家人数<select id="playerCountSelect"><option value="2">2人特殊局</option><option value="3" selected>3人</option><option value="4">4人</option><option value="5">5人</option></select></label>
+        <button id="createRoomButton" class="primary">创建房间</button>
+      </div>
+      <div id="guestSetup" class="setup-card panel hidden">
+        <label>你的称呼<input id="guestNameInput" maxlength="12" placeholder="玩家"></label>
+        <label>房间码<input id="roomCodeInput" maxlength="6" autocomplete="off" placeholder="ABC123"></label>
+        <fieldset id="joinIntentField" class="join-intent">
+          <label><input type="radio" name="joinIntent" value="play" checked><span>加入玩家席<small>满席或开局后自动旁观</small></span></label>
+          <label><input type="radio" name="joinIntent" value="spectate"><span>直接旁观<small>只查看公开行情</small></span></label>
+        </fieldset>
+        <button id="joinRoomButton" class="primary">进入房间</button>
+      </div>
+    </section>
+
+    <section id="roomPanel" class="room-layout hidden">
+      <div id="roomRoleBanner" class="room-role-banner"><div><strong id="roomRoleTitle">玩家席</strong><span id="roomRoleHint"></span></div><button id="seatActionButton" class="small hidden"></button></div>
+      <aside class="sidebar">
+        <section class="panel room-card"><p class="eyebrow">TRADING ROOM</p><div id="roomCodeDisplay" class="room-code">------</div>
+          <div id="hostTools" class="host-tools">
+            <label>本局人数<select id="roomPlayerCountSelect"><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option></select></label>
+            <button id="startGameButton" class="primary">开始交易</button><button id="restartGameButton" class="primary hidden">再来一局</button>
+            <button id="spectatorSettingButton">关闭旁观加入</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+          </div>
+        </section>
+        <section class="panel rules-card"><p class="eyebrow">MARKET GUIDE</p><p>每轮：内幕 → 供给 → 竞价 → 行动 → 卖出 → 行情。</p><p>现金和持股数量公开，持股公司与内幕信息保密。越过 $10 拆股，跌破 $1 破产。</p></section>
+        <details id="spectatorPanel" class="panel spectator-panel"><summary>旁观者 <span id="spectatorCountBadge">0</span></summary><div id="spectatorList"></div></details>
+        <section class="panel log-card"><div class="section-head"><h2>交易记录</h2><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
+      </aside>
+
+      <section class="game-area">
+        <div id="notice" class="notice">等待玩家加入</div>
+        <section class="market-board">
+          <div class="market-head"><div><p class="eyebrow">LIVE MARKET</p><h2>实时行情</h2></div><div class="round-chip">第 <b id="roundNumber">0</b>/<span id="roundTotal">0</span> 轮 · 牌库 <b id="deckCount">0</b></div></div>
+          <div id="stockTicker" class="stock-ticker"></div>
+          <div id="informationPanel" class="information-panel"></div>
+          <div id="stockpiles" class="stockpiles"></div>
+        </section>
+        <section class="panel players-panel"><div class="section-head"><h2>投资人</h2><span class="muted">现金与持股牌数为公开信息</span></div><div id="players" class="players"></div></section>
+
+        <section id="controlDock" class="panel control-dock">
+          <div class="action-zone"><div class="section-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开局</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div><p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div></div>
+          <div id="privateZone" class="private-zone"><div class="private-head"><div><p class="eyebrow">MY PORTFOLIO</p><h2>我的投资组合</h2></div><strong id="myCash">$0K</strong></div><div id="myInformation" class="my-information"></div><div id="myPortfolio" class="my-portfolio"></div></div>
+        </section>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
