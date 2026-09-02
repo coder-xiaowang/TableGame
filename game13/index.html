@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>CABO 联机版</title>
   <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,18 +27,32 @@
       <div><p class="eyebrow">JOIN A TABLE</p><h2>进入好友牌局</h2></div>
       <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
       <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 A7K2"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入玩家席；满员后自动旁观</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只查看已经公开的牌桌信息</small></span></label>
+      </fieldset>
       <button id="joinRoomButton" class="primary">加入房间</button>
     </div>
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
+    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+      <button id="seatActionButton" type="button" class="hidden"></button>
+    </div>
     <aside>
       <div class="panel room-card"><p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
         <div id="hostTools" class="host-tools hidden">
           <label>本房人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
           <button id="startGameButton" class="primary">开始游戏</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
         </div>
       </div>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
       <div class="panel score-card"><p class="eyebrow">SCOREBOARD</p><div id="scoreboard"></div></div>
       <div class="panel rules-card"><p class="eyebrow">2019 SECOND EDITION</p><small>2～4人 · CABO失败 +10<br>牌库耗尽结束本轮<br>首次恰好100分降至50<br>超过100分时结束整局</small></div>
       <div class="panel log-panel sidebar-log"><div class="action-head"><div><p class="eyebrow">JOURNEY NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">展开</button></div><div id="logList" class="log collapsed"></div></div>

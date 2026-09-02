@@ -6,6 +6,7 @@ import {
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
+export const SUPPORTS_SPECTATORS = true;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -255,6 +256,19 @@ export function removePlayer(state,actorId,playerId) {
   return target;
 }
 
+export function canChangeSeats(state) {
+  return state.phase === "lobby";
+}
+
+export function vacateSeat(state,playerId) {
+  if (!canChangeSeats(state)) throw new GameRuleError("seat_change_unavailable","游戏开始后不能转入旁观席。",409);
+  const index=state.players.findIndex((player)=>player.id===String(playerId));
+  const target=state.players[index];
+  if (!target || target.isHost) throw new GameRuleError("invalid_seat_target","该玩家不能转入旁观席。",403);
+  state.players.splice(index,1);
+  return target;
+}
+
 export function setPresence(state,playerId,connected) {
   const player=playerById(state,playerId);
   if (!player || player.connected===Boolean(connected)) return false;
@@ -367,19 +381,25 @@ function visibleSlot(slot,viewerId,ownerId,state) {
   return {slotId:slot.slotId,faceUp:slot.faceUp||showdown,value:slot.faceUp||temporary||initial||showdown?slot.card.value:null,temporary:Boolean(temporary||initial)};
 }
 
-export function buildView(state,viewerId) {
-  const viewer=requireActor(state,viewerId); const current=currentPlayer(state);
-  const pendingForViewer=state.pending && current?.id===viewer.id ? {source:state.pending.source,value:state.pending.card.value,power:state.pending.card.power} : null;
+function buildPublicView(state,{viewer=null,permissions}={}) {
+  const viewerId=viewer?.id||null; const current=currentPlayer(state);
+  const pendingForViewer=state.pending && current?.id===viewerId ? {source:state.pending.source,value:state.pending.card.value,power:state.pending.card.power} : null;
   return {
-    selfId:viewer.id,phase:state.phase,capacity:state.capacity,round:state.round,currentPlayerId:current?.id||null,
+    selfId:viewerId,phase:state.phase,capacity:state.capacity,round:state.round,currentPlayerId:current?.id||null,
     startingPlayerId:state.startingPlayerId,deckCount:state.deck.length,discardTop:state.discard.length?{value:state.discard.at(-1).value,power:state.discard.at(-1).power}:null,
     discardCount:state.discard.length,pendingCard:pendingForViewer,deadline:state.deadline,
     cabo:state.cabo?{callerId:state.cabo.callerId,remainingIds:[...state.cabo.remainingIds]}:null,
-    privateReveal:state.privateReveal?.viewerId===viewer.id?{power:state.privateReveal.power,targetPlayerId:state.privateReveal.targetPlayerId,slotId:state.privateReveal.slotId,until:state.privateReveal.until}:null,
-    targetNotice:state.targetNotice?.targetPlayerId===viewer.id?{id:state.targetNotice.id,type:state.targetNotice.type,actorId:state.targetNotice.actorId,targetSlotId:state.targetNotice.targetSlotId,until:state.targetNotice.until}:null,
+    privateReveal:state.privateReveal?.viewerId===viewerId?{power:state.privateReveal.power,targetPlayerId:state.privateReveal.targetPlayerId,slotId:state.privateReveal.slotId,until:state.privateReveal.until}:null,
+    targetNotice:state.targetNotice?.targetPlayerId===viewerId?{id:state.targetNotice.id,type:state.targetNotice.type,actorId:state.targetNotice.actorId,targetSlotId:state.targetNotice.targetSlotId,until:state.targetNotice.until}:null,
     roundResult:state.roundResult.map((item)=>({...item})),winnerIds:[...state.winnerIds],logs:state.logs.map((entry)=>({...entry})),
-    players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,score:player.score,lastRoundScore:player.lastRoundScore,resetUsed:player.resetUsed,hasInitialPeek:player.initialPeekIds.length===2,slots:player.slots.map((slot)=>visibleSlot(slot,viewer.id,player.id,state))})),
-    permissions:{
+    players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,score:player.score,lastRoundScore:player.lastRoundScore,resetUsed:player.resetUsed,hasInitialPeek:player.initialPeekIds.length===2,slots:player.slots.map((slot)=>visibleSlot(slot,viewerId,player.id,state))})),
+    permissions
+  };
+}
+
+export function buildView(state,viewerId) {
+  const viewer=requireActor(state,viewerId); const current=currentPlayer(state);
+  return buildPublicView(state,{viewer,permissions:{
       canManage:viewer.isHost,canKick:viewer.isHost,canSetCapacity:viewer.isHost&&state.phase==="lobby",
       canStart:viewer.isHost&&(state.phase==="lobby"||state.phase==="roundEnd"),canEnd:viewer.isHost&&state.phase!=="lobby",
       canInitialPeek:state.phase==="initialPeek"&&!viewer.initialPeekIds.length,
@@ -388,8 +408,15 @@ export function buildView(state,viewerId) {
       canUsePower:state.phase==="drawn"&&current?.id===viewer.id&&state.pending?.source==="deck"&&Boolean(state.pending.card.power),
       canPlaceFailedExchange:state.phase==="failedExchange"&&current?.id===viewer.id,
       canCloseReveal:state.phase==="reveal"&&state.privateReveal?.viewerId===viewer.id
-    }
-  };
+    }});
+}
+
+export function buildSpectatorView(state) {
+  return buildPublicView(state,{permissions:{
+    canManage:false,canKick:false,canSetCapacity:false,canStart:false,canEnd:false,
+    canInitialPeek:false,canDraw:false,canCallCabo:false,canExchange:false,
+    canDiscard:false,canUsePower:false,canPlaceFailedExchange:false,canCloseReveal:false
+  }});
 }
 
 export function validateState(state) {

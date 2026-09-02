@@ -120,3 +120,10 @@
 /* Tablet and phone seats always show at least the four initial cards without
    horizontal scrolling. Extra penalty cards wrap onto another row. */
 @media(max-width:1050px){.slots,.seat-top .slots,.seat-left .slots,.seat-right .slots,.seat-self .slots{display:grid;grid-template-columns:repeat(4,minmax(0,54px));justify-content:center;gap:clamp(2px,.55vw,7px);overflow:visible}.slots .slot-button{width:100%;min-width:0;max-width:54px;height:auto;aspect-ratio:27/38;font-size:clamp(18px,3vw,27px)}.slots .card.back span{font-size:clamp(8px,1.5vw,12px)}}
+
+/* Shared spectator controls span the room and keep the CABO table read-only. */
+.room-layout>.room-role-banner{grid-column:1/-1}
+#joinIntentField{grid-column:1/-1}
+.slot-button.read-only{cursor:default}
+.slot-button.read-only:hover{transform:none}
+.spectator-action-note{width:100%;margin:0;padding:10px 12px;border:1px dashed rgba(255,240,180,.55);border-radius:10px;color:#fff5d5;background:rgba(45,39,86,.35);line-height:1.55}

@@ -8,7 +8,7 @@ function started(count=2){
   engine.applyAction(state,"p1",{type:"start"},{now:1000,random:()=>.37});return state;
 }
 function finishInitial(state,now=2000){
-  for(const player of state.players)engine.applyAction(state,player.id,{type:"initialPeek",slotIds:player.slots.slice(0,2).map((slot)=>slot.slotId)},{now});
+  for(const player of state.players)if(!player.initialPeekIds.length)engine.applyAction(state,player.id,{type:"initialPeek",slotIds:player.slots.slice(0,2).map((slot)=>slot.slotId)},{now});
   engine.handleTimeout(state,{now:now+5000});
 }
 const card=(id,value)=>({id,value,power:value>=7&&value<=8?"peek":value>=9&&value<=10?"spy":value>=11&&value<=12?"swap":null});
@@ -90,4 +90,42 @@ test("exactly 100 resets to 50 only once",()=>{
 test("serialized state restores hidden pending data without exposing it",()=>{
   const state=started();finishInitial(state);engine.applyAction(state,"p1",{type:"drawDeck"},{now:8000});const id=state.pending.card.id;
   const restored=engine.restoreState(engine.serializeState(state));assert.equal(restored.pending.card.id,id);assert.equal(engine.buildView(restored,"p2").pendingCard,null);engine.validateState(restored);
+});
+
+test("spectator view never receives CABO private knowledge and seat changes are lobby-only",()=>{
+  const lobby=engine.createLobby({capacity:3,host:{id:"p1",name:"甲",connected:true}});
+  engine.addPlayer(lobby,{id:"p2",name:"乙",connected:true});
+  assert.equal(engine.SUPPORTS_SPECTATORS,true);
+  assert.equal(engine.canChangeSeats(lobby),true);
+  assert.equal(engine.buildSpectatorView(lobby).selfId,null);
+  assert.throws(()=>engine.vacateSeat(lobby,"p1"),(error)=>error.code==="invalid_seat_target"&&error.status===403);
+  assert.equal(engine.vacateSeat(lobby,"p2").id,"p2");
+
+  const state=started(3);
+  const initialIds=state.players[0].slots.slice(0,2).map((slot)=>slot.slotId);
+  engine.applyAction(state,"p1",{type:"initialPeek",slotIds:initialIds},{now:2000});
+  let spectator=engine.buildSpectatorView(state);
+  assert.ok(spectator.players.flatMap((player)=>player.slots).every((slot)=>slot.value===null));
+  assert.equal(spectator.pendingCard,null);
+  assert.equal(spectator.privateReveal,null);
+  assert.equal(spectator.targetNotice,null);
+  assert.ok(Object.values(spectator.permissions).every((allowed)=>allowed===false));
+  assert.equal(engine.canChangeSeats(state),false);
+  assert.throws(()=>engine.vacateSeat(state,"p2"),(error)=>error.code==="seat_change_unavailable"&&error.status===409);
+
+  finishInitial(state);
+  rigDrawn(state,{drawn:card("spy",9)});
+  spectator=engine.buildSpectatorView(state);
+  assert.equal(spectator.pendingCard,null);
+  const target=state.players[1];
+  engine.applyAction(state,"p1",{type:"usePower",targetPlayerId:"p2",slotId:target.slots[0].slotId},{now:3000});
+  spectator=engine.buildSpectatorView(state);
+  assert.equal(spectator.privateReveal,null);
+  assert.equal(spectator.targetNotice,null);
+  assert.ok(spectator.players.flatMap((player)=>player.slots).every((slot)=>slot.value===null));
+
+  state.players[0].slots[0].faceUp=true;
+  assert.equal(engine.buildSpectatorView(state).players[0].slots[0].value,state.players[0].slots[0].card.value);
+  state.phase="roundEnd";
+  assert.ok(engine.buildSpectatorView(state).players.flatMap((player)=>player.slots).every((slot)=>slot.value!==null));
 });
