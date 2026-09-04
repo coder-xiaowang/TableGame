@@ -930,6 +930,18 @@ footer small {
   letter-spacing: 0.05em;
 }
 
+footer small a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+footer small a:hover,
+footer small a:focus-visible {
+  color: #b36a3a;
+  text-decoration: underline;
+}
+
 :focus-visible {
   outline: 3px solid rgba(198, 105, 44, 0.55);
   outline-offset: 4px;
