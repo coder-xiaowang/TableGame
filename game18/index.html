@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>犯人在跳舞 · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div><p class="eyebrow">DANCING CRIMINAL · SERVER AUTHORITY</p><h1>犯人在跳舞</h1><p>交换手中的线索，追踪那张不断移动的犯人牌。</p></div>
+    <div id="connectionStatus" class="connection-status">准备连接</div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active">创建案件</button><button id="guestModeButton">加入案件</button></div>
+    <div id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">OPEN A CASE</p><h2>召集调查小队</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>玩家人数<select id="playerCountSelect"><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <label>比赛目标<select id="targetScoreSelect"><option value="5" selected>先到5分</option><option value="10">先到10分</option></select></label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </div>
+    <div id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN THE CASE</p><h2>进入朋友的案件</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 D4NC"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>加入调查</b><small>满员或开局后自动进入旁观席</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>只做旁观者</b><small>只能看到公开线索与行动</small></span></label>
+      </fieldset>
+      <button id="joinRoomButton" class="primary">进入房间</button>
+    </div>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
+      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
+      <button id="seatActionButton" type="button" class="hidden"></button>
+    </div>
+
+    <aside class="sidebar">
+      <section class="panel room-card">
+        <p class="eyebrow">CASE ROOM</p><div id="roomCodeDisplay" class="room-code">----</div>
+        <div id="hostTools" class="host-tools hidden">
+          <label>本房人数<select id="roomPlayerCountSelect"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+          <label>比赛目标<select id="roomTargetScoreSelect"><option value="5">先到5分</option><option value="10">先到10分</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始调查</button>
+          <button id="restartGameButton" class="primary hidden">重新比赛</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+      </section>
+
+      <section class="panel rule-card">
+        <p class="eyebrow">CASE NOTES</p><h2>调查手册</h2>
+        <p><b>犯人</b>只能作为最后一张手牌打出；<b>侦探</b>从自己的第二圈开始有效。</p>
+        <p><b>不在场证明</b>能挡侦探，不能挡神犬。交易和情报交换都在所有人确认后同时结算。</p>
+      </section>
+
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
+
+      <section class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">CASE LOG</p><h2>调查记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
+        <div id="logList" class="log"></div>
+      </section>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <section class="case-board">
+        <div class="case-heading">
+          <div><p class="eyebrow">CURRENT CASE</p><h2 id="caseText">尚未发生案件</h2></div>
+          <div class="round-badge">第 <b id="roundNumber">0</b> 轮 · 目标 <b id="targetScoreLabel">5</b> 分</div>
+        </div>
+
+        <div id="players" class="players"></div>
+
+        <section id="controlDock" class="center-action" data-role="player">
+          <div class="action-head">
+            <div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </section>
+
+        <div class="discard-area">
+          <div class="section-head"><div><p class="eyebrow">EVIDENCE TRAIL</p><h2>公开牌迹</h2></div><span id="discardCount">0张</span></div>
+          <div id="discardPile" class="discard-pile"><p class="muted">开局后显示公开打出的牌</p></div>
+        </div>
+      </section>
+
+      <section id="privateZone" class="panel hand-dock">
+        <div class="private-head">
+          <div><p class="eyebrow">MY HAND</p><h2>我的手牌</h2></div>
+          <span>点击手牌，再到桌面中央确认</span>
+        </div>
+        <div id="myHand" class="my-hand"></div>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
+
