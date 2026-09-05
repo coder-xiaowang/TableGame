@@ -6,7 +6,7 @@ const Engine=window.Engine, PROTOCOL_VERSION=3, COLORS=Engine.COLORS, TIER_KEYS=
 const BALL_FILES={red:"red.png",blue:"blue.png",black:"black.png",pink:"pink.png",yellow:"yellow.png",purple:"master.png"};
 const BALL_NAMES={red:"精灵球",blue:"超级球",black:"高级球",pink:"治愈球",yellow:"先机球",purple:"大师球"};
 const $=(id)=>document.getElementById(id);
-const E=Object.fromEntries(["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","playerBadge","players","logList","toggleLogButton","notice","tokens","rareMarket","legendMarket","rareCount","legendCount","markets","actionTitle","phaseBadge","selectionSummary","actionArea","trainerBoard","myScore","myResources","myPokemon","myReserved","reserveCount","trainerInspector","trainerInspectorTitle","trainerInspectorContent","closeTrainerInspectorButton"].map((id)=>[id,$(id)]));
+const E=Object.fromEntries(["siteHeader","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","playerBadge","players","logList","toggleLogButton","notice","tokens","rareMarket","legendMarket","rareCount","legendCount","markets","actionTitle","phaseBadge","selectionSummary","actionArea","trainerBoard","myScore","myResources","myPokemon","myReserved","reserveCount","trainerInspector","trainerInspectorTitle","trainerInspectorContent","closeTrainerInspectorButton"].map((id)=>[id,$(id)]));
 let mode="host",view=null,cards=[],byId={},selection=[],selectedCardId=null,inspectedPlayerId=null,spectatorUi=null;
 
 const sessions=createSessionStore({gameId:"pokemon-splendor"});
@@ -16,12 +16,12 @@ const room=createAuthoritativeRoomClient({protocolVersion:PROTOCOL_VERSION,sessi
 });
 spectatorUi=createSpectatorUi({
   room,getView:()=>view,
-  elements:{joinIntentField:E.joinIntentField,roomRoleBanner:E.roomRoleBanner,roomRoleTitle:E.roomRoleTitle,roomRoleHint:E.roomRoleHint,seatActionButton:E.seatActionButton,spectatorSettingButton:E.spectatorSettingButton,spectatorPanel:E.spectatorPanel,spectatorCountBadge:E.spectatorCountBadge,spectatorList:E.spectatorList},
+  elements:{joinIntentField:E.joinIntentField,seatActionButton:E.seatActionButton,spectatorSettingButton:E.spectatorSettingButton,spectatorPanel:E.spectatorPanel,spectatorCountBadge:E.spectatorCountBadge,spectatorList:E.spectatorList},
   notify:(message)=>alert(message),confirmAction:(message)=>confirm(message),onSessionEnded:()=>location.reload()
 });
 const roomInfo=()=>room.snapshot();
 const currentView=()=>view;
-function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);E.roomCodeDisplay.textContent=roomInfo().roomCode;}
+function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.roomHeaderTools,false);E.siteHeader.classList.add("in-room");E.roomCodeDisplay.textContent=roomInfo().roomCode;}
 function submit(action){selection=[];selectedCardId=null;return room.submitAction(action).catch((error)=>alert(`操作失败：${error.message}`));}
 
 async function createGameRoom(){try{const name=cleanPlayerName(E.hostNameInput.value,"房主");await room.createRoom({name,capacity:Number(E.playerCountSelect.value)});}catch(error){alert(`创建失败：${error.message}\n请运行 node game8/signal-server.js`);}}

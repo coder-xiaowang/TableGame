@@ -10,9 +10,21 @@
 </head>
 <body>
   <div class="shell">
-    <header>
-      <div><p class="eyebrow">POKÉMON SPLENDOR</p><h1>璀璨宝石 <span>宝可梦版</span></h1></div>
-      <div id="connectionStatus" class="status">正在检测联机服务</div>
+    <header id="siteHeader" class="site-header">
+      <div class="header-title"><p class="eyebrow">POKÉMON SPLENDOR</p><h1>璀璨宝石 <span>宝可梦版</span></h1></div>
+      <div class="header-meta">
+        <div id="connectionStatus" class="status">正在检测联机服务</div>
+        <div id="roomHeaderTools" class="room-header-tools hidden">
+          <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+          <div id="hostTools" class="host-tools">
+            <label>人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+            <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+            <button id="startGameButton" class="primary">开始挑战</button>
+            <button id="endGameButton" class="danger">结束本局</button>
+          </div>
+          <button id="seatActionButton" type="button" class="small hidden"></button>
+        </div>
+      </div>
     </header>
 
     <main id="setupPanel" class="setup-wrap">
@@ -43,33 +55,35 @@
     </main>
 
     <main id="roomPanel" class="game hidden">
-      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-        <button id="seatActionButton" type="button" class="hidden"></button>
-      </div>
       <aside>
-        <section class="panel room-card">
-          <p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
-          <div id="hostTools">
-            <label>房间人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
-            <button id="spectatorSettingButton" class="small wide hidden" type="button" aria-pressed="true">旁观：开放</button>
-            <button id="startGameButton" class="primary wide">开始挑战</button>
-            <button id="endGameButton" class="danger wide">结束本局</button>
-          </div>
-        </section>
         <div class="observer-panels">
-          <section class="panel">
+          <section class="panel player-panel">
             <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
             <div id="players" class="players"></div>
+          </section>
+          <details class="panel rules-card">
+            <summary><span>详细规则</span><b>展开查看</b></summary>
+            <div class="rule-details">
+              <h3>目标与供应</h3>
+              <p>2～4 名训练家收集精灵球、捕捉并进化宝可梦。普通精灵球每种数量随人数为 4／5／7 个，大师球共 5 个；三个普通市场各展示 4 张，稀有与传说市场各展示 1 张。</p>
+              <h3>每回合行动</h3>
+              <p>选择一种行动：拿取三种不同普通球；当可选颜色少于三种时拿取所有可选颜色；供应至少有 4 个时拿取两个同色球；保留一张普通市场明牌或暗取普通牌堆顶牌（最多保留 3 张，并在供应允许时获得 1 个大师球）；或者支付费用捕捉市场牌或保留牌。</p>
+              <h3>奖励、上限与进化</h3>
+              <p>已捕捉宝可梦提供永久精灵球奖励并降低后续费用，大师球可补足精确缺口。实体精灵球超过 10 个时必须归还超出的数量。完成主要行动后若满足进化条件，可免费进化至多一次，也可以跳过；旧形态压在进化牌下，新形态进入捕捉区。</p>
+              <h3>结束与胜负</h3>
+              <p>有玩家在回合结束时达到 18 枚奖杯后进入最后一轮，确保所有玩家行动次数相同。奖杯最多者获胜；同分时依次比较已进化数量、捕捉与被压住宝可梦总数，仍相同则共同获胜。</p>
+              <h3>公开信息</h3>
+              <p>精灵球、永久奖励、奖杯、捕捉区和保留数量均公开；从市场保留的明牌保持公开，暗取牌堆顶的牌面只对持有者可见。房间状态与行动判定由服务器保存并广播。</p>
+            </div>
+          </details>
+          <section class="panel log-panel">
+            <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
+            <div id="logList" class="log"></div>
           </section>
           <details id="spectatorPanel" class="panel spectator-panel hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
-          <section class="panel rules">
-            <div class="section-head"><h2>行动记录</h2><button id="toggleLogButton" class="small">收起</button></div>
-            <div id="logList" class="log"></div>
-          </section>
         </div>
       </aside>
 

@@ -189,7 +189,9 @@ test("game8 page consumes the shared spectator UI and hides its private trainer 
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
   assert.match(html, /name="joinIntent" value="play"/);
   assert.match(html, /name="joinIntent" value="spectate"/);
-  assert.match(html, /id="roomRoleBanner"/);
+  assert.match(html, /id="roomHeaderTools"/);
+  assert.match(html, /id="seatActionButton"/);
+  assert.doesNotMatch(html, /id="roomRoleBanner"/);
   assert.match(html, /id="spectatorList"/);
   assert.match(html, /id="trainerBoard"/);
   assert.match(html, /shared\/styles\/spectator\.css/);
