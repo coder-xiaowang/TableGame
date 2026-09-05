@@ -9,9 +9,21 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
-    <div><p class="eyebrow">PUSH YOUR LUCK</p><h1>CAN'T <span>STOP</span></h1></div>
-    <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
+  <header id="siteHeader" class="site-header">
+    <div class="header-title"><p class="eyebrow">PUSH YOUR LUCK</p><h1>CAN'T <span>STOP</span></h1></div>
+    <div class="header-meta">
+      <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary" type="button">开始游戏</button>
+          <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
+        </div>
+        <button id="seatActionButton" type="button" class="hidden"></button>
+      </section>
+    </div>
   </header>
 
   <main>
@@ -43,29 +55,35 @@
     </section>
 
     <section id="roomPanel" class="room-shell hidden">
-      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-        <button id="seatActionButton" type="button" class="hidden"></button>
-      </div>
-      <div class="room-toolbar">
-        <div><span class="muted">房间</span><strong id="roomCodeDisplay">----</strong></div>
-        <div id="hostTools" class="host-tools">
-          <label>人数<select id="roomPlayerCountSelect"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
-          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
-          <button id="startGameButton" class="primary" type="button">开始游戏</button>
-          <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
-        </div>
-      </div>
-
       <div class="game-layout">
         <aside class="side-panel panel">
           <div class="panel-title"><span>登山队</span><b id="playerCountBadge">0 / 3</b></div>
           <div id="playerList" class="player-list"></div>
+          <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>本回合</span></div>
+          <details class="rules-card">
+            <summary><span>详细攀登规则</span><span class="fold-hint">展开</span></summary>
+            <div class="rule-details">
+              <h3>目标与路线</h3>
+              <p>2～4人，使用四颗六面骰和点数2～12的十一条路线。率先占领三条路线的玩家立即获胜；已经被占领的路线对所有玩家关闭。</p>
+              <h3>掷骰与推进</h3>
+              <p>把四颗骰子按三种方式两两配对，服务器列出能够推进的组合。每回合最多同时使用三条路线；临时标记已经用完时，只能继续推进本回合已经使用的路线。</p>
+              <p>两个对子点数相同时可在同一路线推进两格；如果距离顶端只剩一格，则只推进一格。临时推进从永久进度与本回合已有进度中的较高位置继续。</p>
+              <h3>继续、扎营与爆掉</h3>
+              <p>完成一次推进后，可以继续掷骰冒险，或扎营保存本回合进度。扎营时临时进度写入永久进度，到达顶端的路线随即被占领。</p>
+              <p>如果一次掷骰没有任何合法组合，玩家立即爆掉：本回合所有临时进度丢失，但此前已经扎营的永久进度不受影响。</p>
+              <h3>倒计时与骰子结果</h3>
+              <p>各操作阶段限时30秒：掷骰阶段超时自动掷骰，选择阶段超时采用第一项合法组合，抉择阶段超时自动扎营。</p>
+              <p>骰子随机种子和最终结果由服务器产生；浏览器只按相同种子复播物理动画，不能提交或修改骰面。</p>
+            </div>
+          </details>
+          <div class="game-log">
+            <div class="panel-title log-title"><span>游戏记录</span><button id="toggleLogButton" type="button">收起</button></div>
+            <div id="logList" class="log-list"></div>
+          </div>
           <details id="spectatorPanel" class="spectator-panel hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
-          <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>本回合</span></div>
         </aside>
 
         <section class="board-panel panel">
@@ -82,8 +100,6 @@
           <div class="dice-title"><span>四颗骰子</span><b id="diceTotal"></b></div>
           <div id="diceArea" class="dice-area"><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span></div>
           <div id="actionArea" class="action-area"></div>
-          <div class="panel-title log-title"><span>游戏记录</span><button id="toggleLogButton" type="button">收起</button></div>
-          <div id="logList" class="log-list"></div>
         </aside>
       </div>
 

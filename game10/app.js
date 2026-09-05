@@ -11,7 +11,7 @@ import { createDicePhysics, simulateDiceRoll } from "./dice-physics.js";
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 30;
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let view = null;
@@ -37,8 +37,7 @@ spectatorUi = createSpectatorUi({
   room,
   getView: () => view,
   elements: {
-    joinIntentField: E.joinIntentField, roomRoleBanner: E.roomRoleBanner, roomRoleTitle: E.roomRoleTitle,
-    roomRoleHint: E.roomRoleHint, seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton,
+    joinIntentField: E.joinIntentField, seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton,
     spectatorPanel: E.spectatorPanel, spectatorCountBadge: E.spectatorCountBadge, spectatorList: E.spectatorList
   },
   notify: (message) => alert(message),
@@ -49,7 +48,7 @@ spectatorUi = createSpectatorUi({
 function currentView() { return view; }
 function isHost() { return room.snapshot().role === "host"; }
 function renderEntryMode() { setModeVisibility(mode, { ...E, hostButton: E.hostModeButton, guestButton: E.guestModeButton }); }
-function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); setHidden(E.hostTools, !isHost()); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
+function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); setHidden(E.roomHeaderTools, false); E.siteHeader.classList.add("in-room"); setHidden(E.hostTools, !isHost()); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
 
 async function createGameRoom() {
   const name = cleanPlayerName(E.hostNameInput.value, "房主");
