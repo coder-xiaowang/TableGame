@@ -12,10 +12,10 @@ import {
 const PROTOCOL_VERSION = 3;
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
-  "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
+  "siteHeader","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
   "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
   "joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect",
-  "spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton",
+  "spectatorSettingButton","seatActionButton",
   "startGameButton","endGameButton","playerCountBadge","playerList","notice","roundBadge",
   "turnBadge","revealPanel","revealProgress","revealedPlays","rows","turnConsole","actionTitle","actionArea","timerText","timerBar","handCount","hand",
   "turnHandPanel","selectionState","logList","toggleLogButton","spectatorPanel","spectatorCountBadge","spectatorList"
@@ -44,9 +44,6 @@ spectatorUi = createSpectatorUi({
   getView:() => view,
   elements:{
     joinIntentField:E.joinIntentField,
-    roomRoleBanner:E.roomRoleBanner,
-    roomRoleTitle:E.roomRoleTitle,
-    roomRoleHint:E.roomRoleHint,
     seatActionButton:E.seatActionButton,
     spectatorSettingButton:E.spectatorSettingButton,
     spectatorPanel:E.spectatorPanel,
@@ -61,6 +58,8 @@ spectatorUi = createSpectatorUi({
 function enterRoom() {
   setHidden(E.setupPanel,true);
   setHidden(E.roomPanel,false);
+  setHidden(E.roomHeaderTools,false);
+  E.siteHeader.classList.add("in-room");
   setHidden(E.hostTools,!view?.permissions?.canManage);
   E.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }

@@ -9,12 +9,32 @@
 </head>
 <body>
   <main class="shell">
-    <header class="topbar">
-      <div>
+    <header class="topbar" id="siteHeader">
+      <div class="header-title">
         <p class="eyebrow">6 NIMMT! · ONLINE</p>
         <h1>牛头王</h1>
       </div>
-      <div class="status" id="connectionStatus">准备连接</div>
+      <div class="header-meta">
+        <div class="status" id="connectionStatus">准备连接</div>
+        <div class="room-header-tools hidden" id="roomHeaderTools">
+          <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+          <div class="host-tools hidden" id="hostTools">
+            <label>人数
+              <select id="roomPlayerCountSelect">
+                <option value="2">2 人</option><option value="3">3 人</option>
+                <option value="4">4 人</option><option value="5">5 人</option>
+                <option value="6">6 人</option><option value="7">7 人</option>
+                <option value="8">8 人</option><option value="9">9 人</option>
+                <option value="10">10 人</option>
+              </select>
+            </label>
+            <button class="small hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
+            <button class="primary" id="startGameButton" type="button">开始游戏</button>
+            <button class="danger hidden" id="endGameButton" type="button">结束当前游戏</button>
+          </div>
+          <button id="seatActionButton" type="button" class="small hidden"></button>
+        </div>
+      </div>
     </header>
 
     <section id="setupPanel">
@@ -56,45 +76,40 @@
     </section>
 
     <section class="game-layout hidden" id="roomPanel">
-      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-        <button id="seatActionButton" type="button" class="hidden"></button>
-      </div>
       <aside class="sidebar">
-        <div class="panel room-card">
-          <p class="eyebrow">ROOM CODE</p>
-          <div class="room-code" id="roomCodeDisplay">----</div>
-          <div class="host-tools hidden" id="hostTools">
-            <label>本房人数
-              <select id="roomPlayerCountSelect">
-                <option value="2">2 人</option><option value="3">3 人</option>
-                <option value="4">4 人</option><option value="5">5 人</option>
-                <option value="6">6 人</option><option value="7">7 人</option>
-                <option value="8">8 人</option><option value="9">9 人</option>
-                <option value="10">10 人</option>
-              </select>
-            </label>
-            <button class="small wide hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
-            <button class="primary wide" id="startGameButton" type="button">开始游戏</button>
-            <button class="danger wide hidden" id="endGameButton" type="button">结束当前游戏</button>
-          </div>
-        </div>
-
-        <div class="panel">
+        <div class="panel player-panel">
           <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
           <div class="player-list" id="playerList"></div>
+        </div>
+
+        <details class="panel rules-card">
+          <summary><span>详细规则</span><b>展开查看</b></summary>
+          <div class="rule-details">
+            <h3>开局与目标</h3>
+            <p>支持 2～10 人。每局使用 1～104 号牌，每人获得 10 张手牌，并翻开 4 张牌建立四条牌列。每局进行 10 回合，牛头分跨局累计；有人达到 66 分或以上时整场结束，累计牛头最少者获胜，同分并列。</p>
+            <h3>秘密选牌</h3>
+            <p>每回合所有玩家在 15 秒内秘密选择一张手牌。全部确认后，选牌会先同时公开，再由服务器按照牌面从小到大逐张结算。选牌超时或选择阶段掉线时，服务器会从该玩家手牌中随机选择。</p>
+            <h3>放牌与收列</h3>
+            <p>牌应接在“末张小于它”的牌列中末张最大的一列。若放入后成为该列第六张牌，出牌者收走原有五张，新牌成为该列第一张；若出的牌小于所有牌列末张，玩家必须自行选择一列收走，选列超时或掉线时由服务器随机决定。</p>
+            <h3>牛头分</h3>
+            <p>55 号牌为 7 个牛头；其他 11 的倍数为 5 个；其他 10 的倍数为 3 个；其他 5 的倍数为 2 个；其余牌均为 1 个牛头。</p>
+            <h3>服务器判定</h3>
+            <p>手牌和秘密选牌仅本人可见，公开、逐张放牌、收列、倒计时和累计得分均由服务器推进。动画期间刷新页面或服务器恢复房间，不会重复放牌或重复计分。</p>
+          </div>
+        </details>
+
+        <div class="panel log-panel">
+          <div class="section-head">
+            <h2>游戏记录</h2>
+            <button class="small" id="toggleLogButton" type="button">展开 / 收起</button>
+          </div>
+          <div class="log" id="logList"></div>
         </div>
 
         <details id="spectatorPanel" class="panel spectator-panel hidden" open>
           <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
           <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
         </details>
-
-        <div class="panel rules">
-          <p class="eyebrow">本房规则</p>
-          <p>每人 10 张牌，累计 66 个牛头后结束。成为第六张牌时收走前五张；无牌可接时自行选列。</p>
-          <p>选牌和选列均限时 15 秒，超时随机处理。</p>
-        </div>
       </aside>
 
       <section class="table-area">
@@ -128,14 +143,6 @@
             </div>
           </div>
           <div class="rows" id="rows"></div>
-        </div>
-
-        <div class="panel log-panel">
-          <div class="section-head">
-            <h2>游戏记录</h2>
-            <button class="small" id="toggleLogButton" type="button">展开 / 收起</button>
-          </div>
-          <div class="log" id="logList"></div>
         </div>
       </section>
     </section>
