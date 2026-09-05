@@ -236,25 +236,6 @@ textarea:focus {
   align-self: start;
 }
 
-.full-width {
-  width: 100%;
-}
-
-.room-code {
-  align-items: center;
-  background: #111827;
-  border-radius: 8px;
-  color: #fff;
-  display: flex;
-  font-size: 42px;
-  font-weight: 900;
-  height: 96px;
-  justify-content: center;
-  letter-spacing: 6px;
-  margin-bottom: 14px;
-  user-select: all;
-}
-
 .player-list,
 .word-board,
 .log-list {
@@ -538,4 +519,52 @@ textarea:focus {
   }
 }
 .spectator-action-note { line-height: 1.6; }
-.room-panel>.room-role-banner { grid-column: 1 / -1; }
+
+/* Compact room chrome: global room controls sit next to the title. */
+.topbar.in-room { margin-bottom: 12px; }
+.topbar.in-room h1 { font-size: clamp(27px,4vw,42px); }
+.header-meta { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.room-header-tools { align-items: center; background: rgba(255,255,255,.9); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(24,38,42,.09); display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; padding: 6px; }
+.room-identity { align-items: center; color: var(--muted); display: flex; font-size: 10px; font-weight: 900; gap: 7px; letter-spacing: .08em; padding: 0 8px; }
+.room-identity strong { color: var(--accent); font: 900 20px/1 monospace; letter-spacing: .14em; }
+.room-header-tools .host-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.room-header-tools button { font-size: 11px; min-height: 32px; padding: 5px 10px; }
+.room-header-tools .danger-button { margin-top: 0; }
+.room-header-tools #seatActionButton { background: #fff1cc; border-color: #dcbd73; color: #684a11; }
+
+/* Player list, rules and filtered history are secondary to words and current actions. */
+.sidebar { max-height: calc(100vh - 24px); overflow: auto; position: sticky; scrollbar-gutter: stable; top: 12px; }
+.rules-card { overflow: hidden; padding: 0; }
+.rules-card summary, .spectator-panel summary { align-items: center; cursor: pointer; display: flex; font-weight: 900; gap: 8px; justify-content: space-between; list-style: none; padding: 15px 18px; }
+.rules-card summary::-webkit-details-marker, .spectator-panel summary::-webkit-details-marker { display: none; }
+.rules-card summary::after { color: var(--accent); content: "＋"; font-size: 18px; }
+.rules-card[open] summary::after { content: "−"; }
+.rules-card summary b { color: var(--muted); font-size: 10px; margin-left: auto; }
+.rule-details { color: var(--muted); display: grid; font-size: 12px; gap: 8px; line-height: 1.65; max-height: min(54vh,490px); overflow: auto; padding: 0 18px 18px; }
+.rule-details h3 { color: var(--ink); font-size: 13px; margin: 5px 0 0; }
+.rule-details p { margin: 0; }
+.sidebar .log-panel { min-height: 0; }
+.sidebar .log-list { max-height: 280px; overflow: auto; }
+.sidebar .log-header { align-items: stretch; display: grid; gap: 8px; }
+.sidebar .log-filter-label { min-width: 0; width: 100%; }
+
+@media (max-width: 860px) {
+  .room-panel { display: flex; flex-direction: column; }
+  .room-panel > .table-area { order: 1; }
+  .room-panel > .sidebar { grid-template-columns: repeat(2,minmax(0,1fr)); max-height: none; order: 2; overflow: visible; position: static; }
+  .sidebar > .log-panel, .sidebar > .spectator-panel { grid-column: 1/-1; }
+  .topbar.in-room { display: grid; gap: 8px; grid-template-columns: minmax(0,1fr); }
+  .topbar.in-room .header-meta { align-items: stretch; justify-content: flex-start; }
+  .topbar.in-room .room-header-tools { justify-content: flex-start; }
+}
+@media (max-width: 560px) {
+  .topbar.in-room .header-title { display: none; }
+  .topbar.in-room .header-meta { width: 100%; }
+  .topbar.in-room .status-pill { align-self: flex-start; }
+  .room-header-tools { display: grid; gap: 6px; grid-template-columns: auto minmax(0,1fr); width: 100%; }
+  .room-header-tools .host-tools { justify-content: flex-start; }
+  .room-header-tools #seatActionButton { grid-column: 1/-1; width: 100%; }
+  .room-panel > .sidebar { grid-template-columns: 1fr; }
+  .sidebar > .log-panel, .sidebar > .spectator-panel { grid-column: auto; }
+  .rule-details { max-height: none; }
+}

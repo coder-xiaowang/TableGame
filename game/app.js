@@ -17,11 +17,11 @@ const PROTOCOL_VERSION = 3;
 const ROOM_CAPACITY = 32;
 const $ = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
-  "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton",
+  "siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton",
   "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "gameModeSelect",
   "topicSelectLabel", "topicSelect", "wordExtraModeLabel", "wordExtraModeSelect",
   "playerWordModeLabel", "playerWordModeSelect", "createRoomButton", "roomCodeInput", "joinIntentField",
-  "joinRoomButton", "hostTools", "roomCodeDisplay", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton",
+  "joinRoomButton", "hostTools", "roomCodeDisplay", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton",
   "playerList", "gameNotice", "wordBoard", "turnTitle", "roundBadge", "actionArea",
   "logPlayerFilter", "logList"
 ].map((id) => [id, $(id)]));
@@ -55,8 +55,7 @@ spectatorUi = createSpectatorUi({
   room,
   getView:() => view,
   elements:{
-    joinIntentField:elements.joinIntentField,roomRoleBanner:elements.roomRoleBanner,roomRoleTitle:elements.roomRoleTitle,
-    roomRoleHint:elements.roomRoleHint,seatActionButton:elements.seatActionButton,spectatorSettingButton:elements.spectatorSettingButton,
+    joinIntentField:elements.joinIntentField,seatActionButton:elements.seatActionButton,spectatorSettingButton:elements.spectatorSettingButton,
     spectatorPanel:elements.spectatorPanel,spectatorCountBadge:elements.spectatorCountBadge,spectatorList:elements.spectatorList
   },
   notify:(message) => alert(message),confirmAction:(message) => confirm(message),onSessionEnded:() => location.reload()
@@ -99,6 +98,8 @@ async function configureCreatedRoom(action) {
 function enterRoom() {
   setHidden(elements.setupPanel, true);
   setHidden(elements.roomPanel, false);
+  setHidden(elements.roomHeaderTools, false);
+  elements.siteHeader.classList.add("in-room");
   setHidden(elements.hostTools, !view?.permissions?.canManage);
   elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }

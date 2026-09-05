@@ -9,12 +9,23 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="topbar">
-        <div>
+      <header class="topbar" id="siteHeader">
+        <div class="header-title">
           <h1>速速破译</h1>
         </div>
-        <div class="status-pill" id="connectionStatus">未连接</div>
-      </section>
+        <div class="header-meta">
+          <div class="status-pill" id="connectionStatus">未连接</div>
+          <div class="room-header-tools hidden" id="roomHeaderTools">
+            <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+            <div class="host-tools hidden" id="hostTools">
+              <button class="hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
+              <button class="primary" id="startGameButton" type="button">开始游戏</button>
+              <button class="danger-button hidden" id="endGameButton" type="button">结束本局</button>
+            </div>
+            <button id="seatActionButton" type="button" class="hidden"></button>
+          </div>
+        </div>
+      </header>
 
       <section class="setup-panel" id="setupPanel">
         <div class="mode-grid">
@@ -83,22 +94,39 @@
       </section>
 
       <section class="room-panel hidden" id="roomPanel">
-        <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-          <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-          <button id="seatActionButton" type="button" class="hidden"></button>
-        </div>
         <aside class="sidebar">
-          <div class="panel host-tools hidden" id="hostTools">
-            <h2>房主管理</h2>
-            <div class="room-code" id="roomCodeDisplay">----</div>
-            <button class="full-width hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
-            <button class="primary full-width" id="startGameButton" type="button">开始游戏</button>
-            <button class="danger-button full-width hidden" id="endGameButton" type="button">结束本局</button>
-          </div>
-
-          <div class="panel">
-            <h2>玩家席位</h2>
+          <div class="panel player-panel">
+            <h2>玩家</h2>
             <div class="player-list" id="playerList"></div>
+          </div>
+          <details class="panel rules-card">
+            <summary><span>详细规则</span><b>展开查看</b></summary>
+            <div class="rule-details">
+              <h3>游戏目标</h3>
+              <p>每名玩家能看到其他玩家的词，但看不到自己的词。玩家轮流提问并依据他人的回答推断自己的答案；猜中者依次完成游戏。陷阱词模式中，猜中陷阱词会立即出局。</p>
+              <h3>出词模式</h3>
+              <p>至少需要 2 名玩家，房间安全上限为 32 人。词库模式由系统从房主选择的主题中分配不同词语；玩家出词模式要求每人提交词语，再通过错位随机分配，任何人都不会拿到自己提交的内容。</p>
+              <h3>附加玩法</h3>
+              <p>玩家出词支持单答案和“答案＋陷阱词”。还可选择无附加信息、禁问信息或开局提示；陷阱词与开局提示不能同时使用。收集出词期间只公开谁已提交，不公开提交内容。</p>
+              <h3>回合流程</h3>
+              <p>当前玩家每回合最多提出一个非空问题；其他仍在游戏且在线的玩家分别回答“是”“否”或“不确定”。全部回答后，当前玩家可以猜词或跳过，也可以不提问直接猜词或跳过。</p>
+              <h3>结果与名次</h3>
+              <p>猜错或跳过后轮到下一名有效玩家；猜中后按完成顺序记录名次并移出行动顺序。陷阱模式中猜中陷阱词会出局且不获得名次。当仍在猜词的玩家不超过一人时游戏结束。</p>
+              <h3>信息边界</h3>
+              <p>自己的答案和陷阱词始终对本人隐藏，其他玩家可见；旁观者只能查看公开问答、状态和结算，不会收到任何人的答案、陷阱词或出词内容。发词、问答、匹配、轮次和胜负均由服务器判定。</p>
+            </div>
+          </details>
+          <div class="panel log-panel">
+            <div class="log-header">
+              <h2>问答记录</h2>
+              <label class="log-filter-label">
+                筛选玩家
+                <select id="logPlayerFilter">
+                  <option value="all">全部玩家</option>
+                </select>
+              </label>
+            </div>
+            <div class="log-list" id="logList"></div>
           </div>
           <details id="spectatorPanel" class="panel spectator-panel hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
@@ -120,19 +148,6 @@
             </div>
 
             <div class="action-area" id="actionArea"></div>
-          </div>
-
-          <div class="panel">
-            <div class="log-header">
-              <h2>问答记录</h2>
-              <label class="log-filter-label">
-                筛选玩家
-                <select id="logPlayerFilter">
-                  <option value="all">全部玩家</option>
-                </select>
-              </label>
-            </div>
-            <div class="log-list" id="logList"></div>
           </div>
         </section>
       </section>
