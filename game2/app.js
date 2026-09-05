@@ -17,10 +17,10 @@ const roleForSeat = (index) => Number(index) % 2 === 0 ? "captain" : "member";
 const teamIndexForSeat = (index) => Math.floor(Number(index) / 2);
 const $ = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
-  "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
+  "siteHeader","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup",
   "guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton",
   "roomCodeInput","joinRoomButton","joinIntentField","hostTools","roomCodeDisplay","roomPlayerCountSelect",
-  "spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton",
+  "spectatorSettingButton","seatActionButton",
   "spectatorPanel","spectatorCountBadge","spectatorList",
   "startGameButton","endGameButton","returnLobbyButton","playerList","gameNotice","roundBadge",
   "wordBadge","scoreBoard","seatBoard","idiomValue","turnTitle","teamBadge","actionArea","logList"
@@ -52,9 +52,6 @@ spectatorUi = createSpectatorUi({
   getView:() => view,
   elements:{
     joinIntentField:elements.joinIntentField,
-    roomRoleBanner:elements.roomRoleBanner,
-    roomRoleTitle:elements.roomRoleTitle,
-    roomRoleHint:elements.roomRoleHint,
     seatActionButton:elements.seatActionButton,
     spectatorSettingButton:elements.spectatorSettingButton,
     spectatorPanel:elements.spectatorPanel,
@@ -69,6 +66,8 @@ spectatorUi = createSpectatorUi({
 function enterRoom() {
   setHidden(elements.setupPanel,true);
   setHidden(elements.roomPanel,false);
+  setHidden(elements.roomHeaderTools,false);
+  elements.siteHeader.classList.add("in-room");
   setHidden(elements.hostTools,!view?.permissions?.canManage);
   elements.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }

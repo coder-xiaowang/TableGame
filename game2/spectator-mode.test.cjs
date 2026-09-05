@@ -115,7 +115,9 @@ test("game2 page uses shared spectator UI and distinguishes room role from team 
   const script = fs.readFileSync(path.join(__dirname,"app.js"),"utf8");
   assert.match(html,/name="joinIntent" value="spectate"/);
   assert.match(html,/shared\/styles\/spectator\.css/);
-  assert.match(html,/id="roomRoleBanner"/);
+  assert.match(html,/id="roomHeaderTools"/);
+  assert.match(html,/id="seatActionButton"/);
+  assert.doesNotMatch(html,/id="roomRoleBanner"/);
   assert.match(html,/id="spectatorList"/);
   assert.match(script,/createSpectatorUi/);
   assert.match(script,/view\.roomRole !== "spectator"/);

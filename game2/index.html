@@ -9,11 +9,27 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <div>
+      <header class="topbar" id="siteHeader">
+        <div class="header-title">
           <h1>我话你猜</h1>
         </div>
-        <div class="status-pill" id="connectionStatus">准备连接</div>
+        <div class="header-meta">
+          <div class="status-pill" id="connectionStatus">准备连接</div>
+          <div class="room-header-tools hidden" id="roomHeaderTools">
+            <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+            <div class="host-tools hidden" id="hostTools">
+              <label>人数<select id="roomPlayerCountSelect">
+                <option value="2">2 人</option><option value="4">4 人</option>
+                <option value="6">6 人</option><option value="8">8 人</option>
+              </select></label>
+              <button class="hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
+              <button class="primary" id="startGameButton" type="button">开始游戏</button>
+              <button class="danger-button hidden" id="endGameButton" type="button">结束大局</button>
+              <button class="primary hidden" id="returnLobbyButton" type="button">返回大厅</button>
+            </div>
+            <button id="seatActionButton" type="button" class="hidden"></button>
+          </div>
+        </div>
       </header>
 
       <section class="setup-panel" id="setupPanel">
@@ -68,32 +84,31 @@
       </section>
 
       <section class="room-panel hidden" id="roomPanel">
-        <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-          <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-          <button id="seatActionButton" type="button" class="hidden"></button>
-        </div>
         <aside class="sidebar">
-          <div class="panel host-tools hidden" id="hostTools">
-            <h2>房主面板</h2>
-            <div class="room-code" id="roomCodeDisplay">----</div>
-            <label>
-              本房人数
-              <select id="roomPlayerCountSelect">
-                <option value="2">2 人 / 1 队</option>
-                <option value="4">4 人 / 2 队</option>
-                <option value="6">6 人 / 3 队</option>
-                <option value="8">8 人 / 4 队</option>
-              </select>
-            </label>
-            <button class="full-width hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
-            <button class="primary full-width" id="startGameButton" type="button">开始游戏</button>
-            <button class="danger-button full-width hidden" id="endGameButton" type="button">结束大局</button>
-            <button class="primary full-width hidden" id="returnLobbyButton" type="button">返回大厅</button>
-          </div>
-
-          <div class="panel">
+          <div class="panel player-panel">
             <h2>玩家</h2>
             <div class="player-list" id="playerList"></div>
+          </div>
+          <details class="panel rules-card">
+            <summary><span>详细规则</span><b>展开查看</b></summary>
+            <div class="rule-details">
+              <h3>人数与组队</h3>
+              <p>仅支持 2、4、6、8 人，即 1～4 支二人队伍。玩家在准备阶段自行选择席位，相邻两个席位组成一队；每队前席是队长，后席是队员。全部座位有人且玩家在线后才能开始。</p>
+              <h3>描述与猜词</h3>
+              <p>服务器抽取一个成语，当前队队长可以看到答案并提交一段描述；队员看不到答案，只能根据描述提交一次猜测。系统会去除空白、转为小写后进行完全匹配。</p>
+              <h3>题目轮转</h3>
+              <p>猜对时本队获得 1 分并立即抽取新题，下一支可行动队伍成为首发队；猜错时答案不变，轮到下一支完整且在线的队伍重新描述和猜测。所有队伍都尝试一遍仍未猜中时，题内轮数增加。</p>
+              <h3>结束与胜负</h3>
+              <p>每猜中一题获得 1 分，没有自动目标分数或固定题数，由房主手动结束大局。结束时最高分队伍获胜，同分并列，并公开最后一题答案。</p>
+              <h3>身份与隐私</h3>
+              <p>只有当前队队长能够看到答案；房主如果坐在队员席也不能查看。旁观者可以看到公开描述、猜词记录与比分，但不会收到当前答案，也不能占用队伍席位或执行游戏操作。</p>
+              <h3>服务器规则</h3>
+              <p>抽题、行动权限、文本匹配、队伍轮换、得分和结算全部由服务器执行并持久化。当前队任一席掉线时会跳到下一支完整在线队伍；本版本没有行动倒计时。</p>
+            </div>
+          </details>
+          <div class="panel log-panel">
+            <h2>公开输入记录</h2>
+            <div class="log-list" id="logList"></div>
           </div>
           <details id="spectatorPanel" class="panel spectator-panel hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
@@ -142,11 +157,6 @@
               </div>
               <div class="action-area" id="actionArea"></div>
             </div>
-          </div>
-
-          <div class="panel">
-            <h2>公开输入记录</h2>
-            <div class="log-list" id="logList"></div>
           </div>
         </section>
       </section>
