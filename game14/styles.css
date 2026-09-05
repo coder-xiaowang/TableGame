@@ -34,8 +34,17 @@ button { color: inherit; }
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .hero h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: .95; color: var(--mud-dark); }
 .hero > div > p:last-child { margin: 10px 0 0; color: var(--muted); }
+.hero.in-room { gap: 12px; margin-bottom: 8px; padding: 7px 10px; }
+.hero.in-room .hero-title { display: flex; align-items: baseline; gap: 12px; }
+.hero.in-room .hero-title .eyebrow, .hero.in-room .hero-title > p:last-child { display: none; }
+.hero.in-room h1 { margin: 0; font-size: clamp(1.45rem, 2.8vw, 2.2rem); white-space: nowrap; }
+.hero-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .eyebrow { margin: 0 0 6px; color: var(--green-dark); font-size: .72rem; font-weight: 900; letter-spacing: .17em; }
 .connection-status { padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow); }
+.room-header-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 15px; background: var(--paper); box-shadow: 0 6px 18px rgba(82,60,36,.09); }
+.room-identity { display: flex; align-items: baseline; gap: 6px; padding: 0 5px; color: var(--muted); font-size: .7rem; }
+.room-header-tools .room-code { margin: 0; font-size: 1.3rem; letter-spacing: .1em; }
+.room-header-tools button { min-height: 32px; padding: 4px 8px; font-size: .74rem; }
 .panel { border: 1px solid var(--line); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
 .setup-wrap { width: min(700px, 100%); margin: 8vh auto 0; }
 .mode-tabs { display: flex; gap: 8px; margin: 0 14px -1px; }
@@ -54,13 +63,27 @@ button.danger { border-color: #c56258; color: #a6423b; background: #fff4ef; font
 button.small { padding: 6px 10px; font-size: .78rem; }
 
 .room-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 18px; align-items: start; }
-.room-layout > .room-role-banner { grid-column: 1 / -1; }
 .sidebar { display: grid; gap: 14px; position: sticky; top: 14px; }
-.room-card, .rule-card, .log-card { padding: 18px; }
+.log-card { padding: 18px; }
 .room-code { margin: 5px 0 14px; color: var(--mud-dark); font: 700 2.5rem/1 Georgia, serif; letter-spacing: .2em; }
-.host-tools { display: grid; gap: 10px; }
+.host-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.host-tools label { display: flex; align-items: center; gap: 5px; font-size: .7rem; }
+.host-tools select { width: auto; min-width: 62px; min-height: 32px; padding: 0 7px; }
 .sidebar > .spectator-panel { margin-top: 0; padding: 18px; border-top-color: var(--line); }
-.rule-card p:last-child, .rule-card p:nth-last-child(2) { color: var(--muted); font-size: .85rem; line-height: 1.7; }
+.rule-card { padding: 0 !important; }
+.rule-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 17px; cursor: pointer; list-style: none; }
+.rule-card > summary::-webkit-details-marker { display: none; }
+.rule-card > summary .eyebrow { display: block; margin-bottom: 3px; }
+.fold-hint { color: var(--muted); font-size: .74rem; }
+.fold-hint::before { content: "＋ "; }
+.rule-card[open] .fold-hint { font-size: 0; }
+.rule-card[open] .fold-hint::before { content: "－ "; font-size: .74rem; }
+.rule-card[open] .fold-hint::after { content: "收起"; font-size: .74rem; }
+.rule-details { max-height: 58vh; overflow: auto; padding: 0 17px 17px; border-top: 1px dashed var(--line); }
+.rule-details h3 { margin: 15px 0 6px; color: var(--green-dark); font-size: .9rem; }
+.rule-details p, .rule-details li { color: var(--muted); font-size: .79rem; line-height: 1.65; }
+.rule-details p { margin: 0 0 8px; }
+.rule-details ul { margin: 0; padding-left: 1.15rem; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .log { max-height: 260px; margin-top: 12px; overflow: auto; }
 .log.collapsed { max-height: 64px; }
@@ -139,6 +162,9 @@ button.small { padding: 6px 10px; font-size: .78rem; }
 .type-mud .card-icon { color: #86543b; }
 
 @media (max-width: 1050px) {
+  .hero.in-room { align-items: flex-start; }
+  .hero.in-room .hero-meta { flex: 1; }
+  .room-header-tools { justify-content: flex-end; }
   .room-layout { grid-template-columns: 1fr; }
   .sidebar { position: static; grid-template-columns: repeat(3,minmax(0,1fr)); }
   .log-card { min-width: 0; }
@@ -151,9 +177,16 @@ button.small { padding: 6px 10px; font-size: .78rem; }
   .hero { align-items: flex-start; }
   .hero > div > p:last-child { font-size: .85rem; }
   .connection-status { padding: 8px 10px; font-size: .75rem; }
+  .hero.in-room { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px; }
+  .hero.in-room .hero-meta { min-width: 0; }
+  .hero.in-room .connection-status { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .room-header-tools { width: 100%; justify-content: flex-end; }
+  .host-tools { justify-content: flex-end; }
   .setup-card { grid-template-columns: 1fr; }
   .setup-card .join-intent { grid-column: auto; }
-  .sidebar { grid-template-columns: 1fr; }
+  .room-layout { display: flex; flex-direction: column; }
+  .game-area { order: 1; }
+  .sidebar { order: 2; grid-template-columns: 1fr; margin-top: 10px; }
   .players { grid-template-columns: 1fr; }
   .players[data-count="5"], .players[data-count="6"] { grid-template-columns: 1fr; }
   .farm-table { min-height: 460px; padding: 10px; }
@@ -176,7 +209,16 @@ button.small { padding: 6px 10px; font-size: .78rem; }
 }
 
 @media (max-width: 470px) {
-  .hero h1 { font-size: 2.5rem; }
+  .hero.in-room { grid-template-columns: 1fr; }
+  .hero.in-room .hero-title { display: none; }
+  .hero-meta { justify-content: stretch; }
+  .hero.in-room .connection-status { margin-left: auto; }
+  .room-header-tools { justify-content: flex-start; }
+  .room-identity { flex: 1 1 auto; }
+  .host-tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .host-tools label { min-width: 0; }
+  .host-tools select, .host-tools button { width: 100%; }
+  .hero:not(.in-room) h1 { font-size: 2.5rem; }
   .pig-row { grid-template-columns: repeat(5, 76px); }
   .section-head { align-items: flex-start; }
   .action-card b { font-size: .88rem; }

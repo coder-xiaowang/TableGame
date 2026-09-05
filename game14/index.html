@@ -10,13 +10,26 @@
 </head>
 <body>
 <main class="shell">
-  <header class="hero">
-    <div>
+  <header id="hero" class="hero">
+    <div class="hero-title">
       <p class="eyebrow">SERVER AUTHORITATIVE · DIRTY PIG</p>
       <h1>脏小猪</h1>
       <p>让小猪跳进泥坑，盖好猪舍，躲开大雨、农夫和闪电。</p>
     </div>
-    <div id="connectionStatus" class="connection-status">准备连接</div>
+    <div class="hero-meta">
+      <div id="connectionStatus" class="connection-status">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay" class="room-code">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始游戏</button>
+          <button id="restartGameButton" class="primary hidden">再玩一局</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" type="button" class="small hidden"></button>
+      </section>
+    </div>
   </header>
 
   <section id="setupPanel" class="setup-wrap">
@@ -46,38 +59,43 @@
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
-    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-      <button id="seatActionButton" type="button" class="hidden"></button>
-    </div>
     <aside class="sidebar">
-      <div class="panel room-card">
-        <p class="eyebrow">ROOM CODE</p>
-        <div id="roomCodeDisplay" class="room-code">----</div>
-        <div id="hostTools" class="host-tools hidden">
-          <label>本房人数
-            <select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
-          </label>
-          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
-          <button id="startGameButton" class="primary">开始游戏</button>
-          <button id="restartGameButton" class="primary hidden">再玩一局</button>
-          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+      <details class="panel rule-card">
+        <summary><span><span class="eyebrow">FARM GUIDE</span><b>详细脏小猪规则</b></span><span class="fold-hint">展开</span></summary>
+        <div class="rule-details">
+          <h3>目标与开局配置</h3>
+          <p>第一位让自己面前所有小猪都变脏的玩家立即获胜。2人每人5只猪，3人每人4只，4～6人每人3只；每人始终持有3张私密手牌。</p>
+          <p>2～4人使用54张行动牌；5～6人使用57张，其中猪舍由9张增加到12张，其余牌数不变。</p>
+          <h3>每回合可以做什么</h3>
+          <ul>
+            <li>打出一张手牌并执行合法效果，然后补回3张。</li>
+            <li>把任意一张牌直接弃掉，不发动效果，然后补一张。</li>
+            <li>只有三张手牌全部无法合法使用时，才能公开三张、全部弃掉并换取三张新牌。</li>
+          </ul>
+          <p>牌库耗尽时，服务器会将弃牌堆重新洗成牌库。换牌资格、目标和胜负均由服务器判定。</p>
+          <h3>泥巴、下雨与防护</h3>
+          <ul>
+            <li><b>泥巴：</b>把自己一只干净小猪变脏。</li>
+            <li><b>下雨：</b>洗净场上所有没有猪舍的脏猪，包括出牌者自己的猪。</li>
+            <li><b>猪舍：</b>放到自己尚无猪舍的小猪上，使其不受下雨影响。</li>
+            <li><b>封门：</b>只能装在有猪舍的脏猪上，阻止农夫洗猪，但不能防闪电。</li>
+            <li><b>避雷针：</b>装在自己的猪舍上，使其不能成为闪电目标。</li>
+          </ul>
+          <h3>攻击牌与完全安全</h3>
+          <p>农夫可以洗净对手没有封门的脏猪，即使它有普通猪舍；闪电可以摧毁对手没有避雷针的猪舍，并同时移除其封门，但不会改变小猪的干净或肮脏状态。</p>
+          <p>同时拥有“脏猪 + 猪舍 + 封门 + 避雷针”的小猪，在基础版中不会再被任何牌洗干净。</p>
+          <h3>倒计时与数字版约定</h3>
+          <p>每回合限时30秒；超时后服务器会把该玩家第一张手牌无效果弃掉、补一张牌并结束回合。随机洗牌、补牌、行动顺序与所有隐藏手牌均由服务器管理。</p>
         </div>
+      </details>
+      <div class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">FARM NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
+        <div id="logList" class="log"></div>
       </div>
       <details id="spectatorPanel" class="panel spectator-panel hidden" open>
         <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
-      <div class="panel rule-card">
-        <p class="eyebrow">HOW TO WIN</p>
-        <h2>全部变脏就获胜</h2>
-        <p>支持2～6人。猪舍防雨，封门防农夫，避雷针防闪电。每回合出一张牌并补回三张。</p>
-        <p>任何牌都能无效果弃掉；仅当三张牌都无法合法使用时，才能公开并全部更换。</p>
-      </div>
-      <div class="panel log-card">
-        <div class="section-head"><div><p class="eyebrow">FARM NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
-        <div id="logList" class="log"></div>
-      </div>
     </aside>
 
     <section class="game-area">
