@@ -10,9 +10,9 @@ const PROTOCOL_VERSION = 3;
 const PHASE_TIMER_MS = { action: 45000, challengeAction: 12000, block: 12000, challengeBlock: 12000, proveClaim: 15000, loseInfluence: 20000, exchange: 30000 };
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
-  "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup",
+  "hero", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup",
   "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField",
-  "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint",
+  "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton",
   "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton",
   "notice", "deckCount", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
   "privateZone", "coinCount", "myInfluences", "toggleLogButton", "logList"
@@ -56,8 +56,7 @@ const room = createAuthoritativeRoomClient({
 
 spectatorUi = createSpectatorUi({
   room, getView: () => view,
-  elements: { joinIntentField: E.joinIntentField, roomRoleBanner: E.roomRoleBanner, roomRoleTitle: E.roomRoleTitle, roomRoleHint: E.roomRoleHint,
-    seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton, spectatorPanel: E.spectatorPanel,
+  elements: { joinIntentField: E.joinIntentField, seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton, spectatorPanel: E.spectatorPanel,
     spectatorCountBadge: E.spectatorCountBadge, spectatorList: E.spectatorList },
   notify: (message) => alert(message), confirmAction: (message) => confirm(message), onSessionEnded: () => location.reload()
 });
@@ -65,7 +64,7 @@ spectatorUi = createSpectatorUi({
 function submit(action) {
   return Promise.resolve(room.submitAction(action)).catch((error) => { E.connectionStatus.textContent = `操作失败：${error.message}`; alert(error.message); });
 }
-function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
+function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); setHidden(E.roomHeaderTools, false); E.hero.classList.add("in-room"); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
 async function createGameRoom() {
   E.createRoomButton.disabled = true;
   try { await room.createRoom({ name: cleanPlayerName(E.hostNameInput.value, "房主"), capacity: Number(E.playerCountSelect.value) }); }
