@@ -80,7 +80,7 @@ h1 { margin-bottom: 8px; font-family: Georgia, "Noto Serif SC", serif; font-size
 .setup-actions, .button-row, .spectator-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .setup-actions button { flex: 1 1 150px; }
 
-.app-shell, .room-layout { display: grid; grid-template-columns: 280px minmax(0,1fr); gap: 14px; min-height: calc(100vh - 68px); padding: 10px 18px 18px; }
+.app-shell, .room-layout { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 12px; min-height: calc(100vh - 68px); padding: 10px 18px 18px; }
 .sidebar { display: flex; flex-direction: column; gap: 14px; }
 .panel, .topbar, .hand-dock {
   border: 1px solid rgba(176,139,80,.34);
@@ -246,7 +246,7 @@ button.card { color: #543c25; }
 .spectator-panel summary { cursor: pointer; }
 
 @media (max-width: 1120px) {
-  .app-shell, .room-layout { grid-template-columns: 240px minmax(0,1fr); }
+  .app-shell, .room-layout { grid-template-columns: 205px minmax(0,1fr); }
   .hero.in-room { align-items: flex-start; }
   .hero.in-room .hero-meta { flex: 1; }
   .room-header-tools { justify-content: flex-end; }
@@ -447,7 +447,7 @@ button.card { color: #373432; }
 }
 
 @media (min-width: 761px) {
-  .case-board { min-height: 670px; }
+  .case-board { min-height: max(740px,calc(100vh - 118px)); }
   .players {
     position: absolute;
     top: 76px;
@@ -482,10 +482,10 @@ button.card { color: #373432; }
   .players[data-count="7"] .player-seat:nth-child(7) { grid-column: 4; }
   .center-action {
     top: 61%;
-    width: clamp(235px,27%,300px);
-    max-height: 202px;
-    padding: 10px 12px;
-    border-radius: 14px;
+    width: clamp(320px,34%,420px);
+    max-height: min(330px,48vh);
+    padding: 11px 13px 9px;
+    border-radius: 15px;
   }
   .action-heading h2, .action-head h2 { font-size: 1.02rem; }
   .action-content, .action-buttons { margin-top: 8px; }
@@ -495,5 +495,47 @@ button.card { color: #373432; }
 @media (max-width: 760px) {
   .hand-dock { display: table; width: fit-content; max-width: calc(100% - 8px); padding: 5px 6px; }
   .hand-cards, .my-hand { justify-content: flex-start; flex-wrap: nowrap; }
-  .center-action { max-height: min(34vh,250px); padding: 11px 12px; border-radius: 15px; }
+  .center-action { max-height: min(58vh,440px); padding: 10px; border-radius: 15px; }
+}
+
+.compact-hand-zone {
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(77,72,65,.2);
+}
+.compact-hand-label {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 5px;
+  color: #4e4642;
+  font-size: .72rem;
+}
+.compact-hand-label span { color: #754048; font-size: .62rem; font-weight: 800; letter-spacing: .14em; }
+.compact-hand-zone .my-hand {
+  width: 100%;
+  max-width: none;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 5px;
+}
+.compact-hand-zone .game-card:not(.compact) {
+  flex: 0 0 76px;
+  width: 76px;
+  min-width: 76px;
+  min-height: 98px;
+  padding: 6px 4px;
+  border-radius: 8px;
+}
+.compact-hand-zone .game-card:not(.compact) .card-icon { font-size: 1.15rem; }
+.compact-hand-zone .game-card:not(.compact) small { display: none; }
+.sidebar .panel { padding: 12px; border-radius: 15px; }
+.sidebar .rule-card { padding: 0; }
+.sidebar .log { max-height: 180px; }
+.sidebar .spectator-list { max-height: 145px; overflow: auto; }
+
+@media (max-width: 760px) {
+  .compact-hand-zone .game-card:not(.compact) { flex-basis: 68px; width: 68px; min-width: 68px; min-height: 88px; }
 }
