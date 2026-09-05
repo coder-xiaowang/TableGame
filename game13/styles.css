@@ -127,3 +127,36 @@
 .slot-button.read-only{cursor:default}
 .slot-button.read-only:hover{transform:none}
 .spectator-action-note{width:100%;margin:0;padding:10px 12px;border:1px dashed rgba(255,240,180,.55);border-radius:10px;color:#fff5d5;background:rgba(45,39,86,.35);line-height:1.55}
+
+/* Compact in-room header and information hierarchy. */
+.hero.in-room{gap:12px;margin-bottom:8px;padding:7px 10px}
+.hero.in-room .hero-title{display:flex;align-items:baseline;gap:12px}
+.hero.in-room .hero-title .eyebrow,.hero.in-room .hero-title>p:last-child{display:none}
+.hero.in-room h1{margin:0;font-size:clamp(29px,3vw,42px);letter-spacing:-2px;white-space:nowrap}
+.hero-meta{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.room-header-tools{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:5px 7px;border:1px solid var(--line);border-radius:15px;background:rgba(255,250,240,.94);box-shadow:0 6px 18px rgba(62,50,28,.1)}
+.room-identity{display:flex;align-items:baseline;gap:6px;padding:0 5px;color:var(--muted);font-size:11px}
+.room-header-tools .room-code{margin:0;font-size:21px;letter-spacing:.1em}
+.room-header-tools button{min-height:32px;padding:5px 9px;font-size:12px}
+.host-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.host-tools label{display:flex;align-items:center;gap:5px;font-size:11px}
+.host-tools select{width:auto;min-width:62px;min-height:32px;padding:4px 7px}
+
+.rules-card{display:block;padding:0!important}
+.rules-card>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 17px;cursor:pointer;list-style:none}
+.rules-card>summary::-webkit-details-marker{display:none}
+.rules-card>summary .eyebrow{display:block;margin-bottom:3px}
+.fold-hint{color:var(--muted);font-size:12px}
+.fold-hint::before{content:"＋ "}
+.rules-card[open] .fold-hint{font-size:0}
+.rules-card[open] .fold-hint::before{content:"－ ";font-size:12px}
+.rules-card[open] .fold-hint::after{content:"收起";font-size:12px}
+.rule-details{max-height:58vh;overflow:auto;padding:0 17px 17px;border-top:1px dashed var(--line)}
+.rule-details h3{margin:15px 0 6px;color:var(--teal2);font-size:14px}
+.rule-details p,.rule-details li{color:var(--muted);font-size:12px;line-height:1.65}
+.rule-details p{margin:0 0 8px}
+.rule-details ul{margin:0;padding-left:18px}
+
+@media(max-width:1050px){.hero.in-room{align-items:flex-start}.hero.in-room .hero-meta{flex:1}.room-header-tools{justify-content:flex-end}}
+@media(max-width:850px){.hero.in-room{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}.hero.in-room .hero-meta{min-width:0}.hero.in-room .status{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.room-header-tools{width:100%;justify-content:flex-end}.host-tools{justify-content:flex-end}.room-layout{display:flex;flex-direction:column}.game-area{order:1}.room-layout aside{order:2;grid-template-columns:1fr 1fr;margin-top:10px}.score-card{grid-column:auto}.rules-card,.sidebar-log{grid-column:1/-1}}
+@media(max-width:540px){.hero.in-room{grid-template-columns:1fr}.hero.in-room .hero-title{display:none}.hero-meta{justify-content:stretch}.hero.in-room .status{margin-left:auto}.room-header-tools{justify-content:flex-start}.room-identity{flex:1 1 auto}.host-tools{flex:1 1 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.host-tools label{min-width:0}.host-tools select,.host-tools button{width:100%}.room-layout aside{grid-template-columns:1fr}.score-card,.rules-card,.sidebar-log{display:block;grid-column:1}}

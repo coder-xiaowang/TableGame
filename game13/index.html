@@ -10,9 +10,21 @@
 </head>
 <body>
 <main class="shell">
-  <header class="hero">
-    <div><p class="eyebrow">SERVER AUTHORITATIVE · MEMORY CARD GAME</p><h1>CA<span>BO</span></h1><p>记住低点数，隐藏你的判断，在正确的时刻宣布 CABO。</p></div>
-    <div class="status" id="connectionStatus">准备连接</div>
+  <header id="hero" class="hero">
+    <div class="hero-title"><p class="eyebrow">SERVER AUTHORITATIVE · MEMORY CARD GAME</p><h1>CA<span>BO</span></h1><p>记住低点数，隐藏你的判断，在正确的时刻宣布 CABO。</p></div>
+    <div class="hero-meta">
+      <div class="status" id="connectionStatus">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay" class="room-code">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始游戏</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" type="button" class="small hidden"></button>
+      </section>
+    </div>
   </header>
 
   <section id="setupPanel" class="setup-wrap">
@@ -37,25 +49,35 @@
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
-    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-      <button id="seatActionButton" type="button" class="hidden"></button>
-    </div>
     <aside>
-      <div class="panel room-card"><p class="eyebrow">ROOM CODE</p><div id="roomCodeDisplay" class="room-code">----</div>
-        <div id="hostTools" class="host-tools hidden">
-          <label>本房人数<select id="roomPlayerCountSelect"><option>2</option><option>3</option><option>4</option></select></label>
-          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
-          <button id="startGameButton" class="primary">开始游戏</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+      <div class="panel score-card"><p class="eyebrow">SCOREBOARD</p><div id="scoreboard"></div></div>
+      <details class="panel rules-card">
+        <summary><span><span class="eyebrow">2019 SECOND EDITION</span><b>详细CABO规则</b></span><span class="fold-hint">展开</span></summary>
+        <div class="rule-details">
+          <h3>目标与初始记忆</h3>
+          <p>2～4人，每人面前有4张固定顺序的背面牌。开局秘密查看自己的任意2张并记住数值；目标是让一轮结束时自己的牌面总和尽可能低。</p>
+          <h3>抽牌与交换</h3>
+          <p>回合中可以从牌库抽牌、拿取弃牌堆顶，或宣布CABO。牌库牌可以弃掉、发动能力或交换；拿取的弃牌堆明牌必须用于交换，并在新位置保持公开。</p>
+          <p>可以用新牌尝试替换多张相同数字。成功时新牌固定放在所选位置中最靠左的一处；失败则公开所选牌，选择至少3张失败时还会获得一张不可查看的惩罚牌，再选择把新增牌放在最左或最右侧。</p>
+          <h3>能力牌</h3>
+          <ul>
+            <li><b>7～8 PEEK：</b>秘密查看自己一张背面牌。</li>
+            <li><b>9～10 SPY：</b>秘密查看对手一张背面牌。</li>
+            <li><b>11～12 SWAP：</b>交换自己和对手各一张牌，不查看牌值。</li>
+          </ul>
+          <p>能力仅在从牌库抽到后主动弃掉时发动。SPY或SWAP的目标玩家会知道被操作的具体牌位，但不会因此获得牌值。</p>
+          <h3>CABO与轮末结算</h3>
+          <p>宣布CABO后，其他玩家各获得最后一个回合。宣布者若为最低或并列最低得0分，否则牌面总和再加10分；其他玩家按牌面总和计分。牌库耗尽时，在当前待处理动作完成后结束本轮。</p>
+          <p>恰好持有两张12和两张13构成Kamikaze：该玩家得0分，其他玩家各得50分。玩家首次累计恰好100分时重置为50；有人超过100分后，累计分最低者赢得整局。</p>
+          <h3>隐藏信息</h3>
+          <p>普通回合限时45秒，抽牌后决策30秒，能力目标选择20秒，初始查看选择30秒，临时亮牌5秒。合法查看只向执行者显示，随后重新盖住；其他玩家和旁观者不会获得初始记忆、抽牌、技能查看结果或隐藏牌值。</p>
         </div>
-      </div>
+      </details>
+      <div class="panel log-panel sidebar-log"><div class="action-head"><div><p class="eyebrow">JOURNEY NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></div>
       <details id="spectatorPanel" class="panel spectator-panel hidden" open>
         <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
-      <div class="panel score-card"><p class="eyebrow">SCOREBOARD</p><div id="scoreboard"></div></div>
-      <div class="panel rules-card"><p class="eyebrow">2019 SECOND EDITION</p><small>2～4人 · CABO失败 +10<br>牌库耗尽结束本轮<br>首次恰好100分降至50<br>超过100分时结束整局</small></div>
-      <div class="panel log-panel sidebar-log"><div class="action-head"><div><p class="eyebrow">JOURNEY NOTES</p><h2>牌局记录</h2></div><button id="toggleLogButton" class="small">展开</button></div><div id="logList" class="log collapsed"></div></div>
     </aside>
 
     <section class="game-area">

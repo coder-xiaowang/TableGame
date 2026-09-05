@@ -79,6 +79,6 @@ test("game13 serializes concurrent competition for the last player seat",async(c
 
 test("game13 page uses the shared spectator UI and a fixed read-only table view",()=>{
   const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8");const script=fs.readFileSync(path.join(__dirname,"app.js"),"utf8");const styles=fs.readFileSync(path.join(__dirname,"styles.css"),"utf8");
-  assert.match(html,/name="joinIntent" value="play"/);assert.match(html,/name="joinIntent" value="spectate"/);assert.match(html,/id="roomRoleBanner"/);assert.match(html,/id="spectatorList"/);assert.match(html,/shared\/styles\/spectator\.css/);
+  assert.match(html,/name="joinIntent" value="play"/);assert.match(html,/name="joinIntent" value="spectate"/);assert.match(html,/id="roomHeaderTools"/);assert.match(html,/id="seatActionButton"/);assert.doesNotMatch(html,/id="roomRoleBanner"/);assert.match(html,/id="spectatorList"/);assert.match(html,/shared\/styles\/spectator\.css/);
   assert.match(script,/createSpectatorUi/);assert.match(script,/spectatorUi\.render\(view\)/);assert.match(script,/memberRole==="spectator"/);assert.match(script,/aria-disabled/);assert.match(script,/\["self","left","top","right"\]/);assert.match(styles,/spectator-action-note/);
 });
