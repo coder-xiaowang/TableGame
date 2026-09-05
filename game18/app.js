@@ -36,6 +36,7 @@ let mode = "host";
 let view = null;
 let selectedCardId = null;
 let spectatorUi = null;
+let pendingInitialTargetScore = null;
 
 const sessions = createSessionStore({ gameId: "dancing-criminal" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -50,6 +51,7 @@ const room = createAuthoritativeRoomClient({
       if (!ownIds.has(selectedCardId)) selectedCardId = null;
       enterRoom();
       render();
+      applyPendingInitialSettings();
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
@@ -76,6 +78,15 @@ function submit(action) {
   });
 }
 
+function applyPendingInitialSettings() {
+  if (pendingInitialTargetScore == null || view?.phase !== "lobby" || !view.permissions?.canSetTargetScore) return;
+  const self = view.players.find((player) => player.id === view.selfId);
+  if (!self?.connected) return;
+  const targetScore = pendingInitialTargetScore;
+  pendingInitialTargetScore = null;
+  if (view.targetScore !== targetScore) submit({ type: "setTargetScore", targetScore });
+}
+
 function enterRoom() {
   setHidden(E.setupPanel, true);
   setHidden(E.roomPanel, false);
@@ -84,10 +95,11 @@ function enterRoom() {
 
 async function createGameRoom() {
   E.createRoomButton.disabled = true;
+  pendingInitialTargetScore = Number(E.targetScoreSelect.value);
   try {
     await room.createRoom({ name: cleanPlayerName(E.hostNameInput.value, "房主"), capacity: Number(E.playerCountSelect.value) });
-    await room.submitAction({ type: "setTargetScore", targetScore: Number(E.targetScoreSelect.value) });
   } catch (error) {
+    pendingInitialTargetScore = null;
     alert(`创建失败：${error.message}\n请确认已启动 game18 服务。`);
   } finally {
     E.createRoomButton.disabled = false;

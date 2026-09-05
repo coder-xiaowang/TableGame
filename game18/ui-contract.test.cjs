@@ -20,6 +20,8 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   assert.match(html, /id="privateZone" class="panel hand-dock"/);
   assert.match(script, /createSpectatorUi/);
   assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
+  assert.match(script, /if \(!self\?\.connected\) return;/);
+  assert.match(script, /if \(view\.targetScore !== targetScore\) submit\(\{ type: "setTargetScore", targetScore \}\);/);
   assert.match(styles, /\.center-action\s*\{[\s\S]*?position: absolute;[\s\S]*?top: 50%;[\s\S]*?left: 50%/);
   assert.match(styles, /\.hand-dock\s*\{ position: sticky;/);
   assert.match(styles, /@media \(max-width: 760px\)/);
