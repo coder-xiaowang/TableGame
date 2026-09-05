@@ -12,10 +12,18 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   const boardStart = html.indexOf('<section class="case-board">');
   const boardEnd = html.indexOf("</section>", html.indexOf('id="controlDock"'));
   const dockAt = html.indexOf('id="controlDock"');
+  const heroEnd = html.indexOf("</header>");
+  const roomToolsAt = html.indexOf('id="roomHeaderTools"');
+  const logAt = html.indexOf('class="panel log-card"');
+  const spectatorAt = html.indexOf('id="spectatorPanel"');
 
   assert.match(html, /name="joinIntent" value="spectate"/);
-  assert.match(html, /id="roomRoleBanner"/);
+  assert.doesNotMatch(html, /id="roomRoleBanner"/);
   assert.match(html, /id="spectatorList"/);
+  assert.ok(roomToolsAt >= 0 && roomToolsAt < heroEnd, "房间设置必须合并进标题区域");
+  assert.match(html, /<details class="panel rule-card">/);
+  assert.doesNotMatch(html, /<details class="panel rule-card" open>/);
+  assert.ok(logAt >= 0 && spectatorAt > logAt, "旁观席必须位于调查记录之后");
   assert.ok(boardStart >= 0 && dockAt > boardStart && dockAt < boardEnd, "当前行动模块必须位于圆桌内部");
   assert.match(html, /id="privateZone" class="panel hand-dock"/);
   assert.match(script, /createSpectatorUi/);

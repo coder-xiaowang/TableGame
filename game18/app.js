@@ -24,9 +24,9 @@ const CARD_META = {
 };
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
-  "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput",
+  "hero", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput",
   "playerCountSelect", "targetScoreSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools",
-  "roomPlayerCountSelect", "roomTargetScoreSelect", "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton",
+  "roomPlayerCountSelect", "roomTargetScoreSelect", "spectatorSettingButton", "seatActionButton",
   "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton", "notice", "caseText", "roundNumber",
   "targetScoreLabel", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "discardCount", "discardPile",
   "privateZone", "myHand", "toggleLogButton", "logList"
@@ -62,8 +62,7 @@ spectatorUi = createSpectatorUi({
   room,
   getView: () => view,
   elements: {
-    joinIntentField: E.joinIntentField, roomRoleBanner: E.roomRoleBanner, roomRoleTitle: E.roomRoleTitle, roomRoleHint: E.roomRoleHint,
-    seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton, spectatorPanel: E.spectatorPanel,
+    joinIntentField: E.joinIntentField, seatActionButton: E.seatActionButton, spectatorSettingButton: E.spectatorSettingButton, spectatorPanel: E.spectatorPanel,
     spectatorCountBadge: E.spectatorCountBadge, spectatorList: E.spectatorList
   },
   notify: (message) => alert(message),
@@ -90,6 +89,8 @@ function applyPendingInitialSettings() {
 function enterRoom() {
   setHidden(E.setupPanel, true);
   setHidden(E.roomPanel, false);
+  setHidden(E.roomHeaderTools, false);
+  E.hero.classList.add("in-room");
   E.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }
 

@@ -62,7 +62,16 @@ h1 { margin-bottom: 8px; font-family: Georgia, "Noto Serif SC", serif; font-size
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px clamp(18px,4vw,54px) 10px; }
 .hero h1 { font-size: clamp(2rem,4vw,3.4rem); }
 .hero p:last-child { margin-bottom: 0; color: var(--muted); }
+.hero.in-room { padding-top: 10px; padding-bottom: 4px; }
+.hero.in-room .hero-title { display: flex; align-items: baseline; gap: 12px; }
+.hero.in-room .hero-title .eyebrow, .hero.in-room .hero-title > p:last-child { display: none; }
+.hero.in-room h1 { margin: 0; font-size: clamp(1.45rem,2.7vw,2.2rem); white-space: nowrap; }
+.hero-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .connection-status { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,250,240,.86); }
+.room-header-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 8px; border: 1px solid rgba(176,139,80,.34); border-radius: 15px; background: rgba(255,250,240,.9); box-shadow: 0 6px 18px rgba(71,51,34,.08); }
+.room-identity { display: flex; align-items: baseline; gap: 7px; padding: 0 6px; color: var(--muted); font-size: .72rem; }
+.room-header-tools .room-code { margin: 0; font-size: 1.35rem; letter-spacing: .12em; }
+.room-header-tools button { min-height: 34px; padding: .4rem .65rem; border-radius: 9px; font-size: .76rem; }
 .setup-wrap { width: min(100% - 28px,560px); margin: 20px auto; }
 .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; padding: 5px; border-radius: 16px; background: rgba(255,250,240,.66); }
 .mode-tabs button:not(.active) { color: var(--muted); background: transparent; }
@@ -71,10 +80,7 @@ h1 { margin-bottom: 8px; font-family: Georgia, "Noto Serif SC", serif; font-size
 .setup-actions, .button-row, .spectator-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .setup-actions button { flex: 1 1 150px; }
 
-.app-shell, .room-layout { display: grid; grid-template-columns: 280px minmax(0,1fr); gap: 18px; min-height: 100vh; padding: 18px; }
-.room-role-banner { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-radius: 14px; background: rgba(255,250,240,.88); }
-.room-role-banner div { display: flex; gap: 8px; }
-.room-role-banner span { color: var(--muted); }
+.app-shell, .room-layout { display: grid; grid-template-columns: 280px minmax(0,1fr); gap: 14px; min-height: calc(100vh - 68px); padding: 10px 18px 18px; }
 .sidebar { display: flex; flex-direction: column; gap: 14px; }
 .panel, .topbar, .hand-dock {
   border: 1px solid rgba(176,139,80,.34);
@@ -220,12 +226,30 @@ button.card { color: #543c25; }
 .target-list button { padding: .62rem .7rem; }
 .log { max-height: 230px; overflow: auto; }
 .log-item { padding: 7px 0; border-bottom: 1px dashed rgba(121,95,67,.18); color: var(--muted); font-size: .82rem; }
-.host-tools { display: grid; gap: 8px; }
-.host-tools label { margin: 0; }
+.host-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.host-tools label { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--muted); font-size: .72rem; }
+.host-tools select { width: auto; min-width: 64px; height: 34px; padding: .25rem 1.55rem .25rem .5rem; border-radius: 8px; }
+.rule-card { padding: 0; }
+.rule-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.rule-card > summary::-webkit-details-marker { display: none; }
+.rule-card > summary .eyebrow { display: block; margin-bottom: 3px; }
+.rule-card .fold-hint { color: var(--muted); font-size: .76rem; }
+.rule-card .fold-hint::before { content: "＋ "; }
+.rule-card[open] .fold-hint::before { content: "－ "; }
+.rule-card[open] .fold-hint { font-size: 0; }
+.rule-card[open] .fold-hint::after { content: "收起"; font-size: .76rem; }
+.rule-details { max-height: 58vh; overflow: auto; padding: 0 16px 16px; border-top: 1px dashed rgba(121,95,67,.2); }
+.rule-details h3 { margin: 15px 0 6px; color: var(--red-dark); font-size: .9rem; }
+.rule-details p, .rule-details li { color: var(--muted); font-size: .8rem; line-height: 1.65; }
+.rule-details p { margin-bottom: 8px; }
+.rule-details ul { margin: 0; padding-left: 1.15rem; }
 .spectator-panel summary { cursor: pointer; }
 
 @media (max-width: 1120px) {
-  .app-shell, .room-layout { grid-template-columns: 230px minmax(0,1fr); }
+  .app-shell, .room-layout { grid-template-columns: 240px minmax(0,1fr); }
+  .hero.in-room { align-items: flex-start; }
+  .hero.in-room .hero-meta { flex: 1; }
+  .room-header-tools { justify-content: flex-end; }
   .case-board { min-height: 680px; }
   .player-seat { width: 150px; transform: translate(-50%,-50%) rotate(var(--seat-angle)) translateY(-260px) rotate(var(--seat-counter)); }
   .center-action { width: min(42%,390px); }
@@ -233,9 +257,12 @@ button.card { color: #543c25; }
 
 @media (max-width: 760px) {
   .app-shell, .room-layout { display: flex; flex-direction: column; padding: 10px; }
-  .hero { padding: 14px 12px 4px; }
+  .hero { align-items: flex-start; padding: 14px 12px 4px; }
   .hero > div:first-child > p:last-child { display: none; }
-  .room-role-banner { order: 0; }
+  .hero.in-room { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px; }
+  .hero.in-room .hero-meta { min-width: 0; }
+  .room-header-tools { width: 100%; justify-content: flex-end; }
+  .host-tools { justify-content: flex-end; }
   .sidebar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); order: 2; }
   .game-main { order: 1; }
   .topbar { position: sticky; top: 6px; z-index: 15; margin-bottom: 9px; padding: 10px 12px; }
@@ -251,6 +278,16 @@ button.card { color: #543c25; }
 
 @media (max-width: 520px) {
   .setup-card { padding: 24px 18px; }
+  .hero.in-room { grid-template-columns: 1fr; }
+  .hero.in-room .hero-title { display: none; }
+  .hero-meta { justify-content: stretch; }
+  .connection-status { margin-left: auto; }
+  .room-header-tools { justify-content: flex-start; }
+  .room-identity { flex: 1 1 auto; }
+  .host-tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .host-tools label { min-width: 0; }
+  .host-tools select { flex: 1; min-width: 0; }
+  .host-tools button { width: 100%; }
   .sidebar { grid-template-columns: 1fr; }
   .players { grid-template-columns: 1fr; }
   .player-seat { display: grid; grid-template-columns: minmax(100px,.8fr) 1.2fr; align-items: center; min-height: 70px; }

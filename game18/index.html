@@ -10,9 +10,23 @@
 </head>
 <body>
 <main class="shell">
-  <header class="hero">
-    <div><p class="eyebrow">DANCING CRIMINAL · SERVER AUTHORITY</p><h1>犯人在跳舞</h1><p>交换手中的线索，追踪那张不断移动的犯人牌。</p></div>
-    <div id="connectionStatus" class="connection-status">准备连接</div>
+  <header id="hero" class="hero">
+    <div class="hero-title"><p class="eyebrow">DANCING CRIMINAL · SERVER AUTHORITY</p><h1>犯人在跳舞</h1><p>交换手中的线索，追踪那张不断移动的犯人牌。</p></div>
+    <div class="hero-meta">
+      <div id="connectionStatus" class="connection-status">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay" class="room-code">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+          <label><span>目标</span><select id="roomTargetScoreSelect"><option value="5">5分</option><option value="10">10分</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始调查</button>
+          <button id="restartGameButton" class="primary hidden">重新比赛</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" type="button" class="secondary small hidden"></button>
+      </section>
+    </div>
   </header>
 
   <section id="setupPanel" class="setup-wrap">
@@ -38,39 +52,43 @@
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
-    <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-      <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-      <button id="seatActionButton" type="button" class="hidden"></button>
-    </div>
-
     <aside class="sidebar">
-      <section class="panel room-card">
-        <p class="eyebrow">CASE ROOM</p><div id="roomCodeDisplay" class="room-code">----</div>
-        <div id="hostTools" class="host-tools hidden">
-          <label>本房人数<select id="roomPlayerCountSelect"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
-          <label>比赛目标<select id="roomTargetScoreSelect"><option value="5">先到5分</option><option value="10">先到10分</option></select></label>
-          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
-          <button id="startGameButton" class="primary">开始调查</button>
-          <button id="restartGameButton" class="primary hidden">重新比赛</button>
-          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+      <details class="panel rule-card">
+        <summary><span><span class="eyebrow">CASE NOTES</span><b>详细调查手册</b></span><span class="fold-hint">展开</span></summary>
+        <div class="rule-details">
+          <h3>目标与流程</h3>
+          <p>每人持有4张牌。第一发现者描述案件并公开该牌，之后按座位顺序每回合公开打出一张牌并结算。犯人牌会随着交换移动，当前持有者就是当前犯人。</p>
+          <p><b>犯人</b>只能作为最后一张手牌打出。成功打出即逃脱；侦探或神犬找到犯人则调查方获胜。</p>
+          <h3>调查与阵营牌</h3>
+          <ul>
+            <li><b>侦探：</b>自己第一圈打出无效，第二圈起指认一人；犯人持有不在场证明时可挡住指认。</li>
+            <li><b>神犬：</b>选择目标的一张随机牌背并公开；不受不在场证明保护。</li>
+            <li><b>目击者：</b>仅发动者查看目标的全部手牌，目标只知道自己被查看。</li>
+            <li><b>少年：</b>仅发动者知道当前犯人是谁，当前犯人知道自己已被认出。</li>
+            <li><b>共犯：</b>公开打出后加入犯人阵营，直到本轮结束。</li>
+            <li><b>不在场证明、普通人：</b>公开打出时没有主动效果。</li>
+          </ul>
+          <h3>移动牌</h3>
+          <ul>
+            <li><b>交易：</b>与目标各秘密选择一张，双方确认后同时交换。</li>
+            <li><b>情报交换：</b>所有有手牌者秘密选择一张，同时交给左侧玩家。</li>
+            <li><b>谣言：</b>每人从右侧玩家效果开始时的手牌中随机获得一张。</li>
+          </ul>
+          <h3>计分与时间</h3>
+          <p>侦探抓捕得2分，神犬抓捕得3分，其余清白玩家各1分；犯人逃脱时犯人与已公开共犯各2分。率先达到5分或10分且总分最高者获胜。</p>
+          <p>普通出牌45秒，目标和秘密选择30秒，查看20秒；超时由服务器执行合法默认操作。</p>
         </div>
-      </section>
-
-      <section class="panel rule-card">
-        <p class="eyebrow">CASE NOTES</p><h2>调查手册</h2>
-        <p><b>犯人</b>只能作为最后一张手牌打出；<b>侦探</b>从自己的第二圈开始有效。</p>
-        <p><b>不在场证明</b>能挡侦探，不能挡神犬。交易和情报交换都在所有人确认后同时结算。</p>
-      </section>
-
-      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
-        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
-        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
 
       <section class="panel log-card">
         <div class="section-head"><div><p class="eyebrow">CASE LOG</p><h2>调查记录</h2></div><button id="toggleLogButton" class="small">收起</button></div>
         <div id="logList" class="log"></div>
       </section>
+
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
     </aside>
 
     <section class="game-area">
@@ -111,4 +129,3 @@
 <script type="module" src="app.js"></script>
 </body>
 </html>
-
