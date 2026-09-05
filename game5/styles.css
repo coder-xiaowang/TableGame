@@ -699,9 +699,10 @@ select {
 .room-header-tools select { width: 60px; min-height: 31px; padding: 3px 5px; }
 .room-header-tools button { min-height: 31px; padding: 5px 9px; font-size: 11px; }
 .room-header-tools #seatActionButton { border-color: #d9b243; background: #fff0b2; color: #5d4100; }
+.room-header-tools .rules-shortcut { border-color: #d7ae36; background: #fff0a8; color: #573d00; }
 
 /* Rules and history are auxiliary information, leaving the main column to play. */
-.layout aside { position: sticky; top: 10px; max-height: calc(100vh - 20px); overflow: auto; scrollbar-gutter: stable; }
+.layout aside { position: static; max-height: none; overflow: visible; }
 .rules-card { padding: 0; overflow: hidden; }
 .rules-card summary, .spectator-panel summary { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 13px 14px; cursor: pointer; font-weight: 900; list-style: none; }
 .rules-card summary::-webkit-details-marker, .spectator-panel summary::-webkit-details-marker { display: none; }
@@ -816,6 +817,7 @@ select {
     overflow: hidden;
     border: 1px solid var(--line)
 }
+.layout aside > .rules-card { border-top: 3px solid #7134a0; }
 .layout aside > .rules-card summary,
 .layout aside > .spectator-panel summary {
     min-height: 50px;

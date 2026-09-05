@@ -23,10 +23,14 @@ test("game5 merges room controls into the UNO title bar",()=>{
 
 test("game5 removes the redundant player heading and folds full rules",()=>{
   assert.doesNotMatch(html,/players-panel-head/);
-  assert.match(html,/<details class="panel rules-card">/);
+  assert.match(html,/<details class="panel rules-card" id="rulesCard">/);
   assert.doesNotMatch(html,/<details class="panel rules-card"[^>]*\sopen(?:\s|>)/);
   assert.match(html,/质疑成功时出牌者摸 4 张/);
   assert.match(html,/其他玩家只公开手牌数量/);
+  assert.match(html,/id="rulesCard"/);
+  assert.match(html,/id="rulesShortcutButton"/);
+  assert.match(script,/E\.rulesCard\.open=true/);
+  assert.match(script,/E\.rulesCard\.scrollIntoView/);
 });
 
 test("game5 places history before spectators in the auxiliary column",()=>{
@@ -65,4 +69,5 @@ test("game5 auxiliary cards remain separate and single-column",()=>{
   assert.match(styles,/\.layout aside > \.rules-card,[\s\S]*?\.layout aside > \.spectator-panel \{/);
   assert.match(styles,/\.layout aside \{[\s\S]*?grid-template-columns: minmax\(0,1fr\)/);
   assert.match(styles,/\.layout aside > \.spectator-panel \.spectator-list/);
+  assert.match(styles,/\.layout aside \{ position: static; max-height: none; overflow: visible; \}/);
 });

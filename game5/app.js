@@ -11,7 +11,7 @@ const $=(id)=>document.getElementById(id);
 const E=Object.fromEntries([
   "siteHeader","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField",
-  "roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
+  "roomCodeDisplay","rulesShortcutButton","rulesCard","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
   "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
   "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
 ].map((id)=>[id,$(id)]));
@@ -145,6 +145,7 @@ async function init(){
   E.createRoomButton.addEventListener("click",createGameRoom);E.joinRoomButton.addEventListener("click",joinGameRoom);
   E.roomPlayerCountSelect.addEventListener("change",()=>submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)}));
   E.startGameButton.addEventListener("click",()=>submit({type:"start"}));E.endGameButton.addEventListener("click",endGame);
+  E.rulesShortcutButton.addEventListener("click",()=>{E.rulesCard.open=true;E.rulesCard.scrollIntoView({behavior:"smooth",block:"start"});});
   E.unoButton.addEventListener("click",()=>submit({type:"callUno"}));E.toggleLogButton.addEventListener("click",()=>E.logList.classList.toggle("collapsed"));
   E.cancelColorButton.addEventListener("click",()=>{pendingCardId=null;setHidden(E.colorModal,true);});
   E.colorModal.querySelectorAll("[data-color]").forEach((button)=>button.addEventListener("click",()=>{if(pendingCardId)submit({type:"play",cardId:pendingCardId,color:button.dataset.color});pendingCardId=null;setHidden(E.colorModal,true);}));

@@ -20,6 +20,7 @@
                 <div class="status" id="connectionStatus">准备连接</div>
                 <div class="room-header-tools hidden" id="roomHeaderTools">
                     <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+                    <button id="rulesShortcutButton" class="rules-shortcut" type="button">查看规则</button>
                     <div id="hostTools" class="host-tools hidden"><label>人数<select id="roomPlayerCountSelect">
                                 <option>2</option><option>3</option><option>4</option>
                                 <option>5</option><option>6</option>
@@ -62,7 +63,7 @@
         </section>
         <section class="layout hidden" id="roomPanel">
             <aside>
-                <details class="panel rules-card">
+                <details class="panel rules-card" id="rulesCard">
                     <summary><span>详细规则</span><b>展开查看</b></summary>
                     <div class="rule-details">
                         <h3>开局与目标</h3>
