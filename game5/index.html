@@ -11,12 +11,23 @@
 
 <body>
     <main class="shell">
-        <header>
-            <div>
+        <header id="siteHeader">
+            <div class="header-title">
                 <p class="eyebrow">ONLINE CARD GAME</p>
                 <h1><i>U</i><i>N</i><i>O</i></h1>
             </div>
-            <div class="status" id="connectionStatus">准备连接</div>
+            <div class="header-meta">
+                <div class="status" id="connectionStatus">准备连接</div>
+                <div class="room-header-tools hidden" id="roomHeaderTools">
+                    <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+                    <div id="hostTools" class="host-tools hidden"><label>人数<select id="roomPlayerCountSelect">
+                                <option>2</option><option>3</option><option>4</option>
+                                <option>5</option><option>6</option>
+                            </select></label><button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button><button class="primary" id="startGameButton">开始游戏</button><button
+                            class="challenge hidden" id="endGameButton">结束当前游戏</button></div>
+                    <button id="seatActionButton" type="button" class="small hidden"></button>
+                </div>
+            </div>
         </header>
         <section id="setupPanel">
             <div class="modes"><button class="mode active"
@@ -50,26 +61,29 @@
             </div>
         </section>
         <section class="layout hidden" id="roomPanel">
-            <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-                <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-                <button id="seatActionButton" type="button" class="hidden"></button>
-            </div>
             <aside>
-                <div class="panel">
-                    <p class="eyebrow">ROOM CODE</p>
-                    <div class="room-code" id="roomCodeDisplay">----</div>
-                    <div id="hostTools" class="hidden"><label>本房人数<select id="roomPlayerCountSelect">
-                                <option>2</option>
-                                <option>3</option>
-                                <option>4</option>
-                                <option>5</option>
-                                <option>6</option>
-                            </select></label><button id="spectatorSettingButton" class="wide hidden" type="button" aria-pressed="true">旁观：开放</button><button class="primary wide" id="startGameButton">开始游戏</button><button
-                            class="challenge wide hidden" id="endGameButton">结束当前游戏</button></div>
-                </div>
-                <div class="panel rules">
-                    <p class="eyebrow">HOUSE RULES</p>
-                    <p>单轮决胜 · 初始7张<br>+2 / +4 可混合叠加<br>主动喊UNO与抓UNO<br>每回合限时15秒</p>
+                <details class="panel rules-card">
+                    <summary><span>详细规则</span><b>展开查看</b></summary>
+                    <div class="rule-details">
+                        <h3>开局与目标</h3>
+                        <p>支持 2～6 人，使用 108 张牌。每人初始 7 张，首张弃牌固定为数字牌。第一位打完手牌且所有待结算的万能 +4 已处理完毕的玩家立即获胜，本版只进行单局。</p>
+                        <h3>合法出牌</h3>
+                        <p>可以按当前颜色、相同数字或相同功能出牌，万能牌始终可出并必须选择颜色。主动摸牌只摸 1 张：若摸到的牌可出，只能立即打出该牌或保留并结束回合；摸到不可出的牌会自动结束回合。</p>
+                        <h3>功能牌与罚牌链</h3>
+                        <p>禁止牌跳过下一人；反转牌改变方向，两人局中同时相当于跳过对手。+2 与 +4 可以混合叠加；存在罚牌链时只能继续打这两类牌，或者接受累计罚牌。</p>
+                        <h3>质疑 +4</h3>
+                        <p>玩家仍持有当前颜色牌时打出 +4 属于非法，但系统允许先打出。质疑成功时出牌者摸 4 张，本张 +4 从罚牌链中移除；质疑失败时质疑者摸取累计罚牌并额外摸 2 张，然后跳过回合。</p>
+                        <h3>UNO 与计时</h3>
+                        <p>玩家可在出牌前主动喊 UNO；手牌降至 1 张但未喊时，其他玩家可在下一次有效摸牌或出牌前抓 UNO，使其摸 2 张。每次行动限时 15 秒；超时有罚牌时自动接受，否则自动摸 1 张并结束回合。</p>
+                        <h3>信息边界</h3>
+                        <p>每人只能看到自己的牌面，其他玩家只公开手牌数量。牌堆、私密手牌、+4 合法性、UNO 抢喊、倒计时和胜负全部由服务器判定。</p>
+                    </div>
+                </details>
+                <div class="panel log-panel">
+                    <div class="action-head">
+                        <h2>牌局记录</h2><button class="small" id="toggleLogButton">展开 / 收起</button>
+                    </div>
+                    <div class="log" id="logList"></div>
                 </div>
                 <details id="spectatorPanel" class="panel spectator-panel hidden" open>
                     <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
@@ -79,10 +93,6 @@
             <section class="main">
                 <div class="notice" id="notice">等待玩家加入。</div>
                 <div class="panel players-panel">
-                    <div class="players-panel-head">
-                        <p class="eyebrow">PLAYERS</p>
-                        <span>玩家席位</span>
-                    </div>
                     <div class="players" id="players"></div>
                 </div>
                 <div class="table panel">
@@ -113,12 +123,6 @@
                         </div><button class="uno-button" id="unoButton" disabled>喊 UNO！</button>
                     </div>
                     <div class="hand" id="hand"></div>
-                </div>
-                <div class="panel log-panel">
-                    <div class="action-head">
-                        <h2>牌局记录</h2><button class="small" id="toggleLogButton">展开 / 收起</button>
-                    </div>
-                    <div class="log" id="logList"></div>
                 </div>
             </section>
         </section>

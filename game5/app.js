@@ -9,9 +9,9 @@ import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
 const PROTOCOL_VERSION=3;
 const $=(id)=>document.getElementById(id);
 const E=Object.fromEntries([
-  "connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
+  "siteHeader","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField",
-  "roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
+  "roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
   "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
   "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
 ].map((id)=>[id,$(id)]));
@@ -34,11 +34,11 @@ const room=createAuthoritativeRoomClient({
 
 spectatorUi=createSpectatorUi({
   room,getView:()=>view,
-  elements:{joinIntentField:E.joinIntentField,roomRoleBanner:E.roomRoleBanner,roomRoleTitle:E.roomRoleTitle,roomRoleHint:E.roomRoleHint,seatActionButton:E.seatActionButton,spectatorSettingButton:E.spectatorSettingButton,spectatorPanel:E.spectatorPanel,spectatorCountBadge:E.spectatorCountBadge,spectatorList:E.spectatorList},
+  elements:{joinIntentField:E.joinIntentField,seatActionButton:E.seatActionButton,spectatorSettingButton:E.spectatorSettingButton,spectatorPanel:E.spectatorPanel,spectatorCountBadge:E.spectatorCountBadge,spectatorList:E.spectatorList},
   notify:(message)=>alert(message),confirmAction:(message)=>confirm(message),onSessionEnded:()=>location.reload()
 });
 
-function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.hostTools,!view?.permissions?.canManage);E.roomCodeDisplay.textContent=room.snapshot().roomCode;}
+function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.roomHeaderTools,false);E.siteHeader.classList.add("in-room");setHidden(E.hostTools,!view?.permissions?.canManage);E.roomCodeDisplay.textContent=room.snapshot().roomCode;}
 function selectMode(nextMode){mode=nextMode;setModeVisibility(mode,{hostSetup:E.hostSetup,guestSetup:E.guestSetup,hostTools:E.hostTools,hostButton:E.hostModeButton,guestButton:E.guestModeButton});}
 async function createGameRoom(){
   E.createRoomButton.disabled=true;

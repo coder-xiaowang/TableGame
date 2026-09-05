@@ -222,41 +222,6 @@ select {
     padding: 10px 12px
 }
 
-.players-panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 7px
-}
-
-.players-panel-head .eyebrow {
-    margin: 0
-}
-
-.players-panel-head span {
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 900
-}
-
-.room-code {
-    margin: 5px 0 10px;
-    padding: 9px;
-    border-radius: 10px;
-    background: #221b2a;
-    color: #fff;
-    font-size: 29px;
-    font-weight: 900;
-    letter-spacing: .16em;
-    text-align: center
-}
-
-.rules p:last-child {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.65
-}
-
 .table {
     grid-column: 1;
     grid-row: 3/6;
@@ -683,9 +648,6 @@ select {
         grid-template-columns: 1fr 1fr
     }
 
-    .rules {
-        min-height: 100%
-    }
 }
 
 @media(max-width:520px) {
@@ -720,4 +682,53 @@ select {
     }
 }
 .spectator-action-note{line-height:1.6}
-.layout>.room-role-banner{grid-column:1/-1}
+
+/* Compact room chrome: room management stays beside the UNO title. */
+#siteHeader.in-room { margin-bottom: 9px; }
+#siteHeader.in-room h1 { font-size: 36px; }
+.header-meta { display: flex; align-items: flex-end; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.room-header-tools {
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap;
+    padding: 5px; border: 1px solid #8e70a7; border-radius: 13px;
+    background: rgba(47,38,56,.92); box-shadow: 0 9px 25px #0004; backdrop-filter: blur(9px)
+}
+.room-identity { display: flex; align-items: center; gap: 6px; padding: 0 7px; color: #d7c9df; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.room-identity strong { color: #f2c335; font: 900 19px/1 monospace; letter-spacing: .14em; }
+.room-header-tools .host-tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.room-header-tools .host-tools label { display: flex; align-items: center; gap: 4px; color: #e7dceb; font-size: 10px; }
+.room-header-tools select { width: 60px; min-height: 31px; padding: 3px 5px; }
+.room-header-tools button { min-height: 31px; padding: 5px 9px; font-size: 11px; }
+.room-header-tools #seatActionButton { border-color: #d9b243; background: #fff0b2; color: #5d4100; }
+
+/* Rules and history are auxiliary information, leaving the main column to play. */
+.layout aside { position: sticky; top: 10px; max-height: calc(100vh - 20px); overflow: auto; scrollbar-gutter: stable; }
+.rules-card { padding: 0; overflow: hidden; }
+.rules-card summary, .spectator-panel summary { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 13px 14px; cursor: pointer; font-weight: 900; list-style: none; }
+.rules-card summary::-webkit-details-marker, .spectator-panel summary::-webkit-details-marker { display: none; }
+.rules-card summary::after { content: "＋"; color: var(--purple); font-size: 18px; }
+.rules-card[open] summary::after { content: "−"; }
+.rules-card summary b { margin-left: auto; color: var(--muted); font-size: 10px; }
+.rule-details { display: grid; gap: 8px; max-height: min(52vh,470px); padding: 0 14px 14px; overflow: auto; color: var(--muted); font-size: 11px; line-height: 1.65; }
+.rule-details h3 { margin: 4px 0 0; color: var(--ink); font-size: 12px; }
+.rule-details p { margin: 0; }
+.layout aside .log-panel { min-height: 0; }
+.layout aside .log { max-height: 210px; }
+.players-panel { padding-block: 8px; }
+
+@media(max-width:720px) {
+    .layout { display: flex; flex-direction: column; }
+    .layout > .main { order: 1; }
+    .layout > aside { order: 2; position: static; max-height: none; overflow: visible; }
+    #siteHeader.in-room { display: grid; grid-template-columns: minmax(0,1fr); gap: 7px; }
+    #siteHeader.in-room .header-meta { align-items: stretch; justify-content: flex-start; }
+    #siteHeader.in-room .room-header-tools { justify-content: flex-start; }
+}
+@media(max-width:520px) {
+    #siteHeader.in-room .header-title { display: none; }
+    #siteHeader.in-room .header-meta { width: 100%; }
+    #siteHeader.in-room .status { max-width: 100%; align-self: flex-start; }
+    .room-header-tools { width: 100%; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 5px; }
+    .room-header-tools .host-tools { justify-content: flex-start; }
+    .room-header-tools #seatActionButton { grid-column: 1/-1; width: 100%; }
+    .rule-details { max-height: none; }
+}
