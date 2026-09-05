@@ -70,4 +70,5 @@ test("game5 auxiliary cards remain separate and single-column",()=>{
   assert.match(styles,/\.layout aside \{[\s\S]*?grid-template-columns: minmax\(0,1fr\)/);
   assert.match(styles,/\.layout aside > \.spectator-panel \.spectator-list/);
   assert.match(styles,/\.layout aside \{ position: static; max-height: none; overflow: visible; \}/);
+  assert.match(styles,/\.layout aside > \.rules-card,[\s\S]*?grid-column: 1;[\s\S]*?grid-row: auto;/);
 });
