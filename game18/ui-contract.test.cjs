@@ -37,7 +37,10 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   assert.match(styles, /\.player-seat \{ position: static;[\s\S]*?transform: none;/);
   assert.match(styles, /@media \(max-width: 520px\)/);
   assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\)[\s\S]*?width: 72px/);
-  assert.match(styles, /translateY\(calc\(-1 \* clamp\(190px,22vw,260px\)\)\)/);
+  assert.match(script, /const leftCount = Math\.floor\(orderedPlayers\.length \/ 2\)/);
+  assert.match(script, /data-seat-side="\$\{side\}"/);
+  assert.match(styles, /\.player-seat\[data-seat-side="left"\][\s\S]*?left: 18px/);
+  assert.match(styles, /\.player-seat\[data-seat-side="right"\][\s\S]*?right: 18px/);
   assert.match(styles, /\.discard-zone, \.discard-area\s*\{[\s\S]*?top: 43%/);
   assert.equal(fs.existsSync(path.join(__dirname, "assets", "detective-case-board-v2.png")), true);
 });

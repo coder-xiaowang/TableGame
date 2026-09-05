@@ -143,9 +143,14 @@ function renderPlayers() {
   E.players.dataset.count = String(view.players.length);
   const ownIndex = view.players.findIndex((player) => player.id === view.selfId);
   const orderedPlayers = ownIndex < 0 ? view.players : [...view.players.slice(ownIndex), ...view.players.slice(0, ownIndex)];
+  const leftCount = Math.floor(orderedPlayers.length / 2);
+  const rightCount = orderedPlayers.length - leftCount;
   E.players.innerHTML = orderedPlayers.map((player, index) => {
-    const angle = 180 + index * 360 / orderedPlayers.length;
-    return `<article class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""}" style="--seat-angle:${angle}deg;--seat-counter:${-angle}deg">
+    const side = index < leftCount ? "left" : "right";
+    const sideIndex = side === "left" ? index : index - leftCount;
+    const sideCount = side === "left" ? leftCount : rightCount;
+    const y = sideCount === 1 ? 50 : 8 + 84 * (sideIndex + .5) / sideCount;
+    return `<article data-seat-side="${side}" class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""}" style="--seat-y:${y}%">
       <header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header>
       <div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div>
       <div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>

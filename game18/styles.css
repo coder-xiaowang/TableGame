@@ -626,3 +626,27 @@ button.card { color: #373432; }
   .hand-strip .game-card:not(.compact) { flex-basis: 64px; width: 64px; min-width: 64px; min-height: 82px; }
   .discard-zone, .discard-area { padding: 8px; }
 }
+
+/* Stable desktop seating: two edge columns, with the extra odd seat on the right. */
+@media (min-width: 761px) {
+  .players {
+    position: absolute;
+    inset: 108px 0 112px;
+    display: block;
+    pointer-events: none;
+  }
+  .player-seat,
+  .players[data-count] > .player-seat:nth-child(n) {
+    position: absolute;
+    top: var(--seat-y);
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: clamp(140px,15vw,190px);
+    min-height: 102px;
+    transform: translateY(-50%);
+    pointer-events: auto;
+  }
+  .players[data-count] > .player-seat[data-seat-side="left"] { left: 18px; right: auto; }
+  .players[data-count] > .player-seat[data-seat-side="right"] { right: 18px; left: auto; }
+}
