@@ -55,6 +55,23 @@ button.small { min-height: 34px; padding: 5px 10px; font-size: .8rem; }
 .court-panel { position: relative; min-height: 640px; overflow: hidden; border: 1px solid rgba(240,211,150,.45); border-radius: 30px; background: radial-gradient(circle at 50% 48%, rgba(231,200,123,.22) 0 12%, transparent 12.5%), repeating-radial-gradient(circle at 50% 50%, transparent 0 88px, rgba(255,228,171,.07) 89px 91px), linear-gradient(145deg, #3c1822, #682635 52%, #35141d); box-shadow: inset 0 0 90px rgba(0,0,0,.35), var(--shadow); }
 .court-panel::after { content: ""; position: absolute; inset: 16px; pointer-events: none; border: 1px solid rgba(234,197,113,.32); border-radius: 23px; }
 .court-center { position: absolute; z-index: 2; left: 50%; top: 50%; display: grid; justify-items: center; width: 150px; padding: 18px; transform: translate(-50%,-50%); border: 1px solid rgba(240,209,140,.45); border-radius: 50%; color: #f6dc9c; background: rgba(33,10,16,.72); box-shadow: 0 0 45px rgba(244,196,86,.16); }.court-center .crown { font-size: 2rem; }.court-center strong { font: 2.2rem Georgia, serif; }.court-center small { opacity: .7; }
+.court-effects { position: absolute; z-index: 12; inset: 0; overflow: hidden; pointer-events: none; }
+.moment-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.moment-trail { fill: none; stroke: #f5d477; stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(255,210,91,.95)); opacity: 0; }
+.moment-trail-layer marker path { fill: #f5d477; filter: drop-shadow(0 0 4px rgba(255,210,91,.8)); }
+.moment-trail.active { opacity: 1; stroke-dasharray: 14 9; animation: moment-travel 1.15s ease-out both, moment-trail-fade 2.5s ease-out both; }
+.moment-announcement { position: absolute; left: 50%; top: 50%; display: grid; gap: 5px; width: min(470px, calc(100% - 34px)); padding: 16px 22px; transform: translate(-50%,-42%) scale(.92); border: 1px solid rgba(248,217,139,.72); border-radius: 18px; color: #fff8e8; background: linear-gradient(135deg,rgba(50,14,23,.96),rgba(116,40,55,.94)); box-shadow: 0 18px 55px rgba(13,4,7,.5), inset 0 0 25px rgba(242,198,99,.08); opacity: 0; text-align: center; }
+.moment-announcement span { color: #f1ce78; font-size: .7rem; font-weight: 900; letter-spacing: .2em; }
+.moment-announcement strong { font: 700 clamp(1rem,2.2vw,1.35rem)/1.45 Georgia,"Noto Serif SC",serif; }
+.moment-announcement.active { animation: moment-announcement 2.55s ease both; }
+.court-effects[data-kind="challenge"] .moment-announcement { border-color: rgba(255,137,121,.8); background: linear-gradient(135deg,rgba(70,12,20,.97),rgba(151,43,49,.95)); }
+.court-effects[data-kind="block"] .moment-announcement { border-color: rgba(125,206,229,.8); background: linear-gradient(135deg,rgba(20,38,55,.97),rgba(36,86,105,.95)); }
+.claim-badge { position: absolute; z-index: 4; left: 50%; top: 50%; width: max-content; max-width: calc(100% - 8px); padding: 5px 8px; transform: translate(-50%,-50%); border: 1px solid #f8dc86; border-radius: 999px; color: #421822; background: #ffe9a6; box-shadow: 0 0 18px rgba(255,221,119,.85); font-size: .68rem; font-weight: 900; line-height: 1.1; }
+.influence-card.claim-pulse { z-index: 5; animation: claimed-card 2.5s ease both; }
+@keyframes moment-travel { from { stroke-dashoffset: 90; } to { stroke-dashoffset: 0; } }
+@keyframes moment-trail-fade { 0%,68% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes moment-announcement { 0% { opacity: 0; transform: translate(-50%,-42%) scale(.9); } 12%,76% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 100% { opacity: 0; transform: translate(-50%,-55%) scale(.98); } }
+@keyframes claimed-card { 0%,100% { box-shadow: 0 8px 16px rgba(0,0,0,.22); } 15%,72% { border-color: #ffe58e; box-shadow: 0 0 0 4px rgba(255,222,119,.3),0 0 32px rgba(255,206,75,.9); transform: translateY(-7px) scale(1.04); } }
 .players { position: relative; z-index: 3; min-height: 640px; }.player-seat { position: relative; width: auto; padding: 14px; border: 1px solid rgba(231,202,139,.32); border-radius: 18px; color: #fff3df; background: rgba(31,13,18,.72); backdrop-filter: blur(7px); transition: opacity .2s, box-shadow .2s; }
 .player-seat.current { border-color: #f4ce71; box-shadow: 0 0 0 2px rgba(244,206,113,.23), 0 0 34px rgba(244,187,67,.25); }.player-seat.self { background: rgba(89,35,47,.9); }.player-seat.eliminated { opacity: .55; filter: grayscale(.45); }.player-seat.offline header small { color: #e8a9a9; }
 .player-seat header { display: flex; justify-content: space-between; gap: 8px; }.player-seat header b, .player-seat header small { display: block; }.player-seat header small { margin-top: 2px; color: #cdb7aa; font-size: .72rem; }.kick { min-height: 28px; padding: 3px 7px; color: #ffd6d6; border-color: rgba(255,200,200,.25); background: transparent; font-size: .7rem; }
@@ -116,4 +133,9 @@ button.small { min-height: 34px; padding: 5px 10px; font-size: .8rem; }
   .seat-cards .role-icon { font-size: 1rem; }
   .seat-cards .influence-card b { font-size: .64rem; }
   .sidebar { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment-trail.active { animation: none; opacity: .55; }
+  .moment-announcement.active { animation: none; opacity: 1; transform: translate(-50%,-50%); }
+  .influence-card.claim-pulse { animation: none; border-color: #ffe58e; box-shadow: 0 0 0 3px rgba(255,222,119,.28); }
 }

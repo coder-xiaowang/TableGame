@@ -132,14 +132,14 @@ export function createAuthoritativeRoomClient({
     return globalThis.crypto?.randomUUID?.() || createId("action");
   }
 
-  function submitAction(action) {
+  function submitAction(action, { expectedVersion = version } = {}) {
     if (!roomCode || !playerId || !resumeToken) throw new Error("尚未建立房间会话");
     return post("/api/actions", {
       roomCode,
       playerId,
       resumeToken,
       actionId: createActionId(),
-      expectedVersion: version,
+      expectedVersion,
       action
     });
   }

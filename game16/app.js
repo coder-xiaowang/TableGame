@@ -7,14 +7,14 @@ import {
 } from "/shared/client/index.js";
 
 const PROTOCOL_VERSION = 3;
-const PHASE_TIMER_MS = { action: 45000, challengeAction: 12000, block: 12000, challengeBlock: 12000, proveClaim: 15000, loseInfluence: 20000, exchange: 30000 };
+const PHASE_TIMER_MS = { action: 45000, challengeAction: 18000, block: 18000, challengeBlock: 18000, proveClaim: 15000, loseInfluence: 20000, exchange: 30000 };
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "hero", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup",
   "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField",
   "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton",
   "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton",
-  "notice", "deckCount", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
+  "notice", "courtPanel", "courtCenter", "courtEffects", "momentTrail", "momentAnnouncement", "momentLabel", "momentText", "deckCount", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
   "privateZone", "coinCount", "myInfluences", "toggleLogButton", "logList"
 ].map((id) => [id, $(id)]));
 
@@ -40,6 +40,10 @@ let view = null;
 let selectedAction = null;
 let exchangeSelection = new Set();
 let spectatorUi = null;
+let actionPending = false;
+let momentCursor = null;
+let momentPlaying = false;
+const momentQueue = [];
 
 const sessions = createSessionStore({ gameId: "coup" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -48,7 +52,7 @@ const room = createAuthoritativeRoomClient({
   sessionStore: sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
-    onView(nextView) { view = nextView; selectedAction = null; exchangeSelection = new Set(view.exchange?.originalIds || []); enterRoom(); render(); },
+    onView(nextView) { actionPending = false; view = nextView; selectedAction = null; exchangeSelection = new Set(view.exchange?.originalIds || []); enterRoom(); render(); },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
@@ -61,8 +65,16 @@ spectatorUi = createSpectatorUi({
   notify: (message) => alert(message), confirmAction: (message) => confirm(message), onSessionEnded: () => location.reload()
 });
 
-function submit(action) {
-  return Promise.resolve(room.submitAction(action)).catch((error) => { E.connectionStatus.textContent = `操作失败：${error.message}`; alert(error.message); });
+function submit(action, { expectedVersion } = {}) {
+  if (actionPending) return Promise.resolve();
+  actionPending = true;
+  E.actionButtons.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  return Promise.resolve(room.submitAction(action, { expectedVersion })).catch((error) => {
+    actionPending = false;
+    E.connectionStatus.textContent = `操作失败：${error.message}`;
+    if (view) renderActions(view.roomRole);
+    alert(error.message);
+  });
 }
 function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); setHidden(E.roomHeaderTools, false); E.hero.classList.add("in-room"); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
 async function createGameRoom() {
@@ -85,10 +97,10 @@ async function kickPlayer(playerId) {
   try { await room.kick(playerId); } catch (error) { alert(error.message); }
 }
 
-function roleCard(card, { own = false, selectable = false, selected = false, dataKind = "" } = {}) {
+function roleCard(card, { own = false, selectable = false, selected = false, dataKind = "", slotIndex = null } = {}) {
   const known = Boolean(card.role); const meta = ROLE_META[card.role];
   return `<button type="button" class="influence-card ${known ? `role-${card.role}` : "hidden-role"} ${card.revealed ? "revealed" : ""} ${selectable ? "selectable" : ""} ${selected ? "selected" : ""}"
-    ${selectable ? `data-${dataKind}="${escapeHtml(card.id)}"` : "disabled"}>
+    ${slotIndex === null ? "" : `data-influence-slot="${slotIndex}"`} ${selectable ? `data-${dataKind}="${escapeHtml(card.id)}"` : "disabled"}>
     <span class="role-icon">${known ? meta.icon : "?"}</span><b>${known ? meta.label : card.revealed ? "已失去" : "隐藏身份"}</b>
     <small>${known ? meta.ability : own ? "只有你知道这张牌" : "仍保有影响力"}</small>
   </button>`;
@@ -98,21 +110,100 @@ function renderPlayers() {
   E.players.dataset.count = String(view.players.length);
   E.players.innerHTML = view.players.map((player) => {
     const active = player.influences.filter((card) => !card.revealed).length;
-    return `<article class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && view.phase !== "lobby" ? "current" : ""} ${player.eliminated ? "eliminated" : ""} ${!player.connected ? "offline" : ""}">
+    return `<article data-player-id="${escapeHtml(player.id)}" class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && view.phase !== "lobby" ? "current" : ""} ${player.eliminated ? "eliminated" : ""} ${!player.connected ? "offline" : ""}">
       <header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>
       ${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header>
       <div class="wealth"><span>● ${player.coins} 金币</span><span>${player.eliminated ? "已出局" : `${active} 点影响力`}</span></div>
-      <div class="seat-cards">${player.influences.map((card) => roleCard(card)).join("") || '<p class="waiting">等待开局</p>'}</div>
+      <div class="seat-cards">${player.influences.map((card, index) => roleCard(card, { slotIndex: index })).join("") || '<p class="waiting">等待开局</p>'}</div>
     </article>`;
   }).join("");
   E.players.querySelectorAll("[data-kick]").forEach((button) => button.onclick = () => kickPlayer(button.dataset.kick));
 }
 
 function addButton(text, handler, className = "") {
-  const button = document.createElement("button"); button.type = "button"; button.textContent = text; button.className = className; button.onclick = handler; E.actionButtons.append(button);
+  const button = document.createElement("button"); button.type = "button"; button.textContent = text; button.className = className; button.disabled = actionPending; button.onclick = handler; E.actionButtons.append(button);
 }
 function nameOf(id) { return view.players.find((player) => player.id === id)?.name || "玩家"; }
 function actionName(type) { return ACTION_META[type]?.label || "行动"; }
+
+function momentKindLabel(kind) {
+  return { claim: "身份声明", action: "宫廷行动", block: "阻挡声明", challenge: "公开质疑" }[kind] || "宫廷动态";
+}
+
+function seatFor(playerId) {
+  return [...E.players.querySelectorAll("[data-player-id]")].find((seat) => seat.dataset.playerId === String(playerId)) || null;
+}
+
+function elementCenter(element, relativeTo) {
+  const rect = element.getBoundingClientRect();
+  const base = relativeTo.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2 - base.left, y: rect.top + rect.height / 2 - base.top };
+}
+
+function setMomentTrail(moment) {
+  const source = seatFor(moment.actorId);
+  const target = seatFor(moment.targetId) || E.courtCenter;
+  if (!source || !target) return false;
+  const width = E.courtPanel.clientWidth; const height = E.courtPanel.clientHeight;
+  const from = elementCenter(source, E.courtPanel); const to = elementCenter(target, E.courtPanel);
+  const bend = Math.max(35, Math.min(120, Math.abs(to.x - from.x) * .22 + Math.abs(to.y - from.y) * .12));
+  const controlX = (from.x + to.x) / 2;
+  const controlY = (from.y + to.y) / 2 - bend;
+  E.momentTrail.ownerSVGElement.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  E.momentTrail.setAttribute("d", `M ${from.x} ${from.y} Q ${controlX} ${controlY} ${to.x} ${to.y}`);
+  E.momentTrail.classList.remove("active");
+  void E.momentTrail.getBoundingClientRect();
+  E.momentTrail.classList.add("active");
+  return true;
+}
+
+function showClaimPulse(moment) {
+  if (moment.claimSlot === null || moment.claimSlot === undefined || moment.actorId === view.selfId) return null;
+  const seat = seatFor(moment.actorId);
+  const card = seat?.querySelector(`[data-influence-slot="${Number(moment.claimSlot)}"]`);
+  if (!card || card.classList.contains("revealed")) return null;
+  const badge = document.createElement("span");
+  badge.className = "claim-badge";
+  badge.textContent = `宣称 · ${ROLE_META[moment.claimedRole]?.label || "身份"}`;
+  card.append(badge);
+  card.classList.add("claim-pulse");
+  return { card, badge };
+}
+
+async function playMoment(moment) {
+  const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  E.courtEffects.dataset.kind = moment.kind;
+  E.momentLabel.textContent = momentKindLabel(moment.kind);
+  E.momentText.textContent = moment.text;
+  E.momentAnnouncement.classList.remove("active");
+  void E.momentAnnouncement.offsetWidth;
+  E.momentAnnouncement.classList.add("active");
+  const hasTrail = setMomentTrail(moment);
+  const claimPulse = showClaimPulse(moment);
+  await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 1200 : 2600));
+  E.momentAnnouncement.classList.remove("active");
+  if (hasTrail) E.momentTrail.classList.remove("active");
+  claimPulse?.card.classList.remove("claim-pulse");
+  claimPulse?.badge.remove();
+}
+
+async function drainMomentQueue() {
+  if (momentPlaying) return;
+  momentPlaying = true;
+  while (momentQueue.length) await playMoment(momentQueue.shift());
+  momentPlaying = false;
+}
+
+function syncMoments() {
+  const moments = Array.isArray(view.moments) ? view.moments : [];
+  const latest = moments.reduce((maximum, moment) => Math.max(maximum, Number(moment.sequence) || 0), 0);
+  if (momentCursor === null) { momentCursor = latest; return; }
+  const fresh = moments.filter((moment) => Number(moment.sequence) > momentCursor).sort((a, b) => a.sequence - b.sequence);
+  momentCursor = Math.max(momentCursor, latest);
+  if (!fresh.length) return;
+  momentQueue.push(...fresh);
+  void drainMomentQueue();
+}
 
 function renderTargetChoices(actionType) {
   E.actionHint.textContent = `请选择“${ACTION_META[actionType].label}”的目标。`;
@@ -154,6 +245,9 @@ function renderExchange() {
 function renderActions(memberRole) {
   E.actionButtons.innerHTML = ""; E.actionHint.textContent = "";
   const action = view.action; const current = nameOf(view.currentPlayerId);
+  const renderedVersion = room.snapshot().version;
+  const reactionAction = (type, extra = {}) => ({ type, ...extra, reactionId: view.reaction?.id, reactionKind: view.reaction?.kind });
+  const submitReaction = (type, extra = {}) => submit(reactionAction(type, extra), { expectedVersion: renderedVersion });
   if (memberRole === "spectator") {
     E.actionTitle.textContent = view.phase === "lobby" ? "旁观准备阶段" : `正在旁观 · ${current}`;
     E.actionHint.textContent = "旁观者只能看到公开角色、金币、声明和响应，不会看到隐藏身份。";
@@ -165,15 +259,15 @@ function renderActions(memberRole) {
   if (view.permissions.canRespond) {
     if (view.phase === "challengeAction") {
       E.actionTitle.textContent = `是否质疑 ${nameOf(action.actorId)}？`; E.actionHint.textContent = `${nameOf(action.actorId)} 宣称角色并选择“${actionName(action.type)}”。`;
-      addButton("提出质疑", () => submit({ type: "challenge" }), "danger"); addButton("相信 / 放弃质疑", () => submit({ type: "pass" })); return;
+      addButton("提出质疑", () => submitReaction("challenge"), "danger"); addButton("相信 / 放弃质疑", () => submitReaction("pass")); return;
     }
     if (view.phase === "block") {
       E.actionTitle.textContent = `是否阻挡“${actionName(action.type)}”？`; E.actionHint.textContent = action.type === "foreignAid" ? "你可以宣称公爵阻挡外援。" : `你是目标玩家，可以声明角色阻挡。`;
       const roles = action.type === "foreignAid" ? ["duke"] : action.type === "assassinate" ? ["contessa"] : ["captain", "ambassador"];
-      roles.forEach((role) => addButton(`声明${ROLE_META[role].label}并阻挡`, () => submit({ type: "block", role }), "warn")); addButton("不阻挡", () => submit({ type: "pass" })); return;
+      roles.forEach((role) => addButton(`声明${ROLE_META[role].label}并阻挡`, () => submitReaction("block", { role }), "warn")); addButton("不阻挡", () => submitReaction("pass")); return;
     }
     E.actionTitle.textContent = `是否质疑 ${nameOf(action.blockerId)} 的阻挡？`; E.actionHint.textContent = `${nameOf(action.blockerId)} 声称自己是${ROLE_META[action.blockRole]?.label}。`;
-    addButton("质疑阻挡", () => submit({ type: "challenge" }), "danger"); addButton("接受阻挡", () => submit({ type: "pass" })); return;
+    addButton("质疑阻挡", () => submitReaction("challenge"), "danger"); addButton("接受阻挡", () => submitReaction("pass")); return;
   }
   if (view.permissions.canProve) {
     E.actionTitle.textContent = "你的角色声明受到质疑"; E.actionHint.textContent = `展示${ROLE_META[view.challenge.role].label}可让质疑者失去影响力；你也可以放弃证明。`;
@@ -211,6 +305,7 @@ function render() {
   E.deckCount.textContent = String(view.deckCount); E.controlDock.dataset.role = memberRole;
   E.notice.textContent = memberRole === "spectator" && view.phase === "lobby" ? "你正在旁观准备阶段，可在有空位时进入玩家席" : view.phase === "lobby" ? `等待玩家加入：${view.players.length}/${view.capacity}` : view.phase === "ended" ? `本局结束 · ${winner?.name || "玩家"} 获胜` : `当前行动者：${nameOf(view.currentPlayerId)}`;
   renderPlayers(); renderActions(memberRole); renderPrivate(memberRole); renderLog();
+  syncMoments();
   if (view.deadline) countdown.start(view.deadline, PHASE_TIMER_MS[view.phase] || 45000); else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
 }
 

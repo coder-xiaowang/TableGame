@@ -8,7 +8,7 @@ export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
 export const TURN_SECONDS = 45;
 export const ACTION_SECONDS = TURN_SECONDS;
-export const REACTION_SECONDS = 12;
+export const REACTION_SECONDS = 18;
 export const PROOF_SECONDS = 15;
 export const DECISION_SECONDS = 20;
 export const EXCHANGE_SECONDS = 30;
@@ -57,6 +57,33 @@ function addLog(state, text, now) {
   if (state.logs.length > 120) state.logs.length = 120;
 }
 
+function addMoment(state, { kind, actorId, targetId = null, actionType = null, claimedRole = null, showClaim = false, text }, now) {
+  state.momentSequence = (Number(state.momentSequence) || 0) + 1;
+  const actor = playerById(state, actorId);
+  const activeSlots = actor?.influences
+    .map((card, index) => card.revealed ? null : index)
+    .filter((index) => index !== null) || [];
+  const visualSeed = `${now}:${state.momentSequence}:${actorId}`;
+  let visualHash = 2166136261;
+  for (const character of visualSeed) visualHash = Math.imul(visualHash ^ character.charCodeAt(0), 16777619);
+  const claimSlot = showClaim && claimedRole && activeSlots.length
+    ? activeSlots[(visualHash >>> 0) % activeSlots.length]
+    : null;
+  state.moments.push({
+    id: `moment_${state.momentSequence}`,
+    sequence: state.momentSequence,
+    kind,
+    actorId: String(actorId),
+    targetId: targetId ? String(targetId) : null,
+    actionType,
+    claimedRole,
+    claimSlot,
+    text: String(text),
+    at: now
+  });
+  if (state.moments.length > 30) state.moments.splice(0, state.moments.length - 30);
+}
+
 function setPhase(state, phase, now, seconds = 0) {
   state.phase = phase;
   state.deadline = seconds ? now + seconds * 1000 : 0;
@@ -68,7 +95,7 @@ function resetPending(state) {
 
 function resetToLobby(state) {
   setPhase(state, "lobby", Date.now());
-  state.deck = []; state.currentIndex = 0; state.winnerId = null; resetPending(state);
+  state.deck = []; state.currentIndex = 0; state.winnerId = null; state.moments = []; resetPending(state);
   for (const player of state.players) { player.coins = 0; player.influences = []; player.eliminated = false; }
 }
 
@@ -81,7 +108,7 @@ function draw(state) {
 
 function beginGame(state, now, random) {
   state.deck = shuffle(createCourtDeck(), random);
-  state.winnerId = null; resetPending(state);
+  state.winnerId = null; state.moments = []; resetPending(state);
   for (const player of state.players) {
     player.coins = STARTING_COINS; player.eliminated = false; player.influences = [draw(state), draw(state)];
   }
@@ -126,7 +153,8 @@ function eligibleBlockers(state) {
 }
 
 function openReaction(state, kind, eligibleIds, now) {
-  state.reaction = { kind, eligibleIds: uniqueStrings(eligibleIds), passedIds: [] };
+  state.reactionSequence = (Number(state.reactionSequence) || 0) + 1;
+  state.reaction = { id: `reaction_${state.reactionSequence}`, kind, eligibleIds: uniqueStrings(eligibleIds), passedIds: [] };
   setPhase(state, kind === "challengeAction" ? "challengeAction" : kind === "block" ? "block" : "challengeBlock", now, REACTION_SECONDS);
 }
 
@@ -204,7 +232,15 @@ function loseInfluence(state, player, cardId, now, random) {
 
 function allPassed(reaction) { return reaction.eligibleIds.every((id) => reaction.passedIds.includes(id)); }
 
-function handlePass(state, actor, now, random) {
+function requireCurrentReaction(state, action) {
+  if (!state.reaction || String(action?.reactionId || "") !== state.reaction.id || String(action?.reactionKind || "") !== state.reaction.kind) {
+    throw new GameRuleError("stale_reaction", "你所响应的声明已经结束，本次操作未执行。", 409);
+  }
+  return state.reaction;
+}
+
+function handlePass(state, actor, action, now, random) {
+  requireCurrentReaction(state, action);
   if (!state.reaction?.eligibleIds.includes(actor.id)) throw new GameRuleError("response_not_allowed", "你不能在这个窗口响应。", 409);
   if (!state.reaction.passedIds.includes(actor.id)) state.reaction.passedIds.push(actor.id);
   if (!allPassed(state.reaction)) return;
@@ -213,10 +249,19 @@ function handlePass(state, actor, now, random) {
   if (state.phase === "challengeBlock") return cancelByBlock(state, now);
 }
 
-function startChallenge(state, challenger, context, now) {
+function startChallenge(state, challenger, action, context, now) {
+  requireCurrentReaction(state, action);
   if (!state.reaction?.eligibleIds.includes(challenger.id)) throw new GameRuleError("challenge_not_allowed", "你不能提出这次质疑。", 409);
   const claimantId = context === "action" ? state.action.actorId : state.action.blockerId;
   const role = context === "action" ? actionMeta(state.action.type).role : state.action.blockRole;
+  const claimant = playerById(state, claimantId);
+  addMoment(state, {
+    kind: "challenge",
+    actorId: challenger.id,
+    targetId: claimantId,
+    claimedRole: role,
+    text: `${challenger.name} 质疑 ${claimant.name} 声称的${roleLabel(role)}`
+  }, now);
   state.challenge = { context, challengerId: challenger.id, claimantId, role };
   state.reaction = null; setPhase(state, "proveClaim", now, PROOF_SECONDS);
   addLog(state, `${challenger.name} 质疑 ${playerById(state, claimantId).name} 声称的${roleLabel(role)}。`, now);
@@ -261,17 +306,36 @@ function declareAction(state, actor, action, now, random) {
   }
   actor.coins -= meta.cost;
   state.action = { type: action.actionType, actorId: actor.id, targetId: target?.id || null, claimedRole: meta.role, blockerId: null, blockRole: null };
+  addMoment(state, {
+    kind: meta.role ? "claim" : "action",
+    actorId: actor.id,
+    targetId: target?.id || null,
+    actionType: action.actionType,
+    claimedRole: meta.role,
+    showClaim: Boolean(meta.role),
+    text: `${actor.name}${meta.role ? ` 声称${roleLabel(meta.role)}并` : ""}发动${actionLabel(action.actionType)}${target ? `，目标是 ${target.name}` : ""}`
+  }, now);
   addLog(state, `${actor.name}${meta.role ? `声称自己是${roleLabel(meta.role)}，` : ""}选择${actionLabel(action.actionType)}${target ? `，目标是 ${target.name}` : ""}${meta.cost ? `（支付${meta.cost}枚金币）` : ""}。`, now);
   if (meta.role) return openReaction(state, "challengeAction", eligibleActionChallengers(state), now);
   if (meta.blockRoles.length) return openReaction(state, "block", eligibleBlockers(state), now);
   return resolveAction(state, now, random);
 }
 
-function declareBlock(state, blocker, role, now) {
+function declareBlock(state, blocker, action, role, now) {
+  requireCurrentReaction(state, action);
   if (state.phase !== "block" || !state.reaction?.eligibleIds.includes(blocker.id)) throw new GameRuleError("block_not_allowed", "你不能阻挡这个行动。", 409);
   const allowed = actionMeta(state.action.type).blockRoles;
   if (!allowed.includes(role)) throw new GameRuleError("invalid_block_role", "这个角色不能阻挡当前行动。", 409);
   state.action.blockerId = blocker.id; state.action.blockRole = role;
+  addMoment(state, {
+    kind: "block",
+    actorId: blocker.id,
+    targetId: state.action.actorId,
+    actionType: state.action.type,
+    claimedRole: role,
+    showClaim: true,
+    text: `${blocker.name} 声称${roleLabel(role)}，阻挡${playerById(state, state.action.actorId).name}的${actionLabel(state.action.type)}`
+  }, now);
   addLog(state, `${blocker.name} 声称自己是${roleLabel(role)}，阻挡${actionLabel(state.action.type)}。`, now);
   openReaction(state, "challengeBlock", livingPlayers(state).filter((p) => p.id !== blocker.id).map((p) => p.id), now);
 }
@@ -293,7 +357,7 @@ function submitExchange(state, actor, keepIds, now) {
 }
 
 export function createLobby({ capacity, host }) {
-  return { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], deck: [], currentIndex: 0, deadline: 0, winnerId: null, action: null, reaction: null, challenge: null, loss: null, exchange: null, logs: [], logSequence: 0 };
+  return { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], deck: [], currentIndex: 0, deadline: 0, winnerId: null, action: null, reaction: null, reactionSequence: 0, challenge: null, loss: null, exchange: null, moments: [], momentSequence: 0, logs: [], logSequence: 0 };
 }
 
 export function addPlayer(state, player) {
@@ -343,10 +407,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   }
   if (type === "end") { requireHost(state, actorId); if (state.phase === "lobby") throw new GameRuleError("game_not_started", "当前没有牌局。", 409); return resetToLobby(state); }
   if (state.phase === "action" && type === "declareAction") return declareAction(state, actor, action, now, random);
-  if (["challengeAction", "block", "challengeBlock"].includes(state.phase) && type === "pass") return handlePass(state, actor, now, random);
-  if (state.phase === "challengeAction" && type === "challenge") return startChallenge(state, actor, "action", now);
-  if (state.phase === "block" && type === "block") return declareBlock(state, actor, String(action.role), now);
-  if (state.phase === "challengeBlock" && type === "challenge") return startChallenge(state, actor, "block", now);
+  if (["challengeAction", "block", "challengeBlock"].includes(state.phase) && type === "pass") return handlePass(state, actor, action, now, random);
+  if (state.phase === "challengeAction" && type === "challenge") return startChallenge(state, actor, action, "action", now);
+  if (state.phase === "block" && type === "block") return declareBlock(state, actor, action, String(action.role), now);
+  if (state.phase === "challengeBlock" && type === "challenge") return startChallenge(state, actor, action, "block", now);
   if (state.phase === "proveClaim" && type === "prove") return proveClaim(state, actor, action.cardId, now, random);
   if (state.phase === "proveClaim" && type === "concede") return concedeClaim(state, actor, now);
   if (state.phase === "loseInfluence" && type === "loseInfluence") return loseInfluence(state, actor, action.cardId, now, random);
@@ -363,7 +427,9 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
     addLog(state, `${actor.name} 行动超时，服务器执行默认行动。`, now); return true;
   }
   if (["challengeAction", "block", "challengeBlock"].includes(state.phase)) {
-    state.reaction.passedIds = [...state.reaction.eligibleIds]; handlePass(state, playerById(state, state.reaction.eligibleIds[0]), now, random); return true;
+    state.reaction.passedIds = [...state.reaction.eligibleIds];
+    handlePass(state, playerById(state, state.reaction.eligibleIds[0]), { reactionId: state.reaction.id, reactionKind: state.reaction.kind }, now, random);
+    return true;
   }
   if (state.phase === "proveClaim") {
     const claimant = playerById(state, state.challenge.claimantId);
@@ -408,14 +474,14 @@ function permissionsFor(state, viewer) {
 
 function publicView(state, viewer = null) {
   const action = state.action ? { ...state.action } : null;
-  const reaction = state.reaction ? { kind: state.reaction.kind, eligibleIds: [...state.reaction.eligibleIds], passedIds: [...state.reaction.passedIds] } : null;
+  const reaction = state.reaction ? { id: state.reaction.id, kind: state.reaction.kind, eligibleIds: [...state.reaction.eligibleIds], passedIds: [...state.reaction.passedIds] } : null;
   const challenge = state.challenge ? { ...state.challenge } : null;
   const loss = state.loss ? { playerId: state.loss.playerId, reason: state.loss.reason } : null;
   return { selfId: viewer?.id || null, phase: state.phase, capacity: state.capacity, currentPlayerId: currentPlayer(state)?.id || null, deckCount: state.deck.length,
     deadline: state.deadline, winnerId: state.winnerId, action, reaction, challenge, loss, players: state.players.map((p) => publicPlayer(p, viewer?.id)),
     exchange: viewer && state.exchange?.playerId === viewer.id ? { cards: [...activeInfluences(viewer), ...state.exchange.drawn].map((c) => ({ id: c.id, role: c.role })), keepCount: activeInfluences(viewer).length, originalIds: [...state.exchange.originalIds] } : null,
     proofOptions: viewer && state.challenge?.claimantId === viewer.id ? activeInfluences(viewer).filter((c) => c.role === state.challenge.role).map((c) => ({ id: c.id, role: c.role })) : [],
-    logs: state.logs.map((entry) => ({ ...entry })), permissions: permissionsFor(state, viewer) };
+    moments: state.moments.map((entry) => ({ ...entry })), logs: state.logs.map((entry) => ({ ...entry })), permissions: permissionsFor(state, viewer) };
 }
 
 export function buildView(state, viewerId) { return publicView(state, requireActor(state, viewerId)); }
@@ -423,6 +489,9 @@ export function buildSpectatorView(state) { return publicView(state, null); }
 
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game16 state");
+  if (!Number.isInteger(state.reactionSequence) || state.reactionSequence < 0) throw new Error("Invalid game16 reaction sequence");
+  if (state.reaction && (!state.reaction.id || !state.reaction.kind)) throw new Error("Invalid game16 reaction window");
+  if (!Array.isArray(state.moments) || !Number.isInteger(state.momentSequence) || state.momentSequence < 0) throw new Error("Invalid game16 presentation events");
   if (state.phase === "lobby") return true;
   const cards = [...state.deck, ...state.players.flatMap((p) => p.influences), ...(state.exchange?.drawn || [])];
   const ids = cards.map((card) => card.id);
@@ -434,5 +503,15 @@ export function validateState(state) {
 export function serializeState(state) { validateState(state); return structuredClone(state); }
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game16 state version: ${serializedState?.stateVersion}`);
-  const state = structuredClone(serializedState); validateState(state); return state;
+  const state = structuredClone(serializedState);
+  state.reactionSequence = Number.isInteger(state.reactionSequence) && state.reactionSequence >= 0 ? state.reactionSequence : 0;
+  if (state.reaction && !state.reaction.id) {
+    state.reactionSequence += 1;
+    state.reaction.id = `reaction_${state.reactionSequence}`;
+  }
+  state.moments = Array.isArray(state.moments) ? state.moments : [];
+  state.momentSequence = Number.isInteger(state.momentSequence) && state.momentSequence >= 0
+    ? state.momentSequence
+    : state.moments.reduce((maximum, moment) => Math.max(maximum, Number(moment?.sequence) || 0), 0);
+  validateState(state); return state;
 }

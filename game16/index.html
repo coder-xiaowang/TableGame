@@ -88,9 +88,23 @@
 
     <section class="game-area">
       <div id="notice" class="notice">等待玩家加入。</div>
-      <section class="court-panel">
-        <div class="court-center">
+      <section id="courtPanel" class="court-panel">
+        <div id="courtCenter" class="court-center">
           <span class="crown">♛</span><b>宫廷牌库</b><strong id="deckCount">15</strong><small>张角色牌</small>
+        </div>
+        <div id="courtEffects" class="court-effects" aria-live="polite" aria-atomic="true">
+          <svg class="moment-trail-layer" aria-hidden="true">
+            <defs>
+              <marker id="momentArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <path id="momentTrail" class="moment-trail" marker-end="url(#momentArrow)"></path>
+          </svg>
+          <div id="momentAnnouncement" class="moment-announcement">
+            <span id="momentLabel"></span>
+            <strong id="momentText"></strong>
+          </div>
         </div>
         <div id="players" class="players"></div>
       </section>

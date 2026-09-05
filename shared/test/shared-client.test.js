@@ -99,6 +99,7 @@ test("authoritative client sends every role action to the server with a state ve
   });
   const created = await client.createRoom({ name: "房主", capacity: 3, id: "host_1" });
   await client.submitAction({ type: "start" });
+  await client.submitAction({ type: "challenge", reactionId: "reaction_1" }, { expectedVersion: 3 });
 
   assert.equal(created.role, "host");
   assert.equal(created.memberRole, "player");
@@ -107,6 +108,8 @@ test("authoritative client sends every role action to the server with a state ve
   assert.equal(requests[1].data.playerId, "host_1");
   assert.equal(requests[1].data.expectedVersion, 4);
   assert.deepEqual(requests[1].data.action, { type: "start" });
+  assert.equal(requests[2].data.expectedVersion, 3);
+  assert.deepEqual(requests[2].data.action, { type: "challenge", reactionId: "reaction_1" });
 });
 
 test("authoritative client sends join intent and persists role changes returned by the seat API", async () => {
