@@ -75,5 +75,5 @@ test("game11 SQLite restart restores spectator identity and closed setting",asyn
 
 test("game11 page consumes shared spectator UI and renders public-only guidance",()=>{
   const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8");const script=fs.readFileSync(path.join(__dirname,"app.js"),"utf8");const styles=fs.readFileSync(path.join(__dirname,"spectator.css"),"utf8");
-  assert.match(html,/name="joinIntent" value="spectate"/);assert.match(html,/id="roomRoleBanner"/);assert.match(html,/id="spectatorList"/);assert.match(html,/shared\/styles\/spectator\.css/);assert.match(script,/createSpectatorUi/);assert.match(script,/spectatorUi\.render\(current\)/);assert.match(script,/双方关键词在行动结束前均对旁观者保密/);assert.match(script,/猜码草稿与最终裁决答案不会提前显示/);assert.match(styles,/spectator-action-note/);
+  assert.match(html,/name="joinIntent" value="spectate"/);assert.match(html,/id="roomHeaderTools"/);assert.match(html,/id="seatActionButton"/);assert.doesNotMatch(html,/id="roomRoleBanner"/);assert.match(html,/id="spectatorList"/);assert.match(html,/shared\/styles\/spectator\.css/);assert.match(script,/createSpectatorUi/);assert.match(script,/spectatorUi\.render\(current\)/);assert.match(script,/双方关键词在行动结束前均对旁观者保密/);assert.match(script,/猜码草稿与最终裁决答案不会提前显示/);assert.match(styles,/spectator-action-note/);
 });

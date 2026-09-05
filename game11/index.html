@@ -11,9 +11,20 @@
 </head>
 <body>
   <main class="shell">
-    <header class="masthead">
-      <div><p class="eyebrow">SIGNAL INTELLIGENCE / 1984</p><h1>截码战</h1><p class="subtitle">让队友听懂，让对手永远差一步。</p></div>
-      <div class="status-box"><span id="connectionStatus">尚未连接</span><strong id="roomCodeDisplay">----</strong></div>
+    <header id="masthead" class="masthead">
+      <div class="masthead-title"><p class="eyebrow">SIGNAL INTELLIGENCE / 1984</p><h1>截码战</h1><p class="subtitle">让队友听懂，让对手永远差一步。</p></div>
+      <div class="masthead-meta">
+        <div class="status-box"><span id="connectionStatus">尚未连接</span></div>
+        <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="行动室设置">
+          <div class="room-identity"><span>行动室</span><strong id="roomCodeDisplay">----</strong></div>
+          <div id="hostTools" class="actions">
+            <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
+            <button id="startGameButton" class="primary">开始行动</button>
+            <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+          </div>
+          <button id="seatActionButton" type="button" class="hidden"></button>
+        </section>
+      </div>
     </header>
 
     <section id="setupPanel" class="panel setup-panel">
@@ -24,9 +35,7 @@
     </section>
 
     <section id="roomPanel" class="hidden">
-      <div id="roomRoleBanner" class="room-role-banner" data-role="player"><div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div><button id="seatActionButton" type="button" class="hidden"></button></div>
-      <div class="command-bar panel"><div><span id="phaseBadge" class="badge">等待部署</span><b id="roundText">第 0 / 8 轮</b></div><div id="timerWrap" class="timer"><span id="timerText">--</span><i><em id="timerBar"></em></i></div><div id="hostTools" class="actions"><button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button><button id="startGameButton" class="primary">开始行动</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button></div></div>
-      <details id="spectatorPanel" class="panel spectator-panel hidden" open><summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary><div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div></details>
+      <div class="command-bar panel"><div><span id="phaseBadge" class="badge">等待部署</span><b id="roundText">第 0 / 8 轮</b></div><div id="timerWrap" class="timer"><span id="timerText">--</span><i><em id="timerBar"></em></i></div></div>
 
       <div id="notice" class="notice">请选择队伍入座。</div>
       <section id="lobbyArea" class="team-grid"></section>
@@ -51,6 +60,29 @@
       </section>
 
       <section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">OPERATION COMPLETE</p><h2 id="winnerText"></h2><div id="finalKeywords" class="final-keywords"></div><div id="finalRecords"></div></section>
+
+      <section class="room-support" aria-label="行动室辅助信息">
+        <details class="panel rules-card">
+          <summary><span><span class="eyebrow">MISSION MANUAL</span><b>详细截码规则</b></span><span class="fold-hint">展开</span></summary>
+          <div class="rule-details">
+            <h3>队伍、关键词与目标</h3>
+            <p>支持4～8人，两队人数可以不相同，但每队至少2人。每队拥有4个仅己方可见的秘密关键词，分别对应数字1～4。</p>
+            <p>对方正确猜中密码会获得一次截获；传讯队未能猜中自己的密码会获得一次误传。达到2次截获、2次误传或完成第8轮后进入结算。</p>
+            <h3>密码与传讯</h3>
+            <p>一个完整轮次先由白队传讯，再由黑队传讯。传讯者按队内座位循环担任，并秘密获得由三个不重复数字组成的密码。</p>
+            <p>传讯者限时150秒，按照密码顺序提供三条提示。提示不能为空或互相重复，不能直接包含己方关键词，同一玩家也不能重复自己此前使用过的提示。</p>
+            <h3>破译与拦截</h3>
+            <p>提示公开后进入100秒猜码。传讯队提交己方破译，另一队从第二轮开始提交拦截；第一轮不进行拦截。每组答案都必须由1～4中三个不重复数字组成。</p>
+            <p>双方答案在揭晓前互相隐藏。合法选择会保存为提交者的私密草稿，超时采用最后一次合法草稿；从未修改也未确认则判为未提交。揭晓结果展示8秒后自动继续。</p>
+            <h3>提交者与胜负</h3>
+            <p>通常由队内最后座位玩家提交；若传讯者正好是己方最后一人，则由倒数第二位非传讯者提交。结算时比较“截获数－误传数”，净分较高者获胜。</p>
+            <p>净分相同则进入最终裁决：双方指定提交者依次猜测对方4个关键词，逐位置完全匹配计分；仍然同分则共同获胜。</p>
+            <h3>公开信息与隐藏信息</h3>
+            <p>每次揭晓后，提示、真正密码、双方猜测和结果会加入公开推理记录。对方关键词、当前密码和猜码草稿按玩家身份分别生成视图；旁观者只能看到已经公开的信息。</p>
+          </div>
+        </details>
+        <details id="spectatorPanel" class="panel spectator-panel hidden" open><summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary><div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div></details>
+      </section>
     </section>
   </main>
   <script type="module" src="./app.js"></script>

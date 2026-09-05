@@ -12,7 +12,7 @@ const CLUE_SECONDS = 150;
 const GUESS_SECONDS = 100;
 const REVEAL_SECONDS = 8;
 const $ = (id) => document.getElementById(id);
-const ids = ["connectionStatus","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","roomRoleBanner","roomRoleTitle","roomRoleHint","seatActionButton","spectatorSettingButton","spectatorPanel","spectatorCountBadge","spectatorList","phaseBadge","roundText","timerWrap","timerText","timerBar","hostTools","startGameButton","endGameButton","notice","lobbyArea","gameArea","myTeamBadge","keywordRack","secretCode","operationTitle","encryptorName","clueComposer","clue1","clue2","clue3","submitCluesButton","clueDisplay","guessComposer","guessRoleText","guess1","guess2","guess3","submitGuessButton","waitingText","whiteScore","blackScore","historyList","resultPanel","winnerText","finalKeywords","finalRecords"];
+const ids = ["masthead","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","seatActionButton","spectatorSettingButton","spectatorPanel","spectatorCountBadge","spectatorList","phaseBadge","roundText","timerWrap","timerText","timerBar","hostTools","startGameButton","endGameButton","notice","lobbyArea","gameArea","myTeamBadge","keywordRack","secretCode","operationTitle","encryptorName","clueComposer","clue1","clue2","clue3","submitCluesButton","clueDisplay","guessComposer","guessRoleText","guess1","guess2","guess3","submitGuessButton","waitingText","whiteScore","blackScore","historyList","resultPanel","winnerText","finalKeywords","finalRecords"];
 const E = Object.fromEntries(ids.map((id) => [id, $(id)]));
 const TEAM_NAME = { white: "白队", black: "黑队" };
 
@@ -37,8 +37,7 @@ spectatorUi = createSpectatorUi({
   room,
   getView: () => view,
   elements: {
-    joinIntentField:E.joinIntentField, roomRoleBanner:E.roomRoleBanner, roomRoleTitle:E.roomRoleTitle,
-    roomRoleHint:E.roomRoleHint, seatActionButton:E.seatActionButton,
+    joinIntentField:E.joinIntentField, seatActionButton:E.seatActionButton,
     spectatorSettingButton:E.spectatorSettingButton, spectatorPanel:E.spectatorPanel,
     spectatorCountBadge:E.spectatorCountBadge, spectatorList:E.spectatorList
   },
@@ -53,6 +52,8 @@ const sortedTeam = (players, team) => players.filter((player) => player.team ===
 function enterRoom() {
   setHidden(E.setupPanel, true);
   setHidden(E.roomPanel, false);
+  setHidden(E.roomHeaderTools, false);
+  E.masthead.classList.add("in-room");
   E.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }
 
