@@ -36,7 +36,13 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   assert.match(styles, /@media \(max-width: 760px\)/);
   assert.match(styles, /\.player-seat \{ position: static;[\s\S]*?transform: none;/);
   assert.match(styles, /@media \(max-width: 520px\)/);
-  assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\)[\s\S]*?width: 72px/);
+  assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\)[\s\S]*?width: 86px/);
+  assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\) small[\s\S]*?display: -webkit-box/);
+  assert.match(script, /function eligibleTargetPlayers\(\)/);
+  assert.match(script, /data-target-player-id=/);
+  assert.match(script, /直接点击桌面左右两侧发光的玩家卡片/);
+  assert.match(styles, /\.player-seat\.targetable/);
+  assert.doesNotMatch(script, /privateInsight\.cardTypes[\s\S]{0,180}compact: true/);
   assert.match(script, /const leftCount = Math\.floor\(orderedPlayers\.length \/ 2\)/);
   assert.match(script, /data-seat-side="\$\{side\}"/);
   assert.match(styles, /\.player-seat\[data-seat-side="left"\][\s\S]*?left: 18px/);

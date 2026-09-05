@@ -139,24 +139,44 @@ function cardMarkup(card, { compact = false, selectable = false, selected = fals
   </button>`;
 }
 
+function eligibleTargetPlayers() {
+  if (!view.permissions.canChooseTarget || !view.pending?.kind) return [];
+  return view.players.filter((player) => player.id !== view.selfId
+    && (view.pending.kind === "detective" || player.handCount > 0));
+}
+
 function renderPlayers() {
   E.players.dataset.count = String(view.players.length);
   const ownIndex = view.players.findIndex((player) => player.id === view.selfId);
   const orderedPlayers = ownIndex < 0 ? view.players : [...view.players.slice(ownIndex), ...view.players.slice(0, ownIndex)];
   const leftCount = Math.floor(orderedPlayers.length / 2);
   const rightCount = orderedPlayers.length - leftCount;
+  const targetIds = new Set(eligibleTargetPlayers().map((player) => player.id));
   E.players.innerHTML = orderedPlayers.map((player, index) => {
     const side = index < leftCount ? "left" : "right";
     const sideIndex = side === "left" ? index : index - leftCount;
     const sideCount = side === "left" ? leftCount : rightCount;
     const y = sideCount === 1 ? 50 : 8 + 84 * (sideIndex + .5) / sideCount;
-    return `<article data-seat-side="${side}" class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""}" style="--seat-y:${y}%">
+    const targetable = targetIds.has(player.id);
+    return `<article data-seat-side="${side}" ${targetable ? `data-target-player-id="${escapeHtml(player.id)}" role="button" tabindex="0" aria-label="选择 ${escapeHtml(player.name)} 作为目标"` : ""} class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""} ${targetable ? "targetable" : ""}" style="--seat-y:${y}%">
       <header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header>
       <div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div>
       <div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>
     </article>`;
   }).join("");
   E.players.querySelectorAll("[data-kick]").forEach((button) => { button.onclick = () => kickPlayer(button.dataset.kick); });
+  E.players.querySelectorAll("[data-target-player-id]").forEach((seat) => {
+    const chooseTarget = () => submit({ type: "chooseTarget", targetId: seat.dataset.targetPlayerId });
+    seat.onclick = (event) => {
+      if (event.target.closest("[data-kick]")) return;
+      chooseTarget();
+    };
+    seat.onkeydown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      chooseTarget();
+    };
+  });
 }
 
 function renderDiscard() {
@@ -205,10 +225,9 @@ function renderPlayAction() {
 function renderTargetAction() {
   const kind = view.pending.kind;
   E.actionTitle.textContent = `${meta(kind).label}：选择目标`;
-  E.actionHint.textContent = kind === "detective" ? "选择要指认的玩家；不在场证明可能让指认失败。" : `选择一名有手牌的其他玩家。`;
-  view.players.filter((player) => player.id !== view.selfId && (kind === "detective" || player.handCount > 0)).forEach((player) => {
-    addButton(`${player.name} · ${player.handCount}张`, () => submit({ type: "chooseTarget", targetId: player.id }), "target-button");
-  });
+  E.actionHint.textContent = kind === "detective"
+    ? "直接点击桌面左右两侧发光的玩家卡片进行指认；不在场证明可能让指认失败。"
+    : "直接点击桌面左右两侧发光的玩家卡片作为目标。";
 }
 
 function renderSecretSelection(kind) {
@@ -245,7 +264,7 @@ function renderPrivateInsight() {
     E.actionHint.textContent = "只有你能看到这些牌，请记住后继续。";
     const reveal = document.createElement("div");
     reveal.className = "insight-cards";
-    reveal.innerHTML = view.privateInsight.cardTypes.map((type, index) => cardMarkup({ id: `insight_${index}`, type }, { compact: true })).join("");
+    reveal.innerHTML = view.privateInsight.cardTypes.map((type, index) => cardMarkup({ id: `insight_${index}`, type })).join("");
     E.actionButtons.append(reveal);
   } else if (view.privateInsight?.kind === "child") {
     E.actionTitle.textContent = "少年发现了当前犯人";
