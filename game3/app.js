@@ -19,13 +19,12 @@ let selectedScorePlayerId = "";
 
 const $ = (id) => document.getElementById(id);
 const elements = {
-  connectionStatus: $("connectionStatus"), setupPanel: $("setupPanel"), roomPanel: $("roomPanel"),
+  siteHeader: $("siteHeader"), connectionStatus: $("connectionStatus"), roomHeaderTools: $("roomHeaderTools"), setupPanel: $("setupPanel"), roomPanel: $("roomPanel"),
   hostModeButton: $("hostModeButton"), guestModeButton: $("guestModeButton"), hostSetup: $("hostSetup"), guestSetup: $("guestSetup"),
   hostNameInput: $("hostNameInput"), guestNameInput: $("guestNameInput"), playerCountSelect: $("playerCountSelect"),
   createRoomButton: $("createRoomButton"), joinRoomButton: $("joinRoomButton"), roomCodeInput: $("roomCodeInput"), joinIntentField: $("joinIntentField"),
   roomCodeDisplay: $("roomCodeDisplay"), hostTools: $("hostTools"), roomPlayerCountSelect: $("roomPlayerCountSelect"),
-  spectatorSettingButton: $("spectatorSettingButton"), roomRoleBanner: $("roomRoleBanner"), roomRoleTitle: $("roomRoleTitle"),
-  roomRoleHint: $("roomRoleHint"), seatActionButton: $("seatActionButton"), spectatorPanel: $("spectatorPanel"),
+  spectatorSettingButton: $("spectatorSettingButton"), seatActionButton: $("seatActionButton"), spectatorPanel: $("spectatorPanel"),
   spectatorCountBadge: $("spectatorCountBadge"), spectatorList: $("spectatorList"),
   startGameButton: $("startGameButton"), endGameButton: $("endGameButton"), playerList: $("playerList"), playerCountBadge: $("playerCountBadge"),
   gameNotice: $("gameNotice"), turnTitle: $("turnTitle"), roundBadge: $("roundBadge"), rollBadge: $("rollBadge"),
@@ -58,9 +57,6 @@ spectatorUi = createSpectatorUi({
   getView: () => view,
   elements: {
     joinIntentField: elements.joinIntentField,
-    roomRoleBanner: elements.roomRoleBanner,
-    roomRoleTitle: elements.roomRoleTitle,
-    roomRoleHint: elements.roomRoleHint,
     seatActionButton: elements.seatActionButton,
     spectatorSettingButton: elements.spectatorSettingButton,
     spectatorPanel: elements.spectatorPanel,
@@ -86,6 +82,8 @@ function setMode(nextMode) {
 function enterRoom() {
   setHidden(elements.setupPanel, true);
   setHidden(elements.roomPanel, false);
+  setHidden(elements.roomHeaderTools, false);
+  elements.siteHeader.classList.add("in-room");
   setHidden(elements.hostTools, !isHost());
   elements.roomCodeDisplay.textContent = roomInfo().roomCode;
 }

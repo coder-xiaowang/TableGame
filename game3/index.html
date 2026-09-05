@@ -9,12 +9,28 @@
   </head>
   <body>
     <main class="app-shell">
-      <header class="topbar">
-        <div>
+      <header class="topbar" id="siteHeader">
+        <div class="header-title">
           <p class="eyebrow">YACHT DICE · ONLINE</p>
           <h1>快艇骰子</h1>
         </div>
-        <div class="status-pill" id="connectionStatus">准备连接</div>
+        <div class="header-meta">
+          <div class="status-pill" id="connectionStatus">准备连接</div>
+          <div class="room-header-tools hidden" id="roomHeaderTools">
+            <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+            <div class="host-controls hidden" id="hostTools">
+              <label>人数<select id="roomPlayerCountSelect">
+                <option value="2">2 人</option><option value="3">3 人</option>
+                <option value="4">4 人</option><option value="5">5 人</option>
+                <option value="6">6 人</option>
+              </select></label>
+              <button class="small hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
+              <button class="primary" id="startGameButton" type="button">开始比赛</button>
+              <button class="danger hidden" id="endGameButton" type="button">结束当前游戏</button>
+            </div>
+            <button id="seatActionButton" type="button" class="small hidden"></button>
+          </div>
+        </div>
       </header>
 
       <section id="setupPanel">
@@ -50,37 +66,32 @@
       </section>
 
       <section class="room-layout hidden" id="roomPanel">
-        <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-          <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-          <button id="seatActionButton" type="button" class="hidden"></button>
-        </div>
         <aside class="sidebar">
-          <div class="panel room-card">
-            <p class="eyebrow">ROOM CODE</p>
-            <div class="room-code" id="roomCodeDisplay">----</div>
-            <div class="host-controls hidden" id="hostTools">
-              <label>本房人数<select id="roomPlayerCountSelect">
-                <option value="2">2 人</option><option value="3">3 人</option>
-                <option value="4">4 人</option><option value="5">5 人</option>
-                <option value="6">6 人</option>
-              </select></label>
-              <button class="small full-width hidden" id="spectatorSettingButton" type="button" aria-pressed="true">旁观：开放</button>
-              <button class="primary full-width" id="startGameButton" type="button">开始比赛</button>
-              <button class="danger full-width hidden" id="endGameButton" type="button">结束当前游戏</button>
-            </div>
-          </div>
-          <div class="panel">
+          <div class="panel player-panel">
             <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
             <div class="player-list" id="playerList"></div>
           </div>
+          <details class="panel rules-card">
+            <summary><span>详细规则</span><b>展开查看</b></summary>
+            <div class="rule-details">
+              <h3>比赛流程</h3>
+              <p>支持 2～6 人。玩家依加入顺序行动，每人需要填写 13 个不同计分类别，因此整场共进行 13 轮。所有玩家填满计分表后，总分最高者获胜。</p>
+              <h3>掷骰与保留</h3>
+              <p>每回合使用 5 颗六面骰，最多投掷 3 次。第一次投掷全部骰子；第一次和第二次投掷后可切换任意骰子的保留状态，再次投掷时只重掷未保留的骰子。第三次投掷后不能再调整。</p>
+              <h3>选择计分</h3>
+              <p>至少投掷一次后，必须选择一个尚未填写的类别计分；不满足组合时该类别记 0 分。计分后立即轮到下一名玩家。</p>
+              <h3>上半区与常见组合</h3>
+              <p>一点至六点分别计算对应点数总和，上半区合计至少 63 分时奖励 35 分。三条、四条满足条件时计算五骰总和；严格葫芦为 25 分；小顺子 30 分；大顺子 40 分；机会为五骰总和。</p>
+              <h3>快艇奖励</h3>
+              <p>五颗相同构成快艇，获得 50 分。快艇类别已经取得 50 分后，再次掷出快艇每次额外奖励 100 分；本版本不使用额外 Joker 计分规则。</p>
+              <h3>联机规则</h3>
+              <p>骰子结果、保留状态、回合与计分全部由服务器判定并保存。各玩家的骰子与计分表均为公开信息；当前玩家掉线时，未完成回合会被清空并跳到下一名在线玩家。本版本没有回合倒计时。</p>
+            </div>
+          </details>
           <details id="spectatorPanel" class="panel spectator-panel hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
-          <div class="panel rules-note">
-            <p class="eyebrow">本房规则</p>
-            <p>13 轮 · 每回合至多投掷 3 次<br>上半区 63 分奖励 35 分<br>额外快艇奖励 100 分</p>
-          </div>
         </aside>
 
         <section class="table-area">
