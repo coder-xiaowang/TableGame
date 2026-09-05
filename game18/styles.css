@@ -539,3 +539,90 @@ button.card { color: #373432; }
 @media (max-width: 760px) {
   .compact-hand-zone .game-card:not(.compact) { flex-basis: 68px; width: 68px; min-width: 68px; min-height: 88px; }
 }
+
+/* Final table composition: circular seats, evidence at center, slim hand strip below. */
+.hand-strip {
+  position: sticky;
+  bottom: max(6px,env(safe-area-inset-bottom));
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(100%,960px);
+  margin: 8px auto 0;
+  padding: 6px 9px;
+  border-radius: 14px;
+}
+.hand-strip-label {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 66px;
+  padding-right: 9px;
+  border-right: 1px solid rgba(77,72,65,.2);
+  line-height: 1.15;
+}
+.hand-strip-label span { color: #754048; font-size: .58rem; font-weight: 800; letter-spacing: .12em; }
+.hand-strip-label b { margin-top: 3px; font-size: .82rem; }
+.hand-strip .my-hand {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 6px;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 5px;
+}
+.hand-strip .game-card:not(.compact) {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  min-height: 90px;
+  padding: 5px 4px;
+  border-radius: 8px;
+}
+.hand-strip .game-card:not(.compact) .card-icon { font-size: 1.08rem; }
+.hand-strip .game-card:not(.compact) small { display: none; }
+
+@media (min-width: 761px) {
+  .case-board { min-height: max(740px,calc(100vh - 120px)); }
+  .players {
+    position: absolute;
+    inset: 100px 0 0;
+    display: block;
+    pointer-events: none;
+  }
+  .player-seat,
+  .players[data-count] > .player-seat:nth-child(n) {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: clamp(132px,14vw,175px);
+    min-height: 102px;
+    transform: translate(-50%,-50%) rotate(var(--seat-angle)) translateY(calc(-1 * clamp(190px,22vw,260px))) rotate(var(--seat-counter));
+    pointer-events: auto;
+  }
+  .discard-zone, .discard-area {
+    top: 43%;
+    bottom: auto;
+    width: min(31%,310px);
+    transform: translate(-50%,-50%);
+  }
+  .center-action {
+    top: 68%;
+    width: clamp(280px,30%,360px);
+    max-height: min(215px,29vh);
+    padding: 11px 13px;
+    border-radius: 15px;
+  }
+}
+
+@media (max-width: 760px) {
+  .hand-strip { width: 100%; gap: 6px; padding: 5px 6px; }
+  .hand-strip-label { min-width: 52px; padding-right: 6px; }
+  .hand-strip .game-card:not(.compact) { flex-basis: 64px; width: 64px; min-width: 64px; min-height: 82px; }
+  .discard-zone, .discard-area { padding: 8px; }
+}

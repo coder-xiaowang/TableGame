@@ -141,8 +141,10 @@ function cardMarkup(card, { compact = false, selectable = false, selected = fals
 
 function renderPlayers() {
   E.players.dataset.count = String(view.players.length);
-  E.players.innerHTML = view.players.map((player, index) => {
-    const angle = -90 + index * 360 / view.players.length;
+  const ownIndex = view.players.findIndex((player) => player.id === view.selfId);
+  const orderedPlayers = ownIndex < 0 ? view.players : [...view.players.slice(ownIndex), ...view.players.slice(0, ownIndex)];
+  E.players.innerHTML = orderedPlayers.map((player, index) => {
+    const angle = 180 + index * 360 / orderedPlayers.length;
     return `<article class="player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""}" style="--seat-angle:${angle}deg;--seat-counter:${-angle}deg">
       <header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header>
       <div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div>
