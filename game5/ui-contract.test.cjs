@@ -46,3 +46,23 @@ test("game5 prioritizes the main table on phones and preserves core controls",()
   assert.match(styles,/\.layout > aside \{ order: 2;/);
   for(const id of["players","drawPile","discardPile","actionArea","timerText","handPanel","unoButton","colorModal"])assert.match(html,new RegExp(`id="${id}"`));
 });
+
+test("game5 integrates action, countdown and hand into one large UNO table",()=>{
+  const tableStart=html.indexOf('<div class="table panel">');
+  const tableEnd=html.indexOf("</div>\n            </section>",tableStart);
+  const table=html.slice(tableStart,tableEnd);
+  assert.match(table,/class="table-stage"/);
+  assert.match(table,/class="table-console"/);
+  assert.match(table,/id="actionTitle"/);
+  assert.match(table,/id="timerText"/);
+  assert.match(table,/id="handPanel"/);
+  assert.match(table,/id="hand"/);
+  assert.match(styles,/\.table \{[\s\S]*?min-height: 640px;/);
+  assert.match(styles,/\.table-console \{[\s\S]*?grid-template-columns:/);
+});
+
+test("game5 auxiliary cards remain separate and single-column",()=>{
+  assert.match(styles,/\.layout aside > \.rules-card,[\s\S]*?\.layout aside > \.spectator-panel \{/);
+  assert.match(styles,/\.layout aside \{[\s\S]*?grid-template-columns: minmax\(0,1fr\)/);
+  assert.match(styles,/\.layout aside > \.spectator-panel \.spectator-list/);
+});

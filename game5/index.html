@@ -98,31 +98,35 @@
                 <div class="table panel">
                     <div class="table-head"><span id="directionText">顺时针 ↻</span><span>摸牌堆 <b
                                 id="deckCount">0</b></span></div>
-                    <div class="center"><button class="draw-pile" id="drawPile"
-                            disabled><span>UNO</span><small>摸牌</small></button>
-                        <div class="discard" id="discardPile"></div>
-                    </div>
-                    <div class="current-color" id="currentColor">当前颜色：—</div>
-                    <div class="penalty hidden" id="penaltyBanner"></div>
-                </div>
-                <div class="panel action-panel">
-                    <div class="action-head">
-                        <div>
-                            <p class="eyebrow">YOUR TURN</p>
-                            <h2 id="actionTitle">等待开始</h2>
+                    <div class="table-stage">
+                        <div class="center"><button class="draw-pile" id="drawPile"
+                                disabled><span>UNO</span><small>摸牌</small></button>
+                            <div class="discard" id="discardPile"></div>
                         </div>
-                        <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+                        <div class="current-color" id="currentColor">当前颜色：—</div>
+                        <div class="penalty hidden" id="penaltyBanner"></div>
                     </div>
-                    <div class="actions" id="actionArea"></div>
-                </div>
-                <div class="panel hand-panel" id="handPanel">
-                    <div class="action-head">
-                        <div>
-                            <p class="eyebrow">YOUR HAND</p>
-                            <h2>我的手牌 <span id="handCount">0</span></h2>
-                        </div><button class="uno-button" id="unoButton" disabled>喊 UNO！</button>
+                    <div class="table-console">
+                        <section class="action-panel">
+                            <div class="action-head">
+                                <div>
+                                    <p class="eyebrow">YOUR TURN</p>
+                                    <h2 id="actionTitle">等待开始</h2>
+                                </div>
+                                <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+                            </div>
+                            <div class="actions" id="actionArea"></div>
+                        </section>
+                        <section class="hand-panel" id="handPanel">
+                            <div class="action-head">
+                                <div>
+                                    <p class="eyebrow">YOUR HAND</p>
+                                    <h2>我的手牌 <span id="handCount">0</span></h2>
+                                </div><button class="uno-button" id="unoButton" disabled>喊 UNO！</button>
+                            </div>
+                            <div class="hand" id="hand"></div>
+                        </section>
                     </div>
-                    <div class="hand" id="hand"></div>
                 </div>
             </section>
         </section>

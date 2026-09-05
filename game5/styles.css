@@ -732,3 +732,131 @@ select {
     .room-header-tools #seatActionButton { grid-column: 1/-1; width: 100%; }
     .rule-details { max-height: none; }
 }
+
+/* A single large UNO table contains the public piles, current action and private hand. */
+.main {
+    grid-template-columns: minmax(0,1fr);
+    grid-template-rows: auto auto auto
+}
+.main > .notice,
+.main > .players-panel,
+.main > .table {
+    grid-column: 1;
+    grid-row: auto
+}
+.table {
+    display: grid;
+    grid-template-rows: auto minmax(270px,1fr) auto;
+    min-height: 640px;
+    padding: 16px;
+    background:
+        radial-gradient(circle at 50% 35%,rgba(255,255,255,.28),transparent 24%),
+        radial-gradient(ellipse,#eadbbd 0%,#d2b88d 72%,#b99769 100%);
+    border-width: 8px;
+    border-radius: 22px
+}
+.table:after { inset: 8px; border-radius: 13px; }
+.table-stage {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    min-height: 270px;
+    padding: 18px 10px
+}
+.table-stage .center { margin: 0 0 18px; gap: 34px; }
+.table-stage .draw-pile,
+.table-stage .uno-card {
+    width: 96px;
+    height: 138px;
+    border-radius: 15px
+}
+.table-stage .draw-pile span { font-size: 28px; }
+.table-console {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(230px,.72fr) minmax(0,1.6fr);
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid rgba(78,52,35,.24);
+    border-radius: 15px;
+    background: rgba(255,250,240,.88);
+    box-shadow: 0 12px 30px rgba(68,43,28,.18);
+    backdrop-filter: blur(9px)
+}
+.table-console .action-panel,
+.table-console .hand-panel {
+    grid-column: auto;
+    grid-row: auto;
+    min-width: 0;
+    padding: 14px
+}
+.table-console .action-panel {
+    min-height: 0;
+    border-right: 1px dashed rgba(89,61,42,.24)
+}
+.table-console:has(.hand-panel.hidden) { grid-template-columns: minmax(0,1fr); }
+.table-console:has(.hand-panel.hidden) .action-panel { border-right: 0; }
+.table-console .hand-panel { min-height: 180px; }
+.table-console .actions { margin-top: 12px; }
+.table-console .hand { min-height: 118px; }
+
+/* Each auxiliary module is an independent, consistently spaced card. */
+.layout aside {
+    grid-template-columns: minmax(0,1fr)
+}
+.layout aside > .rules-card,
+.layout aside > .log-panel,
+.layout aside > .spectator-panel {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--line)
+}
+.layout aside > .rules-card summary,
+.layout aside > .spectator-panel summary {
+    min-height: 50px;
+    padding: 12px 14px
+}
+.layout aside > .rules-card[open] summary,
+.layout aside > .spectator-panel[open] summary,
+.layout aside > .log-panel .action-head {
+    border-bottom: 1px solid var(--line)
+}
+.layout aside > .log-panel .action-head {
+    min-height: 50px;
+    margin: 0;
+    padding: 10px 14px
+}
+.layout aside > .log-panel .log {
+    max-height: 230px;
+    margin: 0;
+    padding: 10px 14px 14px
+}
+.layout aside > .spectator-panel .spectator-list {
+    margin: 0;
+    padding: 10px 14px 14px
+}
+
+@media(max-width:960px) {
+    .table { min-height: 590px; }
+}
+@media(max-width:720px) {
+    .layout > aside { grid-template-columns: minmax(0,1fr); }
+    .table { min-height: 560px; padding: 11px; border-width: 6px; border-radius: 18px; }
+    .table-stage { min-height: 240px; padding: 14px 8px; }
+    .table-console { grid-template-columns: 1fr; }
+    .table-console .action-panel { border-right: 0; border-bottom: 1px dashed rgba(89,61,42,.24); }
+}
+@media(max-width:520px) {
+    .table { min-height: 520px; margin-inline: -3px; }
+    .table-stage { min-height: 210px; }
+    .table-stage .draw-pile,
+    .table-stage .uno-card { width: 72px; height: 103px; }
+    .table-stage .center { gap: 20px; }
+    .table-console .action-panel,
+    .table-console .hand-panel { padding: 11px; }
+}
