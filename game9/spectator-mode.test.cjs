@@ -274,7 +274,8 @@ test("game9 page exposes spectator controls and collapses the list on mobile", (
   const sharedStyles = fs.readFileSync(path.join(__dirname, "../shared/styles/spectator.css"), "utf8");
   assert.match(html, /name="joinIntent" value="play"/);
   assert.match(html, /name="joinIntent" value="spectate"/);
-  assert.match(html, /id="roomRoleBanner"/);
+  assert.match(html, /id="roomHeaderTools"/);
+  assert.doesNotMatch(html, /id="roomRoleBanner"/);
   assert.match(html, /id="spectatorList"/);
   assert.match(html, /id="seatActionButton"/);
   assert.match(html, /id="spectatorSettingButton"/);

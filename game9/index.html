@@ -9,12 +9,27 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="site-header">
-    <div>
+  <header id="siteHeader" class="site-header">
+    <div class="header-title">
       <p class="eyebrow">A GAME OF CALCULATED REFUSAL</p>
       <h1>NO <span>THANKS!</span></h1>
     </div>
-    <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
+    <div class="header-meta">
+      <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools">
+          <label><span>人数</span><select id="roomPlayerCountSelect">
+            <option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            <option value="6">6</option><option value="7">7</option>
+          </select></label>
+          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary" type="button">开始游戏</button>
+          <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
+        </div>
+        <button id="seatActionButton" type="button" class="hidden"></button>
+      </section>
+    </div>
   </header>
 
   <main>
@@ -58,32 +73,10 @@
     </section>
 
     <section id="roomPanel" class="room-shell hidden">
-      <div class="room-toolbar">
-        <div><span class="muted">房间</span><strong id="roomCodeDisplay">----</strong></div>
-        <div id="hostTools" class="host-tools">
-          <label>人数<select id="roomPlayerCountSelect">
-            <option value="3">3</option><option value="4">4</option><option value="5">5</option>
-            <option value="6">6</option><option value="7">7</option>
-          </select></label>
-          <button id="spectatorSettingButton" class="hidden" type="button" aria-pressed="true">旁观：开放</button>
-          <button id="startGameButton" class="primary" type="button">开始游戏</button>
-          <button id="endGameButton" class="danger hidden" type="button">结束本局</button>
-        </div>
-      </div>
-
-      <div id="roomRoleBanner" class="room-role-banner" data-role="player">
-        <div><b id="roomRoleTitle">你在玩家席</b><span id="roomRoleHint">作为正式玩家参与本局</span></div>
-        <button id="seatActionButton" type="button" class="hidden"></button>
-      </div>
-
       <div class="game-grid">
         <aside class="players-panel panel">
           <div class="panel-title"><span>玩家席</span><b id="playerCountBadge">0 / 4</b></div>
           <div id="playerList" class="player-list"></div>
-          <details id="spectatorPanel" class="spectator-panel hidden" open>
-            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
-            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
-          </details>
         </aside>
 
         <section class="table-panel panel">
@@ -110,23 +103,44 @@
           <div id="actionArea" class="action-area"></div>
         </section>
 
-        <aside class="log-panel panel">
+        <aside class="support-panel panel">
+          <details class="rules-card">
+            <summary><span>详细游戏规则</span><span class="fold-hint">展开</span></summary>
+            <div class="rule-details">
+              <h3>目标与开局</h3>
+              <p>3～7人，使用数字3～35共33张牌。开局秘密移除9张，其余组成牌堆；最终净分最低的玩家获胜。</p>
+              <p>3～5人每人11枚筹码，6人每人9枚，7人每人7枚。服务器随机决定首位玩家并翻开第一张数字牌。</p>
+              <h3>回合行动</h3>
+              <p><b>拒绝：</b>支付1枚筹码到当前牌上，然后轮到下一名玩家；没有筹码时不能拒绝。</p>
+              <p><b>拿牌：</b>获得当前数字牌以及牌上的全部筹码，并继续面对牌堆翻出的下一张牌，行动者不会更换。</p>
+              <p>每次行动限时30秒，超时由服务器自动拿下当前牌与筹码。</p>
+              <h3>计分与结束</h3>
+              <p>最后一张可用牌被拿走后立即结束。数字牌升序排列后，每段连续数字只计算最小的一张，其余连续牌均计0分。</p>
+              <p>数字牌得分减去剩余筹码数得到最终净分；最低分获胜，相同最低分共同获胜。秘密移除的9张牌仅在游戏结束后公开。</p>
+              <h3>公开与隐藏信息</h3>
+              <p>所有玩家已经拿到的数字牌公开；游戏过程中其他玩家的筹码数量隐藏，只有本人能看到自己的准确筹码和预计净分。旁观者不能进行拒绝或拿牌操作。</p>
+            </div>
+          </details>
           <div class="panel-title"><span>游戏记录</span><button id="toggleLogButton" type="button">收起</button></div>
           <div id="logList" class="log-list"></div>
+          <details id="spectatorPanel" class="spectator-panel hidden" open>
+            <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+            <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+          </details>
         </aside>
-      </div>
 
-      <section id="myArea" class="my-area panel">
-        <div class="my-summary">
-          <div><span>我的筹码</span><b id="myChips">—</b></div>
-          <div><span>当前牌面分</span><b id="myCardScore">0</b></div>
-          <div><span>预计净分</span><b id="myNetScore">—</b></div>
-        </div>
-        <div>
-          <h2>我的数字牌</h2>
-          <div id="myCards" class="card-runs"><p class="muted">还没有拿牌</p></div>
-        </div>
-      </section>
+        <section id="myArea" class="my-area panel">
+          <div class="my-summary">
+            <div><span>我的筹码</span><b id="myChips">—</b></div>
+            <div><span>当前牌面分</span><b id="myCardScore">0</b></div>
+            <div><span>预计净分</span><b id="myNetScore">—</b></div>
+          </div>
+          <div>
+            <h2>我的数字牌</h2>
+            <div id="myCards" class="card-runs"><p class="muted">还没有拿牌</p></div>
+          </div>
+        </section>
+      </div>
 
       <section id="resultPanel" class="result-panel panel hidden">
         <p class="eyebrow">FINAL SCORE</p>

@@ -147,3 +147,65 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
   .table-center { gap: 14px; padding-inline: 0; }.deck-visual, .number-card { width: 96px; }.deck-visual { font-size: 1.05rem; }.pot-area { min-width: 65px; flex-direction: column; gap: 3px; text-align: center; }
   .action-area { grid-template-columns: 1fr; }.my-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }.score-row { grid-template-columns: 25px 1fr auto; gap: 7px; }.score-row span:nth-of-type(2), .score-row span:nth-of-type(3) { display: none; }
 }
+
+/* Compact room header and game-first responsive hierarchy. */
+.site-header.in-room { min-height: 0; gap: 12px; padding-block: 9px; }
+.site-header.in-room .header-title { display: flex; align-items: baseline; gap: 12px; }
+.site-header.in-room .header-title .eyebrow { display: none; }
+.site-header.in-room h1 { font-size: clamp(1.45rem, 2.8vw, 2.15rem); white-space: nowrap; }
+.header-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.room-header-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 5px 7px; border: 1px solid rgb(255 255 255 / 28%); border-radius: 13px; background: rgb(5 39 30 / 36%); }
+.room-identity { display: flex; align-items: baseline; gap: 6px; padding: 0 5px; color: #c9ddd5; font-size: .7rem; }
+.room-identity strong { color: var(--yellow); font: 900 1.25rem "Arial Black"; letter-spacing: .12em; }
+.room-header-tools .host-tools { align-items: center; flex-wrap: wrap; gap: 6px; }
+.room-header-tools .host-tools label { gap: 5px; color: #d8e5df; font-size: .7rem; }
+.room-header-tools .host-tools select { width: 58px; min-height: 32px; padding: 5px 7px; }
+.room-header-tools button { min-height: 32px; padding: 5px 9px; border-color: rgb(255 255 255 / 26%); color: white; background: rgb(255 255 255 / 10%); font-size: .74rem; }
+.room-header-tools button.primary { border-color: #ff987f; background: var(--coral); }
+.room-header-tools button.danger { border-color: #e7a59a; color: #ffece8; background: #873b31; }
+
+.my-area { grid-column: 1 / -1; }
+.rules-card { margin-bottom: 15px; border-bottom: 1px solid var(--line); }
+.rules-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 12px; cursor: pointer; list-style: none; font-size: .82rem; font-weight: 800; }
+.rules-card > summary::-webkit-details-marker { display: none; }
+.fold-hint { color: #777267; font-size: .7rem; font-weight: 500; }
+.fold-hint::before { content: "＋ "; }
+.rules-card[open] .fold-hint { font-size: 0; }
+.rules-card[open] .fold-hint::before { content: "－ "; font-size: .7rem; }
+.rules-card[open] .fold-hint::after { content: "收起"; font-size: .7rem; }
+.rule-details { max-height: 58vh; overflow: auto; padding: 2px 3px 12px; border-top: 1px dashed var(--line); }
+.rule-details h3 { margin: 13px 0 5px; color: var(--green); font-size: .8rem; }
+.rule-details p { margin: 0 0 7px; color: #777267; font-size: .7rem; line-height: 1.65; }
+.support-panel > .spectator-panel { margin-top: 14px; }
+.support-panel .log-list { max-height: 320px; }
+
+@media (max-width: 1000px) {
+  .site-header.in-room { align-items: flex-start; }
+  .site-header.in-room .header-meta { flex: 1; }
+  .room-header-tools { justify-content: flex-end; }
+  .support-panel { grid-column: 1 / -1; }
+}
+
+@media (max-width: 720px) {
+  .site-header.in-room { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; }
+  .site-header.in-room .header-meta { min-width: 0; }
+  .site-header.in-room .connection-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .room-header-tools { width: 100%; justify-content: flex-end; }
+  .game-grid .table-panel { order: 1; }
+  .game-grid .my-area { order: 2; }
+  .game-grid .players-panel { order: 3; }
+  .game-grid .support-panel { grid-column: auto; order: 4; }
+}
+
+@media (max-width: 500px) {
+  .site-header.in-room { grid-template-columns: 1fr; }
+  .site-header.in-room .header-title { display: none; }
+  .header-meta { justify-content: stretch; }
+  .site-header.in-room .connection-pill { margin-left: auto; }
+  .room-header-tools { justify-content: flex-start; }
+  .room-identity { flex: 1 1 auto; }
+  .room-header-tools .host-tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .room-header-tools .host-tools label { min-width: 0; }
+  .room-header-tools .host-tools select, .room-header-tools .host-tools button { width: 100%; }
+  .rule-details { max-height: 65vh; }
+}
