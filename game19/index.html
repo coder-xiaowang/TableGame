@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>BANG! · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header id="hero" class="hero">
+    <div><p class="eyebrow">WILD WEST · SERVER AUTHORITY</p><h1>BANG!</h1><p>身份、枪火与最后一个活着的人</p></div>
+    <div class="hero-meta">
+      <div id="connectionStatus" class="connection-status">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>4</option><option>5</option><option>6</option><option>7</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary">开始枪战</button>
+          <button id="restartGameButton" class="primary hidden">再来一局</button>
+          <button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" class="secondary small hidden" type="button"></button>
+      </section>
+    </div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active">创建房间</button><button id="guestModeButton">加入房间</button></div>
+    <section id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">OPEN A SALOON</p><h2>召集西部枪手</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>玩家人数<select id="playerCountSelect"><option selected>4</option><option>5</option><option>6</option><option>7</option></select></label>
+      <button id="createRoomButton" class="primary">创建房间</button>
+    </section>
+    <section id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN THE DUEL</p><h2>进入朋友的房间</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 BANG"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>加入游戏</b><small>满员或开局后自动旁观</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>只做旁观者</b><small>不会看到隐藏身份与手牌</small></span></label>
+      </fieldset>
+      <button id="joinRoomButton" class="primary">进入房间</button>
+    </section>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside class="sidebar">
+      <details class="panel rule-card">
+        <summary><span><span class="eyebrow">RULE BOOK</span><b>详细规则</b></span><span>展开</span></summary>
+        <div class="rule-details">
+          <h3>身份目标</h3><p>警长消灭所有歹徒与叛徒；副警长保护警长；歹徒杀死警长；叛徒必须成为最后存活者并最后击败警长。只有警长开局公开身份。</p>
+          <h3>回合流程</h3><p>结算炸药和监狱，摸2张牌，自由出牌，最后把手牌弃至不超过当前生命。通常每回合只能使用1张【砰！】，射程由武器和距离修正决定。</p>
+          <h3>伤害与出局</h3><p>受到【砰！】可用【闪！】或木桶判定。生命降至0时，自己及其他存活玩家可用啤酒救援。击杀歹徒摸3张；警长误杀副警长弃掉全部牌。</p>
+          <h3>数字版时间</h3><p>出牌75秒，响应15秒，选择20秒，超额弃牌25秒。超时由服务器执行确定且合法的默认动作。</p>
+          <p class="muted">完整实现口径见项目内 RULES.md。</p>
+        </div>
+      </details>
+      <section class="panel log-card"><div class="section-head"><div><p class="eyebrow">CHRONICLE</p><h2>枪战记录</h2></div><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open><summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary><div id="spectatorList" class="spectator-list"></div></details>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入</div>
+      <section class="western-table">
+        <div id="players" class="players"></div>
+        <div class="table-center">
+          <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
+          <div class="piles"><div class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
+        </div>
+        <section id="controlDock" class="control-dock">
+          <div><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2><p id="actionHint" class="muted"></p></div>
+          <div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div>
+          <div id="actionButtons" class="action-buttons"></div>
+        </section>
+        <section id="privateZone" class="private-zone">
+          <div class="private-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><div id="selfSummary"></div></div>
+          <div id="myHand" class="hand"></div>
+        </section>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
