@@ -16,9 +16,9 @@ const COMPANIES = [
 const BID_LEVELS = [0, 1000, 3000, 6000, 10000, 15000, 20000, 25000];
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
-  "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput",
+  "hero", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput",
   "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect",
-  "spectatorSettingButton", "roomRoleBanner", "roomRoleTitle", "roomRoleHint", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList",
+  "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList",
   "startGameButton", "restartGameButton", "endGameButton", "notice", "roundNumber", "roundTotal", "deckCount", "stockTicker", "informationPanel", "stockpiles",
   "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "privateZone", "myCash", "myInformation", "myPortfolio", "toggleLogButton", "logList"
 ].map((id) => [id, $(id)]));
@@ -37,7 +37,7 @@ const room = createAuthoritativeRoomClient({
 
 spectatorUi = createSpectatorUi({
   room, getView: () => view,
-  elements: { joinIntentField: E.joinIntentField, roomRoleBanner: E.roomRoleBanner, roomRoleTitle: E.roomRoleTitle, roomRoleHint: E.roomRoleHint, seatActionButton: E.seatActionButton,
+  elements: { joinIntentField: E.joinIntentField, seatActionButton: E.seatActionButton,
     spectatorSettingButton: E.spectatorSettingButton, spectatorPanel: E.spectatorPanel, spectatorCountBadge: E.spectatorCountBadge, spectatorList: E.spectatorList },
   notify: (message) => alert(message), confirmAction: (message) => confirm(message), onSessionEnded: () => location.reload()
 });
@@ -49,7 +49,7 @@ const forecastLabel = (id) => ({ down3: "-3", down2: "-2", up1: "+1", up2: "+2",
 const cardText = (card) => card.kind === "stock" ? `${company(card.companyId).short}股票` : card.kind === "fee" ? `费用 ${money(card.amount)}` : card.kind === "action" ? (card.actionType === "boom" ? "上涨 +2" : "下跌 -2") : "暗牌";
 
 function submit(action) { return Promise.resolve(room.submitAction(action)).catch((error) => { E.connectionStatus.textContent = `操作失败：${error.message}`; alert(error.message); }); }
-function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
+function enterRoom() { setHidden(E.setupPanel, true); setHidden(E.roomPanel, false); setHidden(E.roomHeaderTools, false); E.hero.classList.add("in-room"); E.roomCodeDisplay.textContent = room.snapshot().roomCode; }
 async function createGameRoom() {
   E.createRoomButton.disabled = true;
   try { await room.createRoom({ name: cleanPlayerName(E.hostNameInput.value, "房主"), capacity: Number(E.playerCountSelect.value) }); }

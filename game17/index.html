@@ -10,9 +10,20 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <div><p class="eyebrow">INSIDER TRADING · SERVER AUTHORITY</p><h1>股海纵横</h1><p>掌握内幕，构造市场，在公开竞价中隐藏真正的判断。</p></div>
-      <div id="connectionStatus" class="connection-status">正在检查服务</div>
+    <header id="hero" class="hero">
+      <div class="hero-title"><p class="eyebrow">INSIDER TRADING · SERVER AUTHORITY</p><h1>股海纵横</h1><p>掌握内幕，构造市场，在公开竞价中隐藏真正的判断。</p></div>
+      <div class="hero-meta">
+        <div id="connectionStatus" class="connection-status">正在检查服务</div>
+        <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="交易室设置">
+          <div class="room-identity"><span>交易室</span><strong id="roomCodeDisplay" class="room-code">------</strong></div>
+          <div id="hostTools" class="host-tools hidden">
+            <label><span>人数</span><select id="roomPlayerCountSelect"><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option></select></label>
+            <button id="startGameButton" class="primary">开始交易</button><button id="restartGameButton" class="primary hidden">再来一局</button>
+            <button id="spectatorSettingButton">关闭旁观加入</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+          </div>
+          <button id="seatActionButton" class="small hidden"></button>
+        </section>
+      </div>
     </header>
 
     <section id="setupPanel" class="setup-wrap">
@@ -34,18 +45,37 @@
     </section>
 
     <section id="roomPanel" class="room-layout hidden">
-      <div id="roomRoleBanner" class="room-role-banner"><div><strong id="roomRoleTitle">玩家席</strong><span id="roomRoleHint"></span></div><button id="seatActionButton" class="small hidden"></button></div>
       <aside class="sidebar">
-        <section class="panel room-card"><p class="eyebrow">TRADING ROOM</p><div id="roomCodeDisplay" class="room-code">------</div>
-          <div id="hostTools" class="host-tools">
-            <label>本局人数<select id="roomPlayerCountSelect"><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option><option value="5">5人</option></select></label>
-            <button id="startGameButton" class="primary">开始交易</button><button id="restartGameButton" class="primary hidden">再来一局</button>
-            <button id="spectatorSettingButton">关闭旁观加入</button><button id="endGameButton" class="danger hidden">结束并返回大厅</button>
+        <details class="panel rules-card">
+          <summary><span><span class="eyebrow">MARKET GUIDE</span><b>详细交易规则</b></span><span class="fold-hint">展开</span></summary>
+          <div class="rule-details">
+            <h3>比赛与回合</h3>
+            <p>基础版支持2～5人。3、4、5人分别进行7、6、5轮；2人进行6轮特殊局。普通局初始资金为 $20K，两人局为 $30K，每人随机获得一张起始股票。</p>
+            <p>每轮依次进行：内幕信息 → 配置供给 → 公开竞价 → 行动牌 → 卖出股票 → 公布行情。</p>
+            <h3>内幕与供给</h3>
+            <ul>
+              <li>每家公司每轮对应一项唯一行情；普通局每人掌握一组私密内幕，并有一组公开内幕。</li>
+              <li>两人局每人掌握两组私密内幕，其余两组保持未知。</li>
+              <li>配置供给时必须放置一张明牌和一张暗牌，可以放入同一股票堆，也可以分开放置。</li>
+            </ul>
+            <h3>竞价与取得股票堆</h3>
+            <ul>
+              <li>新报价必须严格高于该股票堆当前报价，并且不能超过自己可以支付的现金。</li>
+              <li>两人局每人使用两个报价标记，不能同时投向同一堆，两个有效报价总和不得超过现金。</li>
+              <li>竞价结束后支付报价并获得整堆卡牌；交易费若暂时无法支付，会记录为欠费并在之后自动偿还。</li>
+            </ul>
+            <h3>股价、卖出与分红</h3>
+            <ul>
+              <li>行动牌必须当轮执行。股价上涨越过 $10 时拆股并从 $6 继续；跌破 $1 时破产并重置为 $5。</li>
+              <li>卖出阶段可卖任意数量股票；拆股牌可按两股全部卖出，也可卖一股后转为普通持股。</li>
+              <li>出现分红时股价不变。玩家自行决定公开多少持股，每公开一股获得 $2K，也可以放弃分红以隐藏持仓。</li>
+            </ul>
+            <h3>终局与公开信息</h3>
+            <p>每家公司单独最大股东获得 $10K；并列最大股东各获 $5K。现金、欠费、报价和持股数量公开，具体公司持仓与未公布内幕保密。最终净资产最高者获胜，并列则共享胜利。</p>
           </div>
-        </section>
-        <section class="panel rules-card"><p class="eyebrow">MARKET GUIDE</p><p>每轮：内幕 → 供给 → 竞价 → 行动 → 卖出 → 行情。</p><p>现金和持股数量公开，持股公司与内幕信息保密。越过 $10 拆股，跌破 $1 破产。</p></section>
-        <details id="spectatorPanel" class="panel spectator-panel"><summary>旁观者 <span id="spectatorCountBadge">0</span></summary><div id="spectatorList"></div></details>
+        </details>
         <section class="panel log-card"><div class="section-head"><h2>交易记录</h2><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
+        <details id="spectatorPanel" class="panel spectator-panel"><summary>旁观者 <span id="spectatorCountBadge">0</span></summary><div id="spectatorList"></div></details>
       </aside>
 
       <section class="game-area">
