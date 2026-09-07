@@ -298,10 +298,10 @@ function tileHtml(tile, { source = "table", changed = false, locked = false, ass
 }
 
 function sortedHandIds() {
-  if (!draft) return view.hand.map((tile) => tile.id);
   const map = tileMap();
   const colorRank = new Map(COLORS.map((color, index) => [color, index]));
-  return [...draft.handIds].sort((leftId, rightId) => {
+  const handIds = draft?.handIds || view.hand.map((tile) => tile.id);
+  return [...handIds].sort((leftId, rightId) => {
     const left = map.get(leftId), right = map.get(rightId);
     if (left.joker !== right.joker) return left.joker ? 1 : -1;
     if (left.joker) return left.id.localeCompare(right.id);
@@ -313,7 +313,7 @@ function sortedHandIds() {
 
 function renderHand() {
   const map = tileMap();
-  const ids = view.permissions.canAct && draft ? sortedHandIds() : view.hand.map((tile) => tile.id);
+  const ids = sortedHandIds();
   E.hand.innerHTML = ids.map((id) => tileHtml(map.get(id), { source: "hand" })).join("")
     || '<p class="waiting">牌架已经清空。</p>';
   E.handHint.textContent = view.phase === "playing"

@@ -36,6 +36,9 @@ test("进入房间时启用紧凑标题工具且旁观接口不依赖身份横�
   assert.doesNotMatch(script, /E\.roomRole(?:Banner|Title|Hint)/);
   assert.match(script, /createSpectatorUi\(\{/);
   assert.match(script, /seatActionButton: E\.seatActionButton/);
+  assert.match(script, /const handIds = draft\?\.handIds \|\| view\.hand\.map/);
+  assert.match(script, /const ids = sortedHandIds\(\);/);
+  assert.doesNotMatch(script, /view\.permissions\.canAct && draft \? sortedHandIds\(\)/);
 });
 
 test("移动端优先展示牌桌并保留吸附操作牌架", () => {
