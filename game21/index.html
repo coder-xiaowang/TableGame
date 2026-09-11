@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>间谍危机 SPYFALL · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header id="hero" class="hero">
+    <div class="hero-title"><p class="eyebrow">CLASSIFIED · SERVER AUTHORITY</p><h1>间谍危机 <span>SPYFALL</span></h1><p>所有人都知道身在何处——除了一名潜伏者。</p></div>
+    <div class="hero-meta">
+      <div id="connectionStatus" class="connection-status">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary" type="button">开始比赛</button>
+          <button id="nextRoundButton" class="primary hidden" type="button">下一轮</button>
+          <button id="endGameButton" class="danger hidden" type="button">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" class="small hidden" type="button"></button>
+      </section>
+    </div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active" type="button">创建行动组</button><button id="guestModeButton" type="button">加入行动组</button></div>
+    <section id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">OPEN A CASE</p><h2>建立秘密频道</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>玩家人数<select id="playerCountSelect"><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <button id="createRoomButton" class="primary" type="button">创建房间</button>
+    </section>
+    <section id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN THE CASE</p><h2>接入秘密频道</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 SPY8"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>加入玩家席</b><small>满员或开局后自动转为旁观</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>只做旁观者</b><small>进行中不会获得地点和身份</small></span></label>
+      </fieldset>
+      <button id="joinRoomButton" class="primary" type="button">进入房间</button>
+    </section>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside class="sidebar">
+      <details class="panel rule-card">
+        <summary><span><span class="eyebrow">FIELD MANUAL</span><b>详细规则</b></span><span>展开</span></summary>
+        <div class="rule-details">
+          <h3>身份与目标</h3><p>每轮只有一名间谍。普通特工知道地点和自己的地点身份，要找出间谍；间谍不知道地点，要隐藏自己或主动猜中地点。</p>
+          <h3>问答</h3><p>首位提问者选择一人并通过语音提问。回答者确认完成后接棒提问，但不能立刻反问刚才向自己提问的人。每轮限时8分钟。</p>
+          <h3>主动指认</h3><p>每人每轮可暂停游戏指认一次。除嫌疑人外必须全票赞成才翻牌；抓中间谍则特工获胜，错抓无辜者则间谍获胜。未获全票时恢复原问答和剩余时间。</p>
+          <h3>间谍猜地点</h3><p>正常问答期间，间谍可以秘密选择地点并最终确认。猜中立即获胜，猜错则普通特工获胜；指认和超时阶段不能抢先猜测。</p>
+          <h3>问答超时</h3><p>从本轮发牌者开始依座次提名。每人可提名另一人或跳过；提名仍须除嫌疑人外全票赞成。全部提名均未形成一致意见时，间谍获胜。</p>
+          <h3>比赛与计分</h3><p>固定进行5轮。特工获胜各得1分，提前指认成功的发起者再得1分；间谍获胜得2分，猜中地点或诱使全员错抓无辜者再得2分。最高分者获胜，同分并列。</p>
+          <h3>隐私</h3><p>投票中只公开提交进度。本轮结束后才公开真实地点、间谍及所有地点身份。旁观者在结算前不会收到任何秘密。</p>
+        </div>
+      </details>
+
+      <details class="panel locations-card">
+        <summary><span><span class="eyebrow">LOCATION INDEX</span><b>30个候选地点</b></span><span>展开</span></summary>
+        <div id="locationList" class="location-list"></div>
+      </details>
+
+      <section class="panel score-card">
+        <p class="eyebrow">SCOREBOARD</p><h2>行动组得分</h2><div id="scoreboard" class="scoreboard"></div>
+      </section>
+
+      <section class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">PUBLIC RECORD</p><h2>公开记录</h2></div><button id="toggleLogButton" class="small" type="button">收起</button></div>
+        <div id="logList" class="log"></div>
+      </section>
+
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <section class="intelligence-table">
+        <div class="table-title"><p class="eyebrow">ACTIVE SURVEILLANCE</p><h2 id="phaseTitle">等待行动开始</h2><span>第 <b id="roundNumber">0</b> / 5 轮</span></div>
+        <div id="players" class="players"></div>
+        <section class="public-focus" aria-live="polite"><span id="focusLabel">CASE STATUS</span><strong id="focusText">地点尚未确定</strong><small id="focusHint">问答顺序和公开表决会显示在这里</small></section>
+      </section>
+
+      <section id="controlDock" class="panel control-dock" data-role="player">
+        <div class="action-zone">
+          <div class="action-head"><div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+          <p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <section id="secretPanel" class="secret-panel private-zone hidden"><span>你的秘密档案</span><strong id="secretRole">—</strong><p id="secretLocation"></p><small id="secretLocationRole"></small></section>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
