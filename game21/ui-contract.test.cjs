@@ -22,6 +22,12 @@ test("页面遵守最新紧凑标题、折叠侧栏、独立桌面和合并吸�
   assert.match(script, /data-target-id=/);
   assert.match(script, /type: "spyGuess"/);
   assert.match(script, /type: "voteAccusation"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(css, /\.presentation-token/);
+  assert.match(css, /\.player-seat\.accused/);
   assert.doesNotMatch(script, /https?:\/\//);
   assert.match(css, /\.control-dock\{position:sticky/);
   assert.match(css, /\.control-dock\[data-role="spectator"\]\{position:relative/);

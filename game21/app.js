@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown, createSessionStore,
-  createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
+  createPresentationTimeline, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 
 const PROTOCOL_VERSION = 3;
@@ -16,7 +16,8 @@ const E = Object.fromEntries([
   "hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay",
   "hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","startGameButton","nextRoundButton","endGameButton",
-  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","controlDock","actionTitle","actionHint","actionButtons",
+  "notice","phaseTitle","roundNumber","intelligenceTable","players","focusLabel","focusText","focusHint","presentationEffects","presentationTrail",
+  "presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons",
   "timerText","timerBar","secretPanel","secretRole","secretLocation","secretLocationRole","locationList","scoreboard","toggleLogButton","logList",
   "spectatorPanel","spectatorCountBadge","spectatorList"
 ].map((id) => [id, $(id)]));
@@ -25,6 +26,7 @@ let mode = "host";
 let view = null;
 let spectatorUi = null;
 let selectionMode = null;
+let presentation = null;
 
 const sessions = createSessionStore({ gameId: "spyfall" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -38,6 +40,7 @@ const room = createAuthoritativeRoomClient({
       if (!selectionStillLegal()) selectionMode = null;
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
@@ -66,6 +69,47 @@ function submit(action) {
 
 function player(id) { return view?.players.find((item) => item.id === id) || null; }
 function nameOf(id) { return player(id)?.name || "玩家"; }
+
+function seatFor(playerId) {
+  return [...E.players.querySelectorAll("[data-player-id]")].find((seat) => seat.dataset.playerId === String(playerId)) || null;
+}
+
+function presentationKindLabel(kind) {
+  return {
+    "question-ready": "提问权交接", question: "定向提问", "answer-complete": "回答完成",
+    accusation: "紧急指认", "vote-submitted": "秘密表决", "vote-rejected": "指认驳回",
+    "nomination-ready": "超时提名", nomination: "最终提名", "nomination-next": "提名权交接",
+    "location-reveal": "间谍摊牌", "round-result": "本轮结案"
+  }[kind] || "行动动态";
+}
+
+function playPresentationObject(event) {
+  const source = seatFor(event.actorId);
+  const target = seatFor(event.targetId) || E.intelligenceTable.querySelector(".public-focus");
+  const highlighted = [source, target].filter(Boolean);
+  highlighted.forEach((element) => element.classList.add("presentation-focus"));
+  if (["accusation", "nomination", "location-reveal"].includes(event.kind)) E.intelligenceTable.classList.add("alert-event");
+
+  let token = null;
+  if (source && target && event.actorId !== event.targetId) {
+    const stageRect = E.intelligenceTable.getBoundingClientRect();
+    const from = source.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    token = document.createElement("span");
+    token.className = "presentation-token";
+    token.textContent = ["question", "answer-complete", "question-ready"].includes(event.kind) ? "?" : "!";
+    token.style.setProperty("--from-x", `${from.left + from.width / 2 - stageRect.left}px`);
+    token.style.setProperty("--from-y", `${from.top + from.height / 2 - stageRect.top}px`);
+    token.style.setProperty("--to-x", `${to.left + to.width / 2 - stageRect.left}px`);
+    token.style.setProperty("--to-y", `${to.top + to.height / 2 - stageRect.top}px`);
+    E.presentationEffects.append(token);
+  }
+  return () => {
+    highlighted.forEach((element) => element.classList.remove("presentation-focus"));
+    E.intelligenceTable.classList.remove("alert-event");
+    token?.remove();
+  };
+}
 
 function selectionStillLegal() {
   if (!view || !selectionMode) return false;
@@ -140,7 +184,9 @@ function renderPlayers() {
       item.role === "spy" ? '<span class="badge spy">间谍</span>' : item.role === "operative" ? `<span class="badge">特工${item.locationRole ? ` · ${escapeHtml(item.locationRole)}` : ""}</span>` : ""
     ].join("");
     const targetable = targets.has(item.id);
-    return `<article data-side="${side}" style="--seat-y:${y}%" class="player-seat ${item.id === view.selfId ? "self" : ""} ${!item.connected ? "offline" : ""} ${active ? "active" : ""} ${targetable ? "targetable" : ""}" ${targetable ? `data-target-id="${escapeHtml(item.id)}" role="button" tabindex="0"` : ""}>
+    const responseState = view.phase === "accusationVote" && view.accusation?.targetId === item.id ? "accused" : view.phase === "timeoutVote" && view.nomination?.targetId === item.id ? "accused" : "";
+    const voted = [...(view.submittedAccusationVoteIds || []), ...(view.submittedTimeoutVoteIds || [])].includes(item.id);
+    return `<article data-player-id="${escapeHtml(item.id)}" data-side="${side}" style="--seat-y:${y}%" class="player-seat ${item.id === view.selfId ? "self" : ""} ${!item.connected ? "offline" : ""} ${active ? "active" : ""} ${targetable ? "targetable" : ""} ${responseState} ${voted ? "responded" : ""}" ${targetable ? `data-target-id="${escapeHtml(item.id)}" role="button" tabindex="0"` : ""}>
       <div class="seat-head"><div><b>${escapeHtml(item.name)}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"} · ${item.score}分</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div>
       <div class="seat-badges">${badges || '<span class="badge">身份保密</span>'}</div>
     </article>`;
@@ -328,6 +374,21 @@ function render() {
   if (view.deadline) countdown.start(view.deadline, PHASE_MS[view.phase] || 30000);
   else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
 }
+
+presentation = createPresentationTimeline({
+  container: E.intelligenceTable,
+  trailPath: E.presentationTrail,
+  announcement: E.presentationAnnouncement,
+  labelElement: E.presentationLabel,
+  textElement: E.presentationText,
+  effectsElement: E.presentationEffects,
+  resolveSource: (event) => seatFor(event.actorId),
+  resolveTarget: (event) => seatFor(event.targetId) || E.intelligenceTable.querySelector(".public-focus"),
+  labelFor: (event) => presentationKindLabel(event.kind),
+  beforePlay: playPresentationObject,
+  durationMs: 2300,
+  reducedDurationMs: 950
+});
 
 function selectMode(nextMode) {
   mode = nextMode;

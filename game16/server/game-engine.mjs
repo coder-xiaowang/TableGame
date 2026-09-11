@@ -3,6 +3,7 @@ import {
   MAX_PLAYERS, MIN_PLAYERS, ROLE_LABELS, ROLES, STARTING_COINS,
   actionLabel, actionMeta, createCourtDeck, roleLabel, shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -58,30 +59,26 @@ function addLog(state, text, now) {
 }
 
 function addMoment(state, { kind, actorId, targetId = null, actionType = null, claimedRole = null, showClaim = false, text }, now) {
-  state.momentSequence = (Number(state.momentSequence) || 0) + 1;
+  const nextSequence = (Number(state.momentSequence) || 0) + 1;
   const actor = playerById(state, actorId);
   const activeSlots = actor?.influences
     .map((card, index) => card.revealed ? null : index)
     .filter((index) => index !== null) || [];
-  const visualSeed = `${now}:${state.momentSequence}:${actorId}`;
+  const visualSeed = `${now}:${nextSequence}:${actorId}`;
   let visualHash = 2166136261;
   for (const character of visualSeed) visualHash = Math.imul(visualHash ^ character.charCodeAt(0), 16777619);
   const claimSlot = showClaim && claimedRole && activeSlots.length
     ? activeSlots[(visualHash >>> 0) % activeSlots.length]
     : null;
-  state.moments.push({
-    id: `moment_${state.momentSequence}`,
-    sequence: state.momentSequence,
+  appendPresentationEvent(state, {
     kind,
     actorId: String(actorId),
     targetId: targetId ? String(targetId) : null,
     actionType,
     claimedRole,
     claimSlot,
-    text: String(text),
-    at: now
-  });
-  if (state.moments.length > 30) state.moments.splice(0, state.moments.length - 30);
+    text: String(text)
+  }, { now, eventsKey: "moments", sequenceKey: "momentSequence", idPrefix: "moment", limit: 30 });
 }
 
 function setPhase(state, phase, now, seconds = 0) {
@@ -491,7 +488,8 @@ export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game16 state");
   if (!Number.isInteger(state.reactionSequence) || state.reactionSequence < 0) throw new Error("Invalid game16 reaction sequence");
   if (state.reaction && (!state.reaction.id || !state.reaction.kind)) throw new Error("Invalid game16 reaction window");
-  if (!Array.isArray(state.moments) || !Number.isInteger(state.momentSequence) || state.momentSequence < 0) throw new Error("Invalid game16 presentation events");
+  try { validatePresentationState(state, { eventsKey: "moments", sequenceKey: "momentSequence" }); }
+  catch { throw new Error("Invalid game16 presentation events"); }
   if (state.phase === "lobby") return true;
   const cards = [...state.deck, ...state.players.flatMap((p) => p.influences), ...(state.exchange?.drawn || [])];
   const ids = cards.map((card) => card.id);
@@ -509,9 +507,6 @@ export function restoreState(serializedState) {
     state.reactionSequence += 1;
     state.reaction.id = `reaction_${state.reactionSequence}`;
   }
-  state.moments = Array.isArray(state.moments) ? state.moments : [];
-  state.momentSequence = Number.isInteger(state.momentSequence) && state.momentSequence >= 0
-    ? state.momentSequence
-    : state.moments.reduce((maximum, moment) => Math.max(maximum, Number(moment?.sequence) || 0), 0);
+  normalizePresentationState(state, { eventsKey: "moments", sequenceKey: "momentSequence" });
   validateState(state); return state;
 }

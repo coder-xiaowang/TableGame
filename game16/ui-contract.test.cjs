@@ -21,7 +21,7 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.ok(logAt >= 0 && spectatorAt > logAt, "旁观席必须位于宫廷记录之后");
   assert.match(script, /createSpectatorUi/); assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(script, /reactionId: view\.reaction\?\.id/); assert.match(script, /expectedVersion: renderedVersion/);
-  assert.match(script, /function syncMoments/); assert.match(script, /data-influence-slot/); assert.match(script, /moment\.actorId === view\.selfId/);
+  assert.match(script, /createPresentationTimeline/); assert.match(script, /presentation\.sync\(view\.moments\)/); assert.match(script, /data-influence-slot/); assert.match(script, /moment\.actorId === view\.selfId/);
   assert.match(script, /setHidden\(E\.roomHeaderTools, false\)/);
   assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/);
   assert.match(styles, /@media \(min-width: 761px\)/);

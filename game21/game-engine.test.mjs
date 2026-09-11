@@ -25,6 +25,9 @@ test("问答由回答者接棒并禁止立即反问上一位提问者", () => {
   engine.applyAction(state, target, { type: "completeAnswer" }, { now: 1300 });
   assert.equal(state.questionerId, target);
   assert.equal(state.blockedTargetId, asker);
+  assert.deepEqual(state.presentationEvents.slice(-2).map((event) => event.kind), ["question", "answer-complete"]);
+  assert.equal(state.presentationEvents.at(-1).actorId, asker);
+  assert.equal(state.presentationEvents.at(-1).targetId, target);
   assert.throws(() => engine.applyAction(state, target, { type: "selectQuestionTarget", targetId: asker }, { now: 1400 }), /不能选择/);
 });
 
@@ -90,6 +93,49 @@ test("逐玩家视图和旁观视图在结算前不泄露地点与间谍", () =>
   assert.equal(spectatorView.privateRole, null);
   assert.equal(spectatorView.privateLocation, null);
   assert.ok(spectatorView.players.every((player) => player.role === null && player.locationRole === null));
+  assert.deepEqual(spectatorView.presentationEvents, operativeView.presentationEvents);
+  assert.ok(spectatorView.presentationEvents.every((event) => !JSON.stringify(event).includes(state.location.name)));
+  assert.ok(spectatorView.presentationEvents.every((event) => !Object.hasOwn(event, "agree")));
+});
+
+test("指认演出公开行动方向和提交进度但不公开赞成或反对", () => {
+  const state = started();
+  const accuser = state.players.find((player) => player.id !== state.spyId);
+  const target = state.players.find((player) => player.id !== accuser.id);
+  engine.applyAction(state, accuser.id, { type: "accuse", targetId: target.id }, { now: 2000 });
+  const voter = state.players.find((player) => player.id !== target.id && player.id !== accuser.id);
+  engine.applyAction(state, voter.id, { type: "voteAccusation", agree: true }, { now: 2100 });
+  const events = engine.buildSpectatorView(state).presentationEvents;
+  assert.equal(events.at(-2).kind, "accusation");
+  assert.equal(events.at(-2).actorId, accuser.id);
+  assert.equal(events.at(-2).targetId, target.id);
+  assert.equal(events.at(-1).kind, "vote-submitted");
+  assert.equal(events.at(-1).actorId, voter.id);
+  assert.equal(JSON.stringify(events).includes('"agree"'), false);
+});
+
+test("导致表决立即失败的反对者不会通过演出事件暴露身份", () => {
+  const state = started();
+  const accuser = state.players.find((player) => player.id !== state.spyId);
+  const target = state.players.find((player) => player.id !== accuser.id);
+  engine.applyAction(state, accuser.id, { type: "accuse", targetId: target.id }, { now: 2000 });
+  const dissenter = state.players.find((player) => player.id !== target.id && player.id !== accuser.id);
+  engine.applyAction(state, dissenter.id, { type: "voteAccusation", agree: false }, { now: 2100 });
+  const latest = state.presentationEvents.at(-1);
+  assert.equal(latest.kind, "vote-rejected");
+  assert.notEqual(latest.actorId, dissenter.id);
+  assert.equal(latest.text.includes(dissenter.name), false);
+});
+
+test("间谍地点猜测只在服务器完成原子结算后进入公开演出事件", () => {
+  const state = started();
+  const locationName = state.location.name;
+  assert.equal(JSON.stringify(engine.buildSpectatorView(state).presentationEvents).includes(locationName), false);
+  engine.applyAction(state, state.spyId, { type: "spyGuess", locationId: state.location.id }, { now: 2000 });
+  const event = engine.buildSpectatorView(state).presentationEvents.at(-1);
+  assert.equal(event.kind, "location-reveal");
+  assert.match(event.text, new RegExp(locationName));
+  assert.equal(state.phase, "roundEnd");
 });
 
 test("状态可以序列化并恢复关键秘密与绝对截止时间", () => {
@@ -99,6 +145,20 @@ test("状态可以序列化并恢复关键秘密与绝对截止时间", () => {
   assert.equal(restored.spyId, state.spyId);
   assert.equal(restored.deadline, state.deadline);
   assert.equal(restored.questionerId, state.questionerId);
+});
+
+test("旧快照缺少演出字段时可兼容恢复并继续分配递增序号", () => {
+  const state = started();
+  const legacy = engine.serializeState(state);
+  delete legacy.presentationEvents;
+  delete legacy.presentationSequence;
+  const restored = engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []);
+  assert.equal(restored.presentationSequence, 0);
+  const asker = restored.questionerId;
+  const target = restored.players.find((player) => player.id !== asker).id;
+  engine.applyAction(restored, asker, { type: "selectQuestionTarget", targetId: target }, { now: 2000 });
+  assert.equal(restored.presentationEvents.at(-1).sequence, 1);
 });
 
 test("上一轮间谍成为下一轮首位提问者且第五轮结算比赛优胜者", () => {

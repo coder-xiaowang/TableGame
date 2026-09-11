@@ -2,6 +2,7 @@ import {
   LOCATIONS, MATCH_ROUNDS, MAX_PLAYERS, MIN_PLAYERS, NOMINATION_SECONDS, ROLE,
   ROUND_SECONDS, SECRET_SECONDS, VOTE_SECONDS, assertCapacity, chooseLocation, dealRound, findLocation
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -54,6 +55,16 @@ function addLog(state, text, now) {
   state.logs = state.logs.slice(0, 100);
 }
 
+function addPresentation(state, event, now) {
+  return appendPresentationEvent(state, event, {
+    now,
+    eventsKey: "presentationEvents",
+    sequenceKey: "presentationSequence",
+    idPrefix: "spyfall_event",
+    limit: 40
+  });
+}
+
 function orderedFrom(state, playerId) {
   const index = Math.max(0, state.players.findIndex((player) => player.id === playerId));
   return [...state.players.slice(index), ...state.players.slice(0, index)].map((player) => player.id);
@@ -92,12 +103,25 @@ function finishRound(state, winnerSide, reason, now, { bonusKind = null, accuser
     winners: state.matchComplete ? state.players.filter((player) => player.score === Math.max(...state.players.map((item) => item.score))).map((player) => player.id) : []
   };
   addLog(state, `${winnerSide === "spy" ? "间谍" : "普通特工"}获胜：${reason}`, now);
+  addPresentation(state, {
+    kind: guessedLocationId ? "location-reveal" : "round-result",
+    actorId: guessedLocationId ? state.spyId : accuserId,
+    targetId: accusedId,
+    text: guessedLocationId
+      ? `${byId(state, state.spyId)?.name || "间谍"} 猜测“${findLocation(guessedLocationId)?.name || "未知地点"}”——${reason}`
+      : `${winnerSide === "spy" ? "间谍" : "普通特工"}获胜：${reason}`,
+    result: winnerSide
+  }, now);
 }
 
 function startQuestioning(state, now) {
   state.phase = "questioning";
   state.deadline = now + ROUND_SECONDS * 1000;
   addLog(state, `第${state.round}轮问答开始，${byId(state, state.questionerId)?.name || "玩家"}首先提问。`, now);
+  addPresentation(state, {
+    kind: "question-ready", actorId: state.questionerId,
+    text: `${byId(state, state.questionerId)?.name || "玩家"} 获得首个提问权`
+  }, now);
 }
 
 function startRound(state, now, random) {
@@ -175,6 +199,13 @@ function resumeQuestioning(state, now, message) {
 }
 
 function resolveAccusationFailure(state, now) {
+  const accusation = state.accusation;
+  addPresentation(state, {
+    kind: "vote-rejected",
+    actorId: accusation?.accuserId || null,
+    targetId: accusation?.targetId || null,
+    text: "指认未获全票，问答继续"
+  }, now);
   resumeQuestioning(state, now, "指认未获全票支持，恢复问答。");
 }
 
@@ -187,9 +218,14 @@ function beginTimeoutNomination(state, now) {
   state.timeoutVotes = {};
   state.questionTargetId = null;
   addLog(state, "问答时间结束，开始依次提名间谍嫌疑人。", now);
+  addPresentation(state, {
+    kind: "nomination-ready", actorId: currentNominatorId(state),
+    text: `问答时间结束，${byId(state, currentNominatorId(state))?.name || "玩家"} 获得提名权`
+  }, now);
 }
 
 function advanceNomination(state, now, message = "本次提名未获全票支持。") {
+  const previous = state.nomination;
   state.nominationIndex += 1;
   state.nomination = null;
   state.timeoutVotes = {};
@@ -200,6 +236,12 @@ function advanceNomination(state, now, message = "本次提名未获全票支持
   state.phase = "timeoutNomination";
   state.deadline = now + NOMINATION_SECONDS * 1000;
   addLog(state, `${message} 轮到 ${byId(state, state.nominationOrder[state.nominationIndex])?.name || "下一名玩家"} 提名。`, now);
+  addPresentation(state, {
+    kind: "nomination-next",
+    actorId: previous?.nominatorId || null,
+    targetId: currentNominatorId(state),
+    text: `${message} ${byId(state, currentNominatorId(state))?.name || "下一名玩家"} 接过提名权`
+  }, now);
 }
 
 function currentNominatorId(state) {
@@ -213,7 +255,8 @@ export function createLobby({ capacity, host }) {
     players: [makePlayer({ ...host, isHost: true })], location: null, spyId: null, dealerId: null, nextDealerId: null,
     questionerId: null, questionTargetId: null, blockedTargetId: null, savedQuestion: null, roundRemainingMs: 0,
     accusation: null, accusationVotes: {}, nominationOrder: [], nominationIndex: 0, nomination: null, timeoutVotes: {},
-    recentLocationIds: [], result: null, logs: [], logSequence: 0
+    recentLocationIds: [], result: null, logs: [], logSequence: 0,
+    presentationEvents: [], presentationSequence: 0
   };
 }
 
@@ -299,6 +342,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(!target || target.id === actor.id || target.id === state.blockedTargetId, "invalid_question_target", "不能选择这名玩家作为当前提问对象。", 409);
     state.questionTargetId = target.id;
     addLog(state, `${actor.name} 正在询问 ${target.name}。`, now);
+    addPresentation(state, {
+      kind: "question", actorId: actor.id, targetId: target.id,
+      text: `${actor.name} 向 ${target.name} 发起提问`
+    }, now);
     return;
   }
   if (type === "completeAnswer") {
@@ -309,6 +356,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     state.questionTargetId = null;
     state.blockedTargetId = previousQuestionerId;
     addLog(state, `${actor.name} 已回答，现在由其选择下一位玩家。`, now);
+    addPresentation(state, {
+      kind: "answer-complete", actorId: previousQuestionerId, targetId: actor.id,
+      text: `${actor.name} 完成回答并接过提问权`
+    }, now);
     return;
   }
   if (type === "accuse") {
@@ -324,6 +375,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     state.accusationVotes = { [actor.id]: true };
     state.deadline = now + VOTE_SECONDS * 1000;
     addLog(state, `${actor.name} 指认 ${target.name} 是间谍，等待全票表决。`, now);
+    addPresentation(state, {
+      kind: "accusation", actorId: actor.id, targetId: target.id,
+      text: `${actor.name} 指认 ${target.name} 是间谍`
+    }, now);
     return;
   }
   if (type === "voteAccusation") {
@@ -332,6 +387,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(Object.hasOwn(state.accusationVotes, actor.id), "already_voted", "你已经提交表决。", 409);
     fail(typeof action.agree !== "boolean", "invalid_vote", "请选择赞成或反对。");
     state.accusationVotes[actor.id] = action.agree;
+    if (action.agree) addPresentation(state, {
+      kind: "vote-submitted", actorId: actor.id, targetId: state.accusation.targetId,
+      text: `${actor.name} 已提交秘密表决`
+    }, now);
     if (!action.agree) {
       resolveAccusationFailure(state, now);
     } else if (allSubmitted(votersExcept(state, state.accusation.targetId), state.accusationVotes)) {
@@ -364,6 +423,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     state.timeoutVotes = { [actor.id]: true };
     state.deadline = now + VOTE_SECONDS * 1000;
     addLog(state, `${actor.name} 提名 ${target.name}，等待全票表决。`, now);
+    addPresentation(state, {
+      kind: "nomination", actorId: actor.id, targetId: target.id,
+      text: `${actor.name} 提名 ${target.name} 接受最终表决`
+    }, now);
     return;
   }
   if (type === "voteTimeoutNomination") {
@@ -372,6 +435,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(Object.hasOwn(state.timeoutVotes, actor.id), "already_voted", "你已经提交表决。", 409);
     fail(typeof action.agree !== "boolean", "invalid_vote", "请选择赞成或反对。");
     state.timeoutVotes[actor.id] = action.agree;
+    if (action.agree) addPresentation(state, {
+      kind: "vote-submitted", actorId: actor.id, targetId: state.nomination.targetId,
+      text: `${actor.name} 已提交秘密表决`
+    }, now);
     if (!action.agree) {
       advanceNomination(state, now);
     } else if (allSubmitted(votersExcept(state, state.nomination.targetId), state.timeoutVotes)) {
@@ -464,6 +531,7 @@ function buildPublicView(state, viewer) {
     })),
     result: state.result ? clone(state.result) : null,
     logs: clone(state.logs),
+    presentationEvents: clone(state.presentationEvents),
     permissions: permissionsFor(state, viewer)
   };
 }
@@ -492,6 +560,8 @@ export function validateState(state) {
     fail(state.players.filter((player) => player.role === ROLE.SPY).length !== 1, "invalid_spy", "间谍身份数据无效。");
     fail(state.players.some((player) => ![ROLE.SPY, ROLE.OPERATIVE].includes(player.role)), "invalid_roles", "玩家身份数据无效。");
   }
+  try { validatePresentationState(state); }
+  catch { throw new Error("Invalid game21 presentation events"); }
   return true;
 }
 
@@ -502,6 +572,7 @@ export function serializeState(state) {
 
 export function restoreState(serializedState) {
   const state = clone(serializedState);
+  normalizePresentationState(state);
   validateState(state);
   return state;
 }

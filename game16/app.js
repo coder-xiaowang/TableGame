@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
+  createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 
@@ -41,9 +41,6 @@ let selectedAction = null;
 let exchangeSelection = new Set();
 let spectatorUi = null;
 let actionPending = false;
-let momentCursor = null;
-let momentPlaying = false;
-const momentQueue = [];
 
 const sessions = createSessionStore({ gameId: "coup" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -134,29 +131,6 @@ function seatFor(playerId) {
   return [...E.players.querySelectorAll("[data-player-id]")].find((seat) => seat.dataset.playerId === String(playerId)) || null;
 }
 
-function elementCenter(element, relativeTo) {
-  const rect = element.getBoundingClientRect();
-  const base = relativeTo.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2 - base.left, y: rect.top + rect.height / 2 - base.top };
-}
-
-function setMomentTrail(moment) {
-  const source = seatFor(moment.actorId);
-  const target = seatFor(moment.targetId) || E.courtCenter;
-  if (!source || !target) return false;
-  const width = E.courtPanel.clientWidth; const height = E.courtPanel.clientHeight;
-  const from = elementCenter(source, E.courtPanel); const to = elementCenter(target, E.courtPanel);
-  const bend = Math.max(35, Math.min(120, Math.abs(to.x - from.x) * .22 + Math.abs(to.y - from.y) * .12));
-  const controlX = (from.x + to.x) / 2;
-  const controlY = (from.y + to.y) / 2 - bend;
-  E.momentTrail.ownerSVGElement.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  E.momentTrail.setAttribute("d", `M ${from.x} ${from.y} Q ${controlX} ${controlY} ${to.x} ${to.y}`);
-  E.momentTrail.classList.remove("active");
-  void E.momentTrail.getBoundingClientRect();
-  E.momentTrail.classList.add("active");
-  return true;
-}
-
 function showClaimPulse(moment) {
   if (moment.claimSlot === null || moment.claimSlot === undefined || moment.actorId === view.selfId) return null;
   const seat = seatFor(moment.actorId);
@@ -167,43 +141,26 @@ function showClaimPulse(moment) {
   badge.textContent = `宣称 · ${ROLE_META[moment.claimedRole]?.label || "身份"}`;
   card.append(badge);
   card.classList.add("claim-pulse");
-  return { card, badge };
+  return () => {
+    card.classList.remove("claim-pulse");
+    badge.remove();
+  };
 }
 
-async function playMoment(moment) {
-  const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  E.courtEffects.dataset.kind = moment.kind;
-  E.momentLabel.textContent = momentKindLabel(moment.kind);
-  E.momentText.textContent = moment.text;
-  E.momentAnnouncement.classList.remove("active");
-  void E.momentAnnouncement.offsetWidth;
-  E.momentAnnouncement.classList.add("active");
-  const hasTrail = setMomentTrail(moment);
-  const claimPulse = showClaimPulse(moment);
-  await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 1200 : 2600));
-  E.momentAnnouncement.classList.remove("active");
-  if (hasTrail) E.momentTrail.classList.remove("active");
-  claimPulse?.card.classList.remove("claim-pulse");
-  claimPulse?.badge.remove();
-}
-
-async function drainMomentQueue() {
-  if (momentPlaying) return;
-  momentPlaying = true;
-  while (momentQueue.length) await playMoment(momentQueue.shift());
-  momentPlaying = false;
-}
-
-function syncMoments() {
-  const moments = Array.isArray(view.moments) ? view.moments : [];
-  const latest = moments.reduce((maximum, moment) => Math.max(maximum, Number(moment.sequence) || 0), 0);
-  if (momentCursor === null) { momentCursor = latest; return; }
-  const fresh = moments.filter((moment) => Number(moment.sequence) > momentCursor).sort((a, b) => a.sequence - b.sequence);
-  momentCursor = Math.max(momentCursor, latest);
-  if (!fresh.length) return;
-  momentQueue.push(...fresh);
-  void drainMomentQueue();
-}
+const presentation = createPresentationTimeline({
+  container: E.courtPanel,
+  trailPath: E.momentTrail,
+  announcement: E.momentAnnouncement,
+  labelElement: E.momentLabel,
+  textElement: E.momentText,
+  effectsElement: E.courtEffects,
+  resolveSource: (moment) => seatFor(moment.actorId),
+  resolveTarget: (moment) => seatFor(moment.targetId) || E.courtCenter,
+  labelFor: (moment) => momentKindLabel(moment.kind),
+  beforePlay: showClaimPulse,
+  durationMs: 2600,
+  reducedDurationMs: 1200
+});
 
 function renderTargetChoices(actionType) {
   E.actionHint.textContent = `请选择“${ACTION_META[actionType].label}”的目标。`;
@@ -305,7 +262,7 @@ function render() {
   E.deckCount.textContent = String(view.deckCount); E.controlDock.dataset.role = memberRole;
   E.notice.textContent = memberRole === "spectator" && view.phase === "lobby" ? "你正在旁观准备阶段，可在有空位时进入玩家席" : view.phase === "lobby" ? `等待玩家加入：${view.players.length}/${view.capacity}` : view.phase === "ended" ? `本局结束 · ${winner?.name || "玩家"} 获胜` : `当前行动者：${nameOf(view.currentPlayerId)}`;
   renderPlayers(); renderActions(memberRole); renderPrivate(memberRole); renderLog();
-  syncMoments();
+  presentation.sync(view.moments);
   if (view.deadline) countdown.start(view.deadline, PHASE_TIMER_MS[view.phase] || 45000); else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
 }
 
