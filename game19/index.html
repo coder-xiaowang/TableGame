@@ -69,11 +69,18 @@
 
     <section class="game-area">
       <div id="notice" class="notice">等待玩家加入</div>
-      <section class="western-table">
+      <section id="westernTable" class="western-table">
         <div id="players" class="players"></div>
-        <div class="table-center">
+        <div id="tableCenter" class="table-center">
           <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
-          <div class="piles"><div class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
+          <div class="piles"><div id="deckPile" class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
+        </div>
+        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+          <svg class="presentation-trail-layer" aria-hidden="true">
+            <defs><marker id="bangArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+            <path id="presentationTrail" class="presentation-trail" marker-end="url(#bangArrow)"></path>
+          </svg>
+          <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
         </div>
       </section>
       <section id="controlDock" class="panel control-dock" data-role="player">

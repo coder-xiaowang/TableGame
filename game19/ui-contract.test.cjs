@@ -20,6 +20,12 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   assert.match(html, /name="joinIntent" value="spectate"/); assert.match(script, /createSpectatorUi/);
   assert.doesNotMatch(script, /https?:\/\//); assert.match(script, /escapeHtml/);
   assert.match(script, /data-side="\$\{side\}"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(next\.presentationEvents\)/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(styles, /\.presentation-token/);
+  assert.match(styles, /\.player-seat\.responding/);
   assert.match(script, /E\.controlDock\.dataset\.role=role/);
   assert.match(styles, /@media\(max-width:850px\)[\s\S]*?\.game-area\{order:1\}[\s\S]*?\.sidebar\{order:2/);
   assert.match(styles, /\.control-dock\{position:sticky/);

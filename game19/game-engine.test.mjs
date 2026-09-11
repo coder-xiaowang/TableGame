@@ -53,6 +53,23 @@ test("开局由服务器分配秘密身份、角色、生命与手牌", () => {
   assert.ok(spectator.players.every((player) => player.hand.every((card) => card.type === null)));
 });
 
+test("公开演出对所有视角一致，摸牌详情只发送给获得者", () => {
+  const state = lobby();
+  engine.applyAction(state, "p1", { type: "start" }, { now: 1000, random: () => 0.37 });
+  const actor = state.players[state.currentIndex];
+  const actorView = engine.buildView(state, actor.id);
+  const other = state.players.find((player) => player.id !== actor.id);
+  const otherView = engine.buildView(state, other.id);
+  const spectator = engine.buildSpectatorView(state);
+  const publicFromActor = actorView.presentationEvents.filter((event) => !event.private);
+  assert.deepEqual(publicFromActor, spectator.presentationEvents);
+  assert.deepEqual(otherView.presentationEvents.filter((event) => !event.private), spectator.presentationEvents);
+  assert.ok(actorView.presentationEvents.some((event) => event.kind === "private-draw" && event.private));
+  assert.ok(otherView.presentationEvents.every((event) => !event.private));
+  assert.ok(spectator.presentationEvents.every((event) => !event.private));
+  assert.ok(spectator.presentationEvents.every((event) => !JSON.stringify(event).includes(ROLE_DISTRIBUTION[4].find((role) => role !== "sheriff"))));
+});
+
 test("旁观座位仅可在准备阶段变更", () => {
   const state = lobby();
   assert.equal(engine.canChangeSeats(state), true);
@@ -77,11 +94,51 @@ test("砰与闪由响应状态机串行结算，旧阶段动作被拒绝", () =>
   const bang = moveCardTo(state, "bang", actor.hand), missed = moveCardTo(state, "missed", target.hand);
   engine.applyAction(state, actor.id, { type: "playCard", cardId: bang.id, targetId: target.id }, { now: 4, random: () => 0.25 });
   assert.equal(state.phase, "defense");
+  assert.deepEqual(state.presentationEvents.slice(-2).map((event) => event.kind), ["attack", "response-window"]);
+  assert.equal(state.presentationEvents.at(-2).actorId, actor.id);
+  assert.equal(state.presentationEvents.at(-2).targetId, target.id);
   assert.throws(() => engine.applyAction(state, actor.id, effect(state, { type: "endTurn" }), { now: 5 }), /不需要你响应/);
   engine.applyAction(state, target.id, effect(state, { type: "respond", cardId: missed.id }), { now: 6, random: () => 0.25 });
   assert.equal(state.phase, "play");
+  assert.equal(state.presentationEvents.at(-1).kind, "defense");
   assert.equal(state.currentIndex, state.players.indexOf(actor));
   engine.validateState(state);
+});
+
+test("随机抢走的秘密手牌只向行动双方说明具体牌面", () => {
+  const state = lobby();
+  engine.applyAction(state, "p1", { type: "start" }, { now: 1, random: () => 0.25 });
+  const actor = enterPlay(state), target = state.players[(state.currentIndex + 1) % state.players.length];
+  actor.characterId = "rose_doolan";
+  target.characterId = "bart_cassidy";
+  const panic = moveCardTo(state, "panic", actor.hand);
+  const stolen = target.hand[0];
+  engine.applyAction(state, actor.id, { type: "playCard", cardId: panic.id, targetId: target.id, targetZone: "hand" }, { now: 4, random: () => 0 });
+  const actorEvents = engine.buildView(state, actor.id).presentationEvents;
+  const targetEvents = engine.buildView(state, target.id).presentationEvents;
+  const outsider = state.players.find((player) => ![actor.id, target.id].includes(player.id));
+  const outsiderEvents = engine.buildView(state, outsider.id).presentationEvents;
+  const spectatorEvents = engine.buildSpectatorView(state).presentationEvents;
+  assert.ok(actorEvents.some((event) => event.private && event.text.includes(CARD_META[stolen.type].name)));
+  assert.ok(targetEvents.some((event) => event.private && event.text.includes(CARD_META[stolen.type].name)));
+  assert.ok(outsiderEvents.every((event) => !event.private));
+  assert.ok(spectatorEvents.every((event) => !event.private));
+  assert.equal(spectatorEvents.some((event) => event.text.includes(CARD_META[stolen.type].name) && event.kind !== "steal"), false);
+  engine.validateState(state);
+});
+
+test("旧快照缺少演出字段时仍可恢复并继续生成事件", () => {
+  const state = lobby();
+  const legacy = structuredClone(state);
+  delete legacy.presentationEvents;
+  delete legacy.privatePresentationEvents;
+  delete legacy.presentationSequence;
+  const restored = engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []);
+  assert.deepEqual(restored.privatePresentationEvents, {});
+  engine.applyAction(restored, "p1", { type: "start" }, { now: 1000, random: () => 0.37 });
+  assert.ok(restored.presentationSequence > 0);
+  assert.doesNotThrow(() => engine.validateState(restored));
 });
 
 test("超额手牌必须按当前生命弃牌，超时也能自动推进", () => {

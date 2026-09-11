@@ -29,7 +29,7 @@ test("SQLite重启后恢复阶段、截止时间、身份和旁观隐私", async
   const before = (await resume(running, host)).payload.view; await close(running,streams); streams=[];
   running = await launch(engine, filename);
   const after = (await resume(running, host)).payload.view, watched = (await resume(running, watcher)).payload.view;
-  assert.equal(after.phase, before.phase); assert.equal(after.deadline, before.deadline); assert.deepEqual(after.players.find((player) => player.id === host.clientId).hand, before.players.find((player) => player.id === host.clientId).hand);
+  assert.equal(after.phase, before.phase); assert.equal(after.deadline, before.deadline); assert.deepEqual(after.players.find((player) => player.id === host.clientId).hand, before.players.find((player) => player.id === host.clientId).hand); assert.deepEqual(after.presentationEvents, before.presentationEvents);
   assert.ok(after.players.every((player) => !player.connected));
   assert.equal(watched.roomRole, "spectator"); assert.ok(watched.players.every((player) => player.hand.every((card) => card.type === null)));
   assert.ok(watched.players.filter((player) => player.role !== "sheriff").every((player) => player.role === null));

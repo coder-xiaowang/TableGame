@@ -2,6 +2,7 @@ import {
   CARD_META, CHARACTERS, MAX_PLAYERS, MIN_PLAYERS, ROLES, ROLE_DISTRIBUTION,
   cardName, createDeck, isBarrelSuccess, isDynamiteHit, isJailSuccess, isRed, shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -31,6 +32,29 @@ function fail(condition, code, message, status) { if (condition) throw new GameR
 function log(state, text, now) {
   state.logs.unshift({ id: `log_${state.logSequence += 1}`, text, at: now });
   if (state.logs.length > 180) state.logs.length = 180;
+}
+function publicEvent(state, event, now) {
+  return appendPresentationEvent(state, event, {
+    now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "bang_event", limit: 50
+  });
+}
+function privateEvent(state, playerId, event, now) {
+  const id = String(playerId || "");
+  if (!id) return null;
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object") state.privatePresentationEvents = {};
+  const envelope = {
+    events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
+    sequence: Number(state.presentationSequence) || 0
+  };
+  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+    now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "bang_private", limit: 20
+  });
+  state.privatePresentationEvents[id] = envelope.events;
+  state.presentationSequence = envelope.sequence;
+  return stored;
+}
+function cardListText(cards) {
+  return cards.filter(Boolean).map((card) => cardName(card.type)).join("、") || "没有牌";
 }
 function newPending(state, data) { return { ...data, id: `effect_${state.effectSequence += 1}` }; }
 function setPhase(state, phase, now, seconds = 0) {
@@ -66,16 +90,32 @@ function drawOne(state, random) {
   return state.deck.pop() || null;
 }
 function drawCards(state, player, count, random) {
+  const drawn = [];
   for (let index = 0; index < count; index += 1) {
-    const card = drawOne(state, random); if (!card) break; player.hand.push(card);
+    const card = drawOne(state, random); if (!card) break; player.hand.push(card); drawn.push(card);
   }
   ensureSuzy(state, player, random);
+  return drawn;
+}
+function grantCards(state, player, count, random, now, text) {
+  const drawn = drawCards(state, player, count, random);
+  if (drawn.length) {
+    publicEvent(state, { kind: "character-draw", actorId: player.id, count: drawn.length, text: text || `${player.name} 获得${drawn.length}张牌` }, now);
+    privateEvent(state, player.id, { kind: "private-draw", actorId: player.id, source: "deck", text: `你获得：${cardListText(drawn)}` }, now);
+  }
+  return drawn;
 }
 function discard(state, card) { if (card) state.discard.push(card); }
 function discardAll(state, player) { state.discard.push(...player.hand.splice(0), ...player.equipment.splice(0)); }
-function ensureSuzy(state, player, random) {
+function ensureSuzy(state, player, random, now = null) {
   if (player?.alive && hasCharacter(player, "suzy_lafayette") && player.hand.length === 0) {
-    const card = drawOne(state, random); if (card) player.hand.push(card);
+    const card = drawOne(state, random); if (card) {
+      player.hand.push(card);
+      if (now !== null) {
+        publicEvent(state, { kind: "character-draw", actorId: player.id, count: 1, text: `${player.name} 发动苏茜能力摸1张牌` }, now);
+        privateEvent(state, player.id, { kind: "private-draw", actorId: player.id, source: "deck", text: `你获得：【${cardName(card.type)}】` }, now);
+      }
+    }
   }
 }
 
@@ -112,13 +152,19 @@ function matchWinner(state) {
 }
 function finishMatch(state, result, now) {
   state.winner = result; state.pending = null; setPhase(state, "ended", now); log(state, result.text, now);
+  publicEvent(state, { kind: "match-result", text: result.text, result: result.side }, now);
 }
 function finalizeElimination(state, victim, killer, orderedIds, now, random, resume) {
   const vulture = alive(state).find((player) => hasCharacter(player, "vulture_sam"));
-  if (vulture) vulture.hand.push(...victim.hand.splice(0), ...victim.equipment.splice(0)); else discardAll(state, victim);
-  if (victim.role === ROLES.OUTLAW && killer?.alive) drawCards(state, killer, 3, random);
-  if (killer?.role === ROLES.SHERIFF && victim.role === ROLES.DEPUTY) { discardAll(state, killer); ensureSuzy(state, killer, random); }
+  if (vulture) {
+    const inherited = [...victim.hand.splice(0), ...victim.equipment.splice(0)]; vulture.hand.push(...inherited);
+    publicEvent(state, { kind: "inherit-cards", actorId: vulture.id, targetId: victim.id, count: inherited.length, text: `${vulture.name} 接收了 ${victim.name} 的遗牌` }, now);
+    privateEvent(state, vulture.id, { kind: "private-card-transfer", actorId: vulture.id, targetId: victim.id, text: `你接收：${cardListText(inherited)}` }, now);
+  } else discardAll(state, victim);
+  if (victim.role === ROLES.OUTLAW && killer?.alive) grantCards(state, killer, 3, random, now, `${killer.name} 击杀歹徒，获得3张奖励牌`);
+  if (killer?.role === ROLES.SHERIFF && victim.role === ROLES.DEPUTY) { const count = killer.hand.length + killer.equipment.length; discardAll(state, killer); publicEvent(state, { kind: "sheriff-penalty", actorId: killer.id, targetId: victim.id, count, text: `${killer.name} 误杀副警长，弃掉全部手牌和装备` }, now); ensureSuzy(state, killer, random, now); }
   log(state, `${victim.name} 出局，身份是${ROLE_META_LABEL(victim.role)}。`, now);
+  publicEvent(state, { kind: "elimination", actorId: killer?.id || null, targetId: victim.id, text: `${victim.name} 出局，身份揭晓为${ROLE_META_LABEL(victim.role)}` }, now);
   const winner = matchWinner(state); if (winner) finishMatch(state, winner, now);
   else resumeFlow(state, resume, now, random);
 }
@@ -139,21 +185,29 @@ function resolveEliminationOrder(state, actor, action, now, random) {
   const all = [...actor.hand, ...actor.equipment], ordered = ids.map((id) => all.find((card) => card.id === id));
   actor.hand = []; actor.equipment = []; state.discard.push(...ordered);
   const killer = byId(state, pending.killerId), resume = pending.resume;
-  if (actor.role === ROLES.OUTLAW && killer?.alive) drawCards(state, killer, 3, random);
-  if (killer?.role === ROLES.SHERIFF && actor.role === ROLES.DEPUTY) { discardAll(state, killer); ensureSuzy(state, killer, random); }
+  if (actor.role === ROLES.OUTLAW && killer?.alive) grantCards(state, killer, 3, random, now, `${killer.name} 击杀歹徒，获得3张奖励牌`);
+  if (killer?.role === ROLES.SHERIFF && actor.role === ROLES.DEPUTY) { const count = killer.hand.length + killer.equipment.length; discardAll(state, killer); publicEvent(state, { kind: "sheriff-penalty", actorId: killer.id, targetId: actor.id, count, text: `${killer.name} 误杀副警长，弃掉全部手牌和装备` }, now); ensureSuzy(state, killer, random, now); }
   log(state, `${actor.name} 出局，身份是${ROLE_META_LABEL(actor.role)}。`, now);
+  publicEvent(state, { kind: "elimination", actorId: killer?.id || null, targetId: actor.id, text: `${actor.name} 出局，身份揭晓为${ROLE_META_LABEL(actor.role)}` }, now);
   const winner = matchWinner(state); if (winner) finishMatch(state, winner, now); else resumeFlow(state, resume, now, random);
 }
 function ROLE_META_LABEL(role) { return ({ sheriff: "警长", deputy: "副警长", outlaw: "歹徒", renegade: "叛徒" })[role] || role; }
 
 function applyDamage(state, target, amount, source, now, random, resume = null) {
   target.life -= amount;
-  if (hasCharacter(target, "bart_cassidy")) drawCards(state, target, amount, random);
-  if (hasCharacter(target, "el_gringo") && source?.hand.length) target.hand.push(source.hand.splice(Math.floor(random() * source.hand.length), 1)[0]);
+  publicEvent(state, { kind: "damage", actorId: source?.id || null, targetId: target.id, amount, text: `${target.name} 失去${amount}点生命` }, now);
+  if (hasCharacter(target, "bart_cassidy")) grantCards(state, target, amount, random, now, `${target.name} 受伤并发动巴特能力摸牌`);
+  if (hasCharacter(target, "el_gringo") && source?.hand.length) {
+    const stolen = source.hand.splice(Math.floor(random() * source.hand.length), 1)[0]; target.hand.push(stolen);
+    publicEvent(state, { kind: "character-steal", actorId: target.id, targetId: source.id, count: 1, text: `${target.name} 受伤并从 ${source.name} 手中随机取得1张牌` }, now);
+    privateEvent(state, target.id, { kind: "private-card-transfer", actorId: target.id, targetId: source.id, text: `你取得了【${cardName(stolen.type)}】` }, now);
+    privateEvent(state, source.id, { kind: "private-card-transfer", actorId: target.id, targetId: source.id, text: `${target.name} 取走了你的【${cardName(stolen.type)}】` }, now);
+  }
   log(state, `${target.name} 失去${amount}点生命（剩余${Math.max(0, target.life)}）。`, now);
   if (target.life <= 0) {
     state.pending = newPending(state, { type: "dying", actorId: target.id, sourceId: source?.id || null, resume });
     setPhase(state, "dying", now, RESPONSE_SECONDS);
+    publicEvent(state, { kind: "dying", actorId: source?.id || null, targetId: target.id, text: `${target.name} 濒死，等待救援` }, now);
   } else resumeFlow(state, resume, now, random);
 }
 function heal(player, amount = 1) { player.life = Math.min(player.maxLife, player.life + amount); }
@@ -182,6 +236,7 @@ function finishJudgment(state, owner, purpose, cards, cardId, context, now, rand
   const chosen = cards.find((card) => card.id === String(cardId)); fail(!chosen, "invalid_judgment_card", "请选择一张判定牌。");
   for (const card of cards) discard(state, card);
   log(state, `${owner.name} 的${purpose === "dynamite" ? "炸药" : purpose === "jail" ? "监狱" : "木桶"}判定为 ${chosen?.rank || "?"}${chosen ? ({spades:"♠",hearts:"♥",clubs:"♣",diamonds:"♦"})[chosen.suit] : ""}。`, now);
+  publicEvent(state, { kind: "judgment", actorId: owner.id, cardType: chosen.type, text: `${owner.name} 的${purpose === "dynamite" ? "炸药" : purpose === "jail" ? "监狱" : "木桶"}判定：${chosen.rank}${({spades:"♠",hearts:"♥",clubs:"♣",diamonds:"♦"})[chosen.suit]}` }, now);
   if (purpose === "dynamite") {
     if (isDynamiteHit(chosen)) { discard(state, context.delayedCard); return applyDamage(state, owner, 3, null, now, random, { type: "turnStart", playerId: owner.id }); }
     const next = state.players[findNextAliveIndex(state, state.players.indexOf(owner))];
@@ -219,9 +274,12 @@ function beginDraw(state, actor, now, random) {
   } else performDraw(state, actor, "deck", null, now, random);
 }
 function performDraw(state, actor, mode, targetId, now, random) {
+  const beforeIds = new Set(actor.hand.map((card) => card.id));
   if (hasCharacter(actor, "kit_carlson")) {
     const cards = []; for (let i = 0; i < 3; i += 1) { const card = drawOne(state, random); if (card) cards.push(card); }
-    state.pending = newPending(state, { type: "kitChoice", actorId: actor.id, cards }); setPhase(state, "kitChoice", now, CHOICE_SECONDS); return;
+    state.pending = newPending(state, { type: "kitChoice", actorId: actor.id, cards }); setPhase(state, "kitChoice", now, CHOICE_SECONDS);
+    publicEvent(state, { kind: "draw", actorId: actor.id, count: 3, text: `${actor.name} 查看牌库顶3张牌` }, now);
+    privateEvent(state, actor.id, { kind: "private-draw", actorId: actor.id, text: `你看到：${cardListText(cards)}` }, now); return;
   }
   if (mode === "steal" && hasCharacter(actor, "jesse_jones")) {
     const target = byId(state, targetId); fail(!target?.alive || target.id === actor.id || !target.hand.length, "invalid_draw_target", "杰西必须选择一名有手牌的其他存活玩家。");
@@ -233,6 +291,9 @@ function performDraw(state, actor, mode, targetId, now, random) {
     const shown = actor.hand[actor.hand.length - 1]; log(state, `${actor.name} 公开摸到的第二张牌：${cardName(shown?.type)}。`, now);
     if (isRed(shown)) drawCards(state, actor, 1, random);
   }
+  const gained = actor.hand.filter((card) => !beforeIds.has(card.id));
+  if (mode !== "deck") publicEvent(state, { kind: mode === "steal" ? "draw-steal" : "draw-discard", actorId: actor.id, targetId: mode === "steal" ? targetId : null, count: gained.length, text: mode === "steal" ? `${actor.name} 从另一名玩家处取得1张牌并摸牌` : `${actor.name} 取得弃牌堆顶并摸牌` }, now);
+  privateEvent(state, actor.id, { kind: "private-draw", actorId: actor.id, targetId: mode === "steal" ? targetId : null, source: mode, text: `你获得：${cardListText(gained)}` }, now);
   enterPlay(state, actor.id, now);
 }
 function enterPlay(state, actorId, now) {
@@ -243,6 +304,7 @@ function nextTurn(state, now, random) {
   const index = findNextAliveIndex(state); if (index < 0) return;
   state.currentIndex = index; const actor = current(state); actor.bangPlayed = 0;
   state.turn += 1; state.pending = null; setPhase(state, "turnStart", now, CHOICE_SECONDS);
+  publicEvent(state, { kind: "turn-start", actorId: actor.id, text: `轮到 ${actor.name} 行动` }, now);
   continueTurnStart(state, actor.id, now, random);
 }
 
@@ -252,12 +314,14 @@ function equipCard(state, actor, card, target, now, random) {
   fail(card.type === "jail" && receiver.id === actor.id, "cannot_jail_self", "不能把监狱放在自己面前。");
   fail(["jail", "dynamite"].includes(card.type) && equipment(receiver, slot), "duplicate_equipment", "目标面前已有同名延时牌。");
   const replaced = equipment(receiver, slot); if (replaced) { receiver.equipment.splice(receiver.equipment.indexOf(replaced), 1); discard(state, replaced); }
-  receiver.equipment.push(card); log(state, `${actor.name} 装备了${cardName(card.type)}${receiver.id === actor.id ? "" : `到${receiver.name}面前`}。`, now); ensureSuzy(state, actor, random);
+  receiver.equipment.push(card); log(state, `${actor.name} 装备了${cardName(card.type)}${receiver.id === actor.id ? "" : `到${receiver.name}面前`}。`, now); ensureSuzy(state, actor, random, now);
+  publicEvent(state, { kind: "equipment", actorId: actor.id, targetId: receiver.id, cardType: card.type, text: `${actor.name}${receiver.id === actor.id ? "装备" : `对${receiver.name}放置`}【${cardName(card.type)}】` }, now);
 }
 function finishPlayedCard(state, card) { discard(state, card); }
 function makeDefense(state, actor, target, card, now, resume, sourceType = "bang") {
   state.pending = newPending(state, { type: "defense", actorId: target.id, sourceId: actor.id, card, sourceType, needed: hasCharacter(actor, "slab_the_killer") && sourceType === "bang" ? 2 : 1, played: 0, barrelUses: 0, resume });
   setPhase(state, "defense", now, RESPONSE_SECONDS);
+  publicEvent(state, { kind: "response-window", actorId: actor.id, targetId: target.id, cardType: sourceType, text: `${target.name} 需要响应【${cardName(sourceType)}】` }, now);
 }
 function continueMulti(state, resume, now, random) {
   const queue = resume.queue.filter((id) => byId(state, id)?.alive);
@@ -285,17 +349,19 @@ function playCard(state, actor, action, now, random) {
       fail(!canBang(state, actor, target), "target_out_of_range", "目标不在武器射程内。");
       const unlimited = hasCharacter(actor, "willy_the_kid") || equipment(actor, "weapon")?.type === "volcanic";
       fail(actor.bangPlayed >= 1 && !unlimited, "bang_limit", "本回合已经使用过【砰！】。"); actor.bangPlayed += 1;
-      ensureSuzy(state, actor, random);
+      ensureSuzy(state, actor, random, now);
       log(state, `${actor.name} 对${target.name}使用了【砰！】。`, now);
+      publicEvent(state, { kind: "attack", actorId: actor.id, targetId: target.id, cardType: type, text: `${actor.name} 对 ${target.name} 开枪` }, now);
       return makeDefense(state, actor, target, card, now, { type: "play", actorId: actor.id });
     }
     if (type === "missed") {
       fail(!hasCharacter(actor, "calamity_janet"), "missed_requires_response", "【闪！】只能用于响应【砰！】。");
-      const result = playVirtualCardAfterRemoval(state, actor, card, action, now); if (!result) throw new GameRuleError("target_out_of_range", "目标不在射程内。"); ensureSuzy(state, actor, random); log(state, `${actor.name} 将【闪！】当作【砰！】使用。`, now); return;
+      const result = playVirtualCardAfterRemoval(state, actor, card, action, now); if (!result) throw new GameRuleError("target_out_of_range", "目标不在射程内。"); ensureSuzy(state, actor, random, now); log(state, `${actor.name} 将【闪！】当作【砰！】使用。`, now);
+      publicEvent(state, { kind: "attack", actorId: actor.id, targetId: action.targetId, cardType: "missed", text: `${actor.name} 将【闪！】当作【砰！】使用` }, now); return;
     }
-    if (type === "beer") { if (alive(state).length > 2) heal(actor); finishPlayedCard(state, card); log(state, `${actor.name} 使用了啤酒。`, now); ensureSuzy(state, actor, random); return; }
-    if (type === "stagecoach" || type === "wells_fargo") { drawCards(state, actor, type === "stagecoach" ? 2 : 3, random); finishPlayedCard(state, card); log(state, `${actor.name} 使用了${cardName(type)}。`, now); return; }
-    if (type === "saloon") { for (const player of alive(state)) heal(player); finishPlayedCard(state, card); ensureSuzy(state, actor, random); log(state, `${actor.name} 请所有存活玩家进入酒馆。`, now); return; }
+    if (type === "beer") { if (alive(state).length > 2) heal(actor); finishPlayedCard(state, card); log(state, `${actor.name} 使用了啤酒。`, now); ensureSuzy(state, actor, random, now); publicEvent(state, { kind: "heal", actorId: actor.id, targetId: actor.id, cardType: type, text: `${actor.name} 使用【啤酒】恢复生命` }, now); return; }
+    if (type === "stagecoach" || type === "wells_fargo") { const drawn = drawCards(state, actor, type === "stagecoach" ? 2 : 3, random); finishPlayedCard(state, card); log(state, `${actor.name} 使用了${cardName(type)}。`, now); publicEvent(state, { kind: "card-play", actorId: actor.id, cardType: type, count: drawn.length, text: `${actor.name} 使用【${cardName(type)}】摸取${drawn.length}张牌` }, now); privateEvent(state, actor.id, { kind: "private-draw", actorId: actor.id, text: `你获得：${cardListText(drawn)}` }, now); return; }
+    if (type === "saloon") { for (const player of alive(state)) heal(player); finishPlayedCard(state, card); ensureSuzy(state, actor, random, now); log(state, `${actor.name} 请所有存活玩家进入酒馆。`, now); publicEvent(state, { kind: "group-heal", actorId: actor.id, cardType: type, text: `${actor.name} 打出【酒馆】，所有存活玩家恢复生命` }, now); return; }
     if (type === "panic" || type === "cat_balou") {
       const target = byId(state, action.targetId); fail(!canTouch(state, actor, target, type === "panic"), "invalid_target", "不能选择该目标。");
       const pool = [...target.hand.map((item) => ({ zone: "hand", card: item })), ...target.equipment.map((item) => ({ zone: "equipment", card: item }))];
@@ -304,21 +370,28 @@ function playCard(state, actor, action, now, random) {
       fail(!selected, "target_card_required", "请选择目标的一张可见装备，或选择其手牌区。");
       const zone = selected.zone === "hand" ? target.hand : target.equipment; zone.splice(zone.indexOf(selected.card), 1);
       if (type === "panic") actor.hand.push(selected.card); else discard(state, selected.card);
-      finishPlayedCard(state, card); log(state, `${actor.name} 对${target.name}使用了${cardName(type)}。`, now); ensureSuzy(state, target, random); ensureSuzy(state, actor, random); return;
+      finishPlayedCard(state, card); log(state, `${actor.name} 对${target.name}使用了${cardName(type)}。`, now);
+      publicEvent(state, { kind: type === "panic" ? "steal" : "discard-target", actorId: actor.id, targetId: target.id, cardType: type, text: `${actor.name} 对 ${target.name} 使用【${cardName(type)}】` }, now);
+      if (selected.zone === "hand") {
+        privateEvent(state, actor.id, { kind: "private-card-transfer", actorId: actor.id, targetId: target.id, text: type === "panic" ? `你取得了【${cardName(selected.card.type)}】` : `你拆除了【${cardName(selected.card.type)}】` }, now);
+        privateEvent(state, target.id, { kind: "private-card-transfer", actorId: actor.id, targetId: target.id, text: `${actor.name}${type === "panic" ? "取走" : "拆除"}了你的【${cardName(selected.card.type)}】` }, now);
+      }
+      ensureSuzy(state, target, random, now); ensureSuzy(state, actor, random, now); return;
     }
     if (type === "duel") {
       const target = byId(state, action.targetId); fail(!target?.alive || target.id === actor.id, "invalid_target", "请选择其他存活玩家。");
-      ensureSuzy(state, actor, random); log(state, `${actor.name} 向${target.name}发起决斗。`, now); return continueDuel(state, { responderId: target.id, otherId: actor.id, actorId: actor.id, card }, now);
+      ensureSuzy(state, actor, random, now); log(state, `${actor.name} 向${target.name}发起决斗。`, now); publicEvent(state, { kind: "duel", actorId: actor.id, targetId: target.id, cardType: type, text: `${actor.name} 向 ${target.name} 发起决斗` }, now); return continueDuel(state, { responderId: target.id, otherId: actor.id, actorId: actor.id, card }, now);
     }
     if (type === "gatling" || type === "indians") {
       const queue = alive(state).filter((player) => player.id !== actor.id).map((player) => player.id);
-      ensureSuzy(state, actor, random); log(state, `${actor.name} 使用了${cardName(type)}。`, now); return continueMulti(state, { type: "multi", queue, actorId: actor.id, card, sourceType: type }, now, random);
+      ensureSuzy(state, actor, random, now); log(state, `${actor.name} 使用了${cardName(type)}。`, now); publicEvent(state, { kind: "group-attack", actorId: actor.id, cardType: type, text: `${actor.name} 发动【${cardName(type)}】` }, now); return continueMulti(state, { type: "multi", queue, actorId: actor.id, card, sourceType: type }, now, random);
     }
     if (type === "general_store") {
       const choices = []; for (let i = 0; i < alive(state).length; i += 1) { const choice = drawOne(state, random); if (choice) choices.push(choice); }
       const living = alive(state), start = living.findIndex((player) => player.id === actor.id);
       const chooserIds = Array.from({ length: living.length }, (_, offset) => living[(start + offset) % living.length].id);
-      state.pending = newPending(state, { type: "generalStore", actorId: actor.id, chooserIds, choices, card }); ensureSuzy(state, actor, random); log(state, `${actor.name} 开启了杂货店。`, now);
+      state.pending = newPending(state, { type: "generalStore", actorId: actor.id, chooserIds, choices, card }); ensureSuzy(state, actor, random, now); log(state, `${actor.name} 开启了杂货店。`, now);
+      publicEvent(state, { kind: "general-store", actorId: actor.id, cardType: type, text: `${actor.name} 开启【杂货店】，所有人依次选牌` }, now);
       setPhase(state, "generalStore", now, CHOICE_SECONDS); return;
     }
     throw new GameRuleError("unsupported_card", "这张牌暂时无法使用。");
@@ -343,7 +416,8 @@ function resolveDefense(state, actor, action, now, random) {
     let card = removeCard(actor, action.cardId); const needed = pending.sourceType === "indians" ? "bang" : "missed";
     const valid = card.type === needed || (hasCharacter(actor, "calamity_janet") && ((needed === "bang" && card.type === "missed") || (needed === "missed" && card.type === "bang")));
     if (!valid) { actor.hand.push(card); throw new GameRuleError("wrong_response_card", `需要打出【${needed === "bang" ? "砰！" : "闪！"}】。`); }
-    discard(state, card); ensureSuzy(state, actor, random); pending.played += 1; log(state, `${actor.name} 打出${cardName(card.type)}完成响应。`, now);
+    discard(state, card); ensureSuzy(state, actor, random, now); pending.played += 1; log(state, `${actor.name} 打出${cardName(card.type)}完成响应。`, now);
+    publicEvent(state, { kind: "defense", actorId: actor.id, targetId: source?.id || null, cardType: card.type, text: `${actor.name} 打出【${cardName(card.type)}】完成响应${pending.needed > 1 ? `（${pending.played}/${pending.needed}）` : ""}` }, now);
     if (pending.played < pending.needed) { state.deadline = now + RESPONSE_SECONDS * 1000; return; }
     const resume = pending.resume; if (resume?.type === "play") finishPlayedCard(state, pending.card);
     return resumeFlow(state, resume, now, random);
@@ -353,6 +427,7 @@ function resolveDefense(state, actor, action, now, random) {
     fail(!equipment(actor, "barrel") && !hasCharacter(actor, "jourdonnais"), "barrel_not_available", "你没有可用的木桶能力。");
     const availableUses = Number(Boolean(equipment(actor, "barrel"))) + Number(hasCharacter(actor, "jourdonnais"));
     fail(pending.barrelUses >= availableUses, "barrel_already_used", "本次攻击可用的木桶判定已经用完。"); pending.barrelUses += 1;
+    publicEvent(state, { kind: "barrel", actorId: actor.id, targetId: pending.sourceId, cardType: "barrel", text: `${actor.name} 尝试用【木桶】闪避` }, now);
     return beginJudgment(state, actor, "barrel", { defense: clone(pending) }, now, random);
   }
   fail(action.type !== "takeHit", "invalid_response", "请选择响应方式。");
@@ -364,7 +439,8 @@ function resolveDuel(state, actor, action, now, random) {
   if (action.type === "respond") {
     const card = removeCard(actor, action.cardId); const valid = card.type === "bang" || (hasCharacter(actor, "calamity_janet") && card.type === "missed");
     if (!valid) { actor.hand.push(card); throw new GameRuleError("wrong_response_card", "决斗必须打出【砰！】。"); }
-    discard(state, card); ensureSuzy(state, actor, random);
+    discard(state, card); ensureSuzy(state, actor, random, now);
+    publicEvent(state, { kind: "duel-return", actorId: actor.id, targetId: pending.otherId, cardType: card.type, text: `${actor.name} 在决斗中打出【${cardName(card.type)}】` }, now);
     return continueDuel(state, { responderId: pending.otherId, otherId: actor.id, actorId: pending.originalActorId, card: pending.card }, now);
   }
   fail(action.type !== "takeHit", "invalid_response", "请选择打出【砰！】或承受伤害。");
@@ -377,7 +453,8 @@ function resolveDying(state, actor, action, now, random) {
   if (action.type === "useBeer") {
     fail(alive(state).length <= 2, "beer_disabled", "只剩两名玩家时【啤酒】不能生效。");
     const card = removeCard(actor, action.cardId); if (card.type !== "beer") { actor.hand.push(card); throw new GameRuleError("beer_required", "请选择【啤酒】。"); }
-    discard(state, card); heal(target); ensureSuzy(state, actor, random);
+    discard(state, card); heal(target); ensureSuzy(state, actor, random, now);
+    publicEvent(state, { kind: "rescue", actorId: actor.id, targetId: target.id, cardType: "beer", text: `${actor.name} 用【啤酒】救援 ${target.name}` }, now);
     if (target.life > 0) resumeFlow(state, pending.resume, now, random); else state.deadline = now + RESPONSE_SECONDS * 1000;
     return;
   }
@@ -389,7 +466,8 @@ function resolveDying(state, actor, action, now, random) {
 function useSid(state, actor, cardIds, now, random) {
   fail(!hasCharacter(actor, "sid_ketchum"), "ability_unavailable", "你不是西德·凯查姆。");
   const ids = [...new Set((cardIds || []).map(String))]; fail(ids.length !== 2, "two_cards_required", "请选择两张手牌。");
-  const cards = ids.map((id) => removeCard(actor, id)); discard(state, cards[0]); discard(state, cards[1]); heal(actor); ensureSuzy(state, actor, random);
+  const cards = ids.map((id) => removeCard(actor, id)); discard(state, cards[0]); discard(state, cards[1]); heal(actor); ensureSuzy(state, actor, random, now);
+  publicEvent(state, { kind: "heal", actorId: actor.id, targetId: actor.id, text: `${actor.name} 发动角色能力恢复生命` }, now);
   if (state.phase === "dying" && actor.life > 0) resumeFlow(state, state.pending.resume, now, random);
 }
 
@@ -404,11 +482,14 @@ function startGame(state, actorId, now, random) {
     drawCards(state, player, player.maxLife, random);
   }
   const sheriffIndex = state.players.findIndex((player) => player.role === ROLES.SHERIFF); state.currentIndex = sheriffIndex;
-  log(state, `游戏开始，${state.players[sheriffIndex].name}公开身份为警长。`, now); continueTurnStart(state, current(state).id, now, random);
+  log(state, `游戏开始，${state.players[sheriffIndex].name}公开身份为警长。`, now);
+  publicEvent(state, { kind: "match-start", actorId: state.players[sheriffIndex].id, text: `${state.players[sheriffIndex].name} 亮明警长身份，枪战开始` }, now);
+  publicEvent(state, { kind: "turn-start", actorId: current(state).id, text: `警长 ${current(state).name} 首先行动` }, now);
+  continueTurnStart(state, current(state).id, now, random);
 }
 
 export function createLobby({ capacity, host }) {
-  return { stateVersion: STATE_VERSION, capacity: assertCapacity(capacity), phase: "lobby", deadline: 0, players: [makePlayer({ ...host, isHost: true })], deck: [], discard: [], currentIndex: 0, turn: 0, pending: null, effectSequence: 0, winner: null, logs: [], logSequence: 0 };
+  return { stateVersion: STATE_VERSION, capacity: assertCapacity(capacity), phase: "lobby", deadline: 0, players: [makePlayer({ ...host, isHost: true })], deck: [], discard: [], currentIndex: 0, turn: 0, pending: null, effectSequence: 0, winner: null, logs: [], logSequence: 0, presentationEvents: [], privatePresentationEvents: {}, presentationSequence: 0 };
 }
 export function addPlayer(state, player) {
   fail(state.phase !== "lobby", "game_started", "牌局已经开始。", 409); fail(state.players.length >= state.capacity, "room_full", "玩家席已满。", 409); fail(byId(state, player.id), "duplicate_player", "该玩家已在房间中。", 409);
@@ -451,10 +532,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   if (state.phase === "duel") return resolveDuel(state, actor, action, now, random);
   if (state.phase === "dying") return resolveDying(state, actor, action, now, random);
   if (state.phase === "discardExcess") {
-    fail(state.pending?.actorId !== actor.id || action.type !== "discardCards", "discard_required", "请选择要弃掉的牌。"); const ids = [...new Set((action.cardIds || []).map(String))]; fail(ids.length !== state.pending.count, "wrong_discard_count", `需要弃掉${state.pending.count}张牌。`); for (const id of ids) discard(state, removeCard(actor, id)); ensureSuzy(state, actor, random); return nextTurn(state, now, random);
+    fail(state.pending?.actorId !== actor.id || action.type !== "discardCards", "discard_required", "请选择要弃掉的牌。"); const ids = [...new Set((action.cardIds || []).map(String))]; fail(ids.length !== state.pending.count, "wrong_discard_count", `需要弃掉${state.pending.count}张牌。`); for (const id of ids) discard(state, removeCard(actor, id)); ensureSuzy(state, actor, random, now); publicEvent(state, { kind: "discard", actorId: actor.id, count: ids.length, text: `${actor.name} 弃掉${ids.length}张超额手牌` }, now); return nextTurn(state, now, random);
   }
   if (state.phase === "generalStore") {
-    const pending = state.pending; fail(action.type !== "chooseStore" || pending.chooserIds[0] !== actor.id, "not_store_chooser", "还没有轮到你选择。"); const index = pending.choices.findIndex((card) => card.id === String(action.cardId)); fail(index < 0, "invalid_store_card", "该牌已被选走。"); actor.hand.push(pending.choices.splice(index, 1)[0]); pending.chooserIds.shift(); while (pending.chooserIds.length && !byId(state, pending.chooserIds[0])?.alive) pending.chooserIds.shift(); if (!pending.chooserIds.length) { for (const card of pending.choices) discard(state, card); finishPlayedCard(state, pending.card); enterPlay(state, pending.actorId, now); } else state.deadline = now + CHOICE_SECONDS * 1000; return;
+    const pending = state.pending; fail(action.type !== "chooseStore" || pending.chooserIds[0] !== actor.id, "not_store_chooser", "还没有轮到你选择。"); const index = pending.choices.findIndex((card) => card.id === String(action.cardId)); fail(index < 0, "invalid_store_card", "该牌已被选走。"); const chosen = pending.choices.splice(index, 1)[0]; actor.hand.push(chosen); publicEvent(state, { kind: "store-choice", actorId: actor.id, cardType: chosen.type, text: `${actor.name} 从杂货店选择【${cardName(chosen.type)}】` }, now); pending.chooserIds.shift(); while (pending.chooserIds.length && !byId(state, pending.chooserIds[0])?.alive) pending.chooserIds.shift(); if (!pending.chooserIds.length) { for (const card of pending.choices) discard(state, card); finishPlayedCard(state, pending.card); enterPlay(state, pending.actorId, now); } else state.deadline = now + CHOICE_SECONDS * 1000; return;
   }
   throw new GameRuleError("action_not_allowed", "当前阶段不能执行这个操作。", 409);
 }
@@ -490,6 +571,12 @@ function publicPending(state, viewer) {
   if (p.type === "generalStore") return { id: p.id, type: p.type, actorId: p.actorId, chooserId: p.chooserIds[0] || null, choices: p.choices.map((card) => publicCard(card)) };
   return { id: p.id, type: p.type, actorId: p.actorId || null, sourceId: p.sourceId || p.otherId || null, sourceType: p.sourceType || null, needed: p.needed || null, played: p.played || 0, count: p.count || (p.cardIds?.length || 0) };
 }
+function presentationFor(state, viewer) {
+  const privateEvents = viewer ? state.privatePresentationEvents?.[viewer.id] || [] : [];
+  return [...state.presentationEvents, ...privateEvents]
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((event) => ({ ...event }));
+}
 function permissions(state, viewer) {
   const id = viewer?.id;
   return {
@@ -508,7 +595,7 @@ function publicView(state, viewer = null) {
     selfId: viewer?.id || null, phase: state.phase, capacity: state.capacity, deadline: state.deadline, turn: state.turn, currentPlayerId: current(state)?.id || null,
     deckCount: state.deck.length, discardTop: state.discard.length ? publicCard(state.discard[state.discard.length - 1]) : null, discardCount: state.discard.length,
     players: state.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, connected: player.connected, alive: player.alive, life: player.life, maxLife: player.maxLife, role: player.role === ROLES.SHERIFF || player.id === viewer?.id || ended || !player.alive ? player.role : null, characterId: player.characterId, characterName: character(player)?.name || null, characterText: character(player)?.text || null, handCount: player.hand.length, hand: player.id === viewer?.id || ended ? player.hand.map((card) => publicCard(card)) : player.hand.map(() => publicCard(null, false)), equipment: player.equipment.map((card) => publicCard(card)), distance: viewer?.alive && player.alive && player.id !== viewer.id ? livingDistance(state, viewer.id, player.id) : null })),
-    pending: publicPending(state, viewer), winner: state.winner ? clone(state.winner) : null, logs: state.logs.map((entry) => ({ ...entry })), permissions: permissions(state, viewer)
+    pending: publicPending(state, viewer), winner: state.winner ? clone(state.winner) : null, logs: state.logs.map((entry) => ({ ...entry })), presentationEvents: presentationFor(state, viewer), permissions: permissions(state, viewer)
   };
 }
 export function buildView(state, viewerId) { return publicView(state, requireActor(state, viewerId)); }
@@ -531,7 +618,28 @@ export function validateState(state) {
     const ids = cards.filter(Boolean).map((card) => card.id);
     if (ids.length !== 80 || new Set(ids).size !== 80) throw new Error(`BANG card conservation failed: ${ids.length}/${new Set(ids).size}`);
   }
+  try { validatePresentationState(state); }
+  catch { throw new Error("Invalid game19 public presentation events"); }
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object" || Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game19 private presentation events");
+  const sequences = new Set(state.presentationEvents.map((event) => event.sequence));
+  for (const events of Object.values(state.privatePresentationEvents)) {
+    try { validatePresentationState({ presentationEvents: events, presentationSequence: state.presentationSequence }); }
+    catch { throw new Error("Invalid game19 private presentation events"); }
+    for (const event of events) {
+      if (!event.private || sequences.has(event.sequence)) throw new Error("Invalid game19 private presentation event sequence");
+      sequences.add(event.sequence);
+    }
+  }
   return true;
 }
 export function serializeState(state) { validateState(state); return clone(state); }
-export function restoreState(serializedState) { if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game19 state version: ${serializedState?.stateVersion}`); const state = clone(serializedState); validateState(state); return state; }
+export function restoreState(serializedState) {
+  if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game19 state version: ${serializedState?.stateVersion}`);
+  const state = clone(serializedState);
+  state.privatePresentationEvents = state.privatePresentationEvents && typeof state.privatePresentationEvents === "object" ? state.privatePresentationEvents : {};
+  normalizePresentationState(state);
+  const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
+  state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
+  validateState(state);
+  return state;
+}

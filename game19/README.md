@@ -4,6 +4,8 @@
 
 规则口径见 [RULES.md](RULES.md)，状态机与隐私边界见 [STATE_MACHINE.md](STATE_MACHINE.md)。本项目不使用官方卡图，页面卡牌由文字、花色和CSS生成。
 
+桌面互动演出层的迁移目标、公开/私人事件边界与验收清单见 [PRESENTATION_MIGRATION.md](PRESENTATION_MIGRATION.md)。
+
 ## 本地启动
 
 ```bash
