@@ -54,11 +54,13 @@
       <details class="panel rule-card">
         <summary><span><span class="eyebrow">RULE BOOK</span><b>详细规则</b></span><span>展开</span></summary>
         <div class="rule-details">
-          <h3>身份目标</h3><p>警长消灭所有歹徒与叛徒；副警长保护警长；歹徒杀死警长；叛徒必须成为最后存活者并最后击败警长。只有警长开局公开身份。</p>
-          <h3>回合流程</h3><p>结算炸药和监狱，摸2张牌，自由出牌，最后把手牌弃至不超过当前生命。通常每回合只能使用1张【砰！】，射程由武器和距离修正决定。</p>
-          <h3>伤害与出局</h3><p>受到【砰！】可用【闪！】或木桶判定。生命降至0时，自己及其他存活玩家可用啤酒救援。击杀歹徒摸3张；警长误杀副警长弃掉全部牌。</p>
-          <h3>数字版时间</h3><p>出牌75秒，响应15秒，选择20秒，超额弃牌25秒。超时由服务器执行确定且合法的默认动作。</p>
-          <p class="muted">完整实现口径见项目内 RULES.md。</p>
+          <h3>身份与胜利</h3><p>警长公开身份并消灭所有歹徒与叛徒；副警长隐藏身份保护警长；歹徒杀死警长；叛徒必须成为最后存活者并亲自面对警长。其余身份只在出局或游戏结束后公开。</p>
+          <h3>开局与回合</h3><p>每人随机获得一名角色，警长生命上限额外增加1。初始手牌数等于生命上限。警长先行动；回合依次结算炸药和监狱、摸牌、自由出牌，最后将手牌弃至不超过当前生命。</p>
+          <h3>距离、武器与装备</h3><p>基础距离按仍存活玩家之间的最短座位距离计算。瞄准镜令你看别人距离-1，野马令别人看你距离+1。武器只改变【砰！】射程；火山手枪还允许一回合使用多张【砰！】。同槽位新装备会替换旧装备。</p>
+          <h3>基础牌与响应</h3><ul><li><b>砰！：</b>通常每回合限1张，攻击射程内一人；目标可用【闪！】或成功的木桶判定躲避。</li><li><b>啤酒：</b>回复自己1点生命且不能超过上限；只剩2名存活玩家时仍可打出，但不会治疗，濒死救援也不能生效。</li><li><b>决斗：</b>双方轮流弃【砰！】，先放弃或无法响应者受1点伤害。</li><li><b>加特林／印第安人：</b>依座位顺序让其他存活玩家分别响应。</li><li><b>抢劫／拆除：</b>取得或弃掉目标的手牌或装备，其中抢劫要求实际距离1。</li></ul>
+          <h3>延时牌与判定</h3><p>炸药在回合开始判定：黑桃2～9时爆炸并造成3点伤害，否则传给下一名存活玩家。监狱红桃判定成功可正常行动，否则跳过回合；警长不能成为监狱目标。幸运公爵从两张判定牌中选择一张。</p>
+          <h3>濒死、出局与奖励</h3><p>生命降至0时进入救援，自己和其他存活玩家可依次使用啤酒。无人救回则出局并公开身份、弃掉全部牌。击杀歹徒者摸3张；警长误杀副警长须弃掉全部手牌和装备。</p>
+          <h3>角色能力与数字版时间</h3><p>16名基础角色能力均由服务器结算，包括巴特受伤摸牌、苏茜空手摸牌、秃鹫山姆接收遗牌、灾星珍妮互换【砰！／闪！】、杀手斯拉布要求两次闪避等。出牌75秒，响应15秒，选择20秒，超额弃牌25秒；超时执行合法默认动作。</p>
         </div>
       </details>
       <section class="panel log-card"><div class="section-head"><div><p class="eyebrow">CHRONICLE</p><h2>枪战记录</h2></div><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
@@ -73,11 +75,13 @@
           <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
           <div class="piles"><div class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
         </div>
-        <section id="controlDock" class="control-dock">
-          <div><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2><p id="actionHint" class="muted"></p></div>
-          <div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div>
+      </section>
+      <section id="controlDock" class="panel control-dock" data-role="player">
+        <div class="action-zone">
+          <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div></div>
+          <p id="actionHint" class="muted"></p>
           <div id="actionButtons" class="action-buttons"></div>
-        </section>
+        </div>
         <section id="privateZone" class="private-zone">
           <div class="private-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><div id="selfSummary"></div></div>
           <div id="myHand" class="hand"></div>

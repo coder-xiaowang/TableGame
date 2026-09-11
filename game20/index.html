@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>局内人 INSIDER · 服务器权威联机版</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header id="hero" class="hero">
+    <div class="hero-title"><p class="eyebrow">WHO GUIDES THE TRUTH? · SERVER AUTHORITY</p><h1>局内人 <span>INSIDER</span></h1><p>答案藏在问题之后，引路的人也藏在人群之中。</p></div>
+    <div class="hero-meta">
+      <div id="connectionStatus" class="connection-status">准备连接</div>
+      <section id="roomHeaderTools" class="room-header-tools hidden" aria-label="房间设置">
+        <div class="room-identity"><span>房间</span><strong id="roomCodeDisplay">----</strong></div>
+        <div id="hostTools" class="host-tools hidden">
+          <label><span>人数</span><select id="roomPlayerCountSelect"><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+          <button id="spectatorSettingButton" class="small hidden" type="button" aria-pressed="true">旁观：开放</button>
+          <button id="startGameButton" class="primary" type="button">开始本轮</button>
+          <button id="nextRoundButton" class="primary hidden" type="button">下一轮</button>
+          <button id="endGameButton" class="danger hidden" type="button">结束并返回大厅</button>
+        </div>
+        <button id="seatActionButton" class="small hidden" type="button"></button>
+      </section>
+    </div>
+  </header>
+
+  <section id="setupPanel" class="setup-wrap">
+    <div class="mode-tabs"><button id="hostModeButton" class="active" type="button">创建讨论</button><button id="guestModeButton" type="button">加入讨论</button></div>
+    <section id="hostSetup" class="panel setup-card">
+      <div><p class="eyebrow">OPEN A CIRCLE</p><h2>召集提问者</h2></div>
+      <label>昵称<input id="hostNameInput" maxlength="12" value="房主"></label>
+      <label>玩家人数<select id="playerCountSelect"><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+      <button id="createRoomButton" class="primary" type="button">创建房间</button>
+    </section>
+    <section id="guestSetup" class="panel setup-card hidden">
+      <div><p class="eyebrow">JOIN THE CIRCLE</p><h2>进入朋友的房间</h2></div>
+      <label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label>
+      <label>房间号<input id="roomCodeInput" maxlength="4" placeholder="例如 EYE8"></label>
+      <fieldset id="joinIntentField" class="join-intent hidden">
+        <legend>加入身份</legend>
+        <label><input type="radio" name="joinIntent" value="play" checked><span><b>加入玩家席</b><small>满员或开局后自动进入旁观席</small></span></label>
+        <label><input type="radio" name="joinIntent" value="spectate"><span><b>只做旁观者</b><small>不会看到答案和隐藏身份</small></span></label>
+      </fieldset>
+      <button id="joinRoomButton" class="primary" type="button">进入房间</button>
+    </section>
+  </section>
+
+  <section id="roomPanel" class="room-layout hidden">
+    <aside class="sidebar">
+      <details class="panel rule-card">
+        <summary><span><span class="eyebrow">RULE BOOK</span><b>详细规则</b></span><span>展开</span></summary>
+        <div class="rule-details">
+          <h3>身份和目标</h3>
+          <p>每轮随机产生1名公开主持人、1名隐藏局内人，其余为普通人。主持人和局内人知道答案；局内人要暗中引导大家猜中，并避免被识破。</p>
+          <h3>猜词</h3>
+          <p>5分钟内通过语音自由提问，主持人只能回答“是”“不是”或“不知道”。有人说出正确答案后，由主持人在网页上标记猜中者。超时无人猜中则全员失败。</p>
+          <h3>讨论与第一次投票</h3>
+          <p>讨论时间等于猜词耗时。之后除猜中者外的玩家投票判断猜中者是否是局内人，必须超过全部合资格玩家半数才算指控。</p>
+          <ul><li>正确指控局内人：普通阵营胜利。</li><li>错误指控普通猜中者：局内人胜利。</li><li>局内人作为猜中者却未被指控：局内人胜利。</li><li>普通猜中者被排除：进入第二次投票。</li></ul>
+          <h3>第二次投票</h3>
+          <p>主持人与已排除的猜中者不能成为候选人。所有玩家秘密投票，最高票者被指控；平票由猜中者裁决。命中局内人则普通阵营胜利，否则局内人胜利。</p>
+          <h3>计时和隐私</h3>
+          <p>身份确认30秒、第一次和第二次投票各30秒、平票裁决20秒。投票提交期间只公开谁已提交，不公开选择；本轮结束后公开答案、身份和结果。</p>
+        </div>
+      </details>
+
+      <section class="panel stats-card">
+        <p class="eyebrow">ROOM RECORD</p><h2>房间战绩</h2>
+        <div class="stats"><span>普通阵营<b id="commonWins">0</b></span><span>局内人<b id="insiderWins">0</b></span><span>全员失败<b id="failedRounds">0</b></span></div>
+      </section>
+
+      <section class="panel log-card">
+        <div class="section-head"><div><p class="eyebrow">PUBLIC RECORD</p><h2>公开记录</h2></div><button id="toggleLogButton" class="small" type="button">收起</button></div>
+        <div id="logList" class="log"></div>
+      </section>
+
+      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+        <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+        <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+      </details>
+    </aside>
+
+    <section class="game-area">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <section class="discussion-table">
+        <div class="table-title"><p class="eyebrow">THE QUESTIONING ROOM</p><h2 id="phaseTitle">等待讨论开始</h2><span>第 <b id="roundNumber">0</b> 轮</span></div>
+        <div id="players" class="players"></div>
+
+        <section class="public-focus" aria-live="polite">
+          <span id="focusLabel">CURRENT SIGNAL</span>
+          <strong id="focusText">答案尚未藏入房间</strong>
+          <small id="focusHint">主持人的回答和公开结果会显示在这里</small>
+        </section>
+
+      </section>
+      <section id="controlDock" class="panel control-dock" data-role="player">
+        <div class="action-zone">
+          <div class="action-head"><div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <section id="secretPanel" class="secret-panel private-zone hidden"><span id="roleLabel">你的身份</span><strong id="secretRole">—</strong><p id="secretWord"></p></section>
+      </section>
+    </section>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
