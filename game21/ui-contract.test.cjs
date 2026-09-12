@@ -24,6 +24,10 @@ test("页面遵守最新紧凑标题、折叠侧栏、独立桌面和合并吸�
   assert.match(script, /type: "voteAccusation"/);
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script, /catchUpThreshold: 2/);
+  assert.match(script, /severeBacklogThreshold: 5/);
+  assert.match(script, /urgentPriority: 4/);
   assert.match(html, /id="presentationTrail"/);
   assert.match(html, /id="presentationAnnouncement"/);
   assert.match(css, /\.presentation-token/);

@@ -55,8 +55,52 @@ function addLog(state, text, now) {
   state.logs = state.logs.slice(0, 100);
 }
 
+const PRESENTATION_PRIORITY = {
+  "vote-submitted": 1,
+  "question-ready": 2,
+  question: 2,
+  "answer-complete": 2,
+  "vote-rejected": 3,
+  "nomination-ready": 3,
+  "nomination-next": 3,
+  accusation: 4,
+  nomination: 4,
+  "location-reveal": 4,
+  "round-result": 4
+};
+
+function decoratePresentation(state, event) {
+  let sceneId = event.sceneId || state.activePresentationScene;
+  if (!sceneId) {
+    state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence + 1 : 1;
+    sceneId = `spyfall_scene_${state.presentationSceneSequence}`;
+  } else if (sceneId === state.activePresentationScene && Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, state.activePresentationSceneNumber);
+  }
+  const priority = Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] ?? 2;
+  return { ...event, sceneId, priority };
+}
+
+function runPresentationScene(state, callback) {
+  const previous = state.activePresentationScene;
+  const previousNumber = state.activePresentationSceneNumber;
+  const sceneNumber = (Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : 0) + 1;
+  state.activePresentationScene = `spyfall_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber = sceneNumber;
+  try { return callback(); }
+  finally {
+    if (previous) {
+      state.activePresentationScene = previous;
+      state.activePresentationSceneNumber = previousNumber;
+    } else {
+      delete state.activePresentationScene;
+      delete state.activePresentationSceneNumber;
+    }
+  }
+}
+
 function addPresentation(state, event, now) {
-  return appendPresentationEvent(state, event, {
+  return appendPresentationEvent(state, decoratePresentation(state, event), {
     now,
     eventsKey: "presentationEvents",
     sequenceKey: "presentationSequence",
@@ -256,7 +300,7 @@ export function createLobby({ capacity, host }) {
     questionerId: null, questionTargetId: null, blockedTargetId: null, savedQuestion: null, roundRemainingMs: 0,
     accusation: null, accusationVotes: {}, nominationOrder: [], nominationIndex: 0, nomination: null, timeoutVotes: {},
     recentLocationIds: [], result: null, logs: [], logSequence: 0,
-    presentationEvents: [], presentationSequence: 0
+    presentationEvents: [], presentationSequence: 0, presentationSceneSequence: 0
   };
 }
 
@@ -294,7 +338,7 @@ export function setPresence(state, playerId, connected) {
   return player;
 }
 
-export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+function applyActionInternal(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const actor = requirePlayer(state, actorId);
   const type = String(action?.type || "");
 
@@ -451,21 +495,27 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   throw new GameRuleError("unknown_action", "无法识别这个操作。");
 }
 
+export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
+}
+
 export function handleTimeout(state, { now = Date.now() } = {}) {
   if (!state.deadline || now < state.deadline) return false;
-  if (state.phase === "secretReveal") {
-    state.players.forEach((player) => { player.secretAcknowledged = true; });
-    startQuestioning(state, now);
-  } else if (state.phase === "questioning") {
-    beginTimeoutNomination(state, now);
-  } else if (state.phase === "accusationVote") {
-    resolveAccusationFailure(state, now);
-  } else if (state.phase === "timeoutNomination") {
-    advanceNomination(state, now, `${byId(state, currentNominatorId(state))?.name || "当前玩家"} 提名超时。`);
-  } else if (state.phase === "timeoutVote") {
-    advanceNomination(state, now, "最终表决未获全票支持。");
-  } else return false;
-  return true;
+  return runPresentationScene(state, () => {
+    if (state.phase === "secretReveal") {
+      state.players.forEach((player) => { player.secretAcknowledged = true; });
+      startQuestioning(state, now);
+    } else if (state.phase === "questioning") {
+      beginTimeoutNomination(state, now);
+    } else if (state.phase === "accusationVote") {
+      resolveAccusationFailure(state, now);
+    } else if (state.phase === "timeoutNomination") {
+      advanceNomination(state, now, `${byId(state, currentNominatorId(state))?.name || "当前玩家"} 提名超时。`);
+    } else if (state.phase === "timeoutVote") {
+      advanceNomination(state, now, "最终表决未获全票支持。");
+    } else return false;
+    return true;
+  });
 }
 
 export function getDeadline(state) { return Number(state.deadline) || 0; }
@@ -555,6 +605,7 @@ export function validateState(state) {
   fail(!Array.isArray(state.players) || state.players.length < 1 || state.players.length > state.capacity, "invalid_players", "玩家数据无效。");
   fail(new Set(state.players.map((player) => player.id)).size !== state.players.length, "duplicate_players", "玩家身份重复。");
   fail(state.players.filter((player) => player.isHost).length !== 1, "invalid_host", "房间必须有且只有一名房主。");
+  fail(!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0, "invalid_presentation_scene", "演出场景序号无效。");
   if (state.phase !== "lobby") {
     fail(!state.location || !findLocation(state.location.id), "invalid_location", "当前地点无效。");
     fail(state.players.filter((player) => player.role === ROLE.SPY).length !== 1, "invalid_spy", "间谍身份数据无效。");
@@ -572,6 +623,7 @@ export function serializeState(state) {
 
 export function restoreState(serializedState) {
   const state = clone(serializedState);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) && state.presentationSceneSequence >= 0 ? state.presentationSceneSequence : 0;
   normalizePresentationState(state);
   validateState(state);
   return state;

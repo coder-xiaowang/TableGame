@@ -386,8 +386,17 @@ presentation = createPresentationTimeline({
   resolveTarget: (event) => seatFor(event.targetId) || E.intelligenceTable.querySelector(".public-focus"),
   labelFor: (event) => presentationKindLabel(event.kind),
   beforePlay: playPresentationObject,
-  durationMs: 2300,
-  reducedDurationMs: 950
+  durationMs: 1500,
+  reducedDurationMs: 650,
+  maxQueue: 18,
+  sceneKey: (event) => event.sceneId || event.id,
+  priorityFor: (event) => Number(event.priority) || 0,
+  catchUpThreshold: 2,
+  severeBacklogThreshold: 5,
+  catchUpDurationMs: 700,
+  severeDurationMs: 360,
+  urgentPriority: 4,
+  retainPriority: 3
 });
 
 function selectMode(nextMode) {
