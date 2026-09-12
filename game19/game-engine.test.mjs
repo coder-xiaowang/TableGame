@@ -97,6 +97,8 @@ test("砰与闪由响应状态机串行结算，旧阶段动作被拒绝", () =>
   assert.deepEqual(state.presentationEvents.slice(-2).map((event) => event.kind), ["attack", "response-window"]);
   assert.equal(state.presentationEvents.at(-2).actorId, actor.id);
   assert.equal(state.presentationEvents.at(-2).targetId, target.id);
+  assert.equal(new Set(state.presentationEvents.slice(-2).map((event) => event.sceneId)).size, 1);
+  assert.ok(state.presentationEvents.slice(-2).every((event) => event.priority === 3));
   assert.throws(() => engine.applyAction(state, actor.id, effect(state, { type: "endTurn" }), { now: 5 }), /不需要你响应/);
   engine.applyAction(state, target.id, effect(state, { type: "respond", cardId: missed.id }), { now: 6, random: () => 0.25 });
   assert.equal(state.phase, "play");
@@ -121,6 +123,9 @@ test("随机抢走的秘密手牌只向行动双方说明具体牌面", () => {
   const spectatorEvents = engine.buildSpectatorView(state).presentationEvents;
   assert.ok(actorEvents.some((event) => event.private && event.text.includes(CARD_META[stolen.type].name)));
   assert.ok(targetEvents.some((event) => event.private && event.text.includes(CARD_META[stolen.type].name)));
+  const actorTransfer = actorEvents.find((event) => event.kind === "private-card-transfer" && event.private && event.text.includes(CARD_META[stolen.type].name));
+  const publicSteal = actorEvents.find((event) => event.kind === "steal" && !event.private);
+  assert.equal(actorTransfer.sceneId, publicSteal.sceneId);
   assert.ok(outsiderEvents.every((event) => !event.private));
   assert.ok(spectatorEvents.every((event) => !event.private));
   assert.equal(spectatorEvents.some((event) => event.text.includes(CARD_META[stolen.type].name) && event.kind !== "steal"), false);
@@ -133,12 +138,38 @@ test("旧快照缺少演出字段时仍可恢复并继续生成事件", () => {
   delete legacy.presentationEvents;
   delete legacy.privatePresentationEvents;
   delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
   const restored = engine.restoreState(legacy);
   assert.deepEqual(restored.presentationEvents, []);
   assert.deepEqual(restored.privatePresentationEvents, {});
+  assert.equal(restored.presentationSceneSequence, 0);
   engine.applyAction(restored, "p1", { type: "start" }, { now: 1000, random: () => 0.37 });
   assert.ok(restored.presentationSequence > 0);
+  assert.equal(restored.presentationEvents.at(-1).sceneId, "bang_scene_1");
   assert.doesNotThrow(() => engine.validateState(restored));
+});
+
+test("同一结算链共享场景且非法操作不消耗演出场景编号", () => {
+  const state = lobby();
+  engine.applyAction(state, "p1", { type: "start" }, { now: 1, random: () => 0.25 });
+  const actor = enterPlay(state), target = state.players.find((player) => player.alive && player.id !== actor.id);
+  moveCardTo(state, "winchester", actor.equipment);
+  const bang = moveCardTo(state, "bang", actor.hand);
+  engine.applyAction(state, actor.id, { type: "playCard", cardId: bang.id, targetId: target.id }, { now: 4, random: () => 0.25 });
+  const attackScene = state.presentationEvents.slice(-2);
+  assert.equal(new Set(attackScene.map((event) => event.sceneId)).size, 1);
+  const before = state.presentationSceneSequence;
+  assert.throws(() => engine.applyAction(state, actor.id, effect(state, { type: "endTurn" }), { now: 5 }), /不需要你响应/);
+  assert.equal(state.presentationSceneSequence, before);
+  assert.equal("activePresentationScene" in state, false);
+  const snapshot = engine.serializeState(state);
+  const restored = engine.restoreState(snapshot);
+  assert.equal(restored.presentationSceneSequence, state.presentationSceneSequence);
+  assert.deepEqual(restored.presentationEvents, state.presentationEvents);
+
+  delete snapshot.presentationSceneSequence;
+  const inferred = engine.restoreState(snapshot);
+  assert.equal(inferred.presentationSceneSequence, state.presentationSceneSequence);
 });
 
 test("超额手牌必须按当前生命弃牌，超时也能自动推进", () => {

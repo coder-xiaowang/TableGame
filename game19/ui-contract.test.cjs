@@ -22,6 +22,10 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   assert.match(script, /data-side="\$\{side\}"/);
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(next\.presentationEvents\)/);
+  assert.match(script, /sceneKey:\(event\)=>event\.sceneId\|\|event\.id/);
+  assert.match(script, /catchUpThreshold:2/);
+  assert.match(script, /severeBacklogThreshold:5/);
+  assert.match(script, /urgentPriority:4/);
   assert.match(html, /id="presentationTrail"/);
   assert.match(html, /id="presentationAnnouncement"/);
   assert.match(styles, /\.presentation-token/);

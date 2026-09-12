@@ -33,8 +33,70 @@ function log(state, text, now) {
   state.logs.unshift({ id: `log_${state.logSequence += 1}`, text, at: now });
   if (state.logs.length > 180) state.logs.length = 180;
 }
+
+const PRESENTATION_PRIORITY = {
+  "turn-start": 1,
+  draw: 1,
+  "private-draw": 2,
+  "character-draw": 2,
+  "draw-steal": 2,
+  "draw-discard": 2,
+  "card-play": 2,
+  equipment: 2,
+  discard: 2,
+  "general-store": 2,
+  "store-choice": 2,
+  attack: 3,
+  "response-window": 3,
+  defense: 3,
+  barrel: 3,
+  judgment: 3,
+  duel: 3,
+  "duel-response": 3,
+  "duel-return": 3,
+  "group-attack": 3,
+  heal: 3,
+  "group-heal": 3,
+  steal: 3,
+  "discard-target": 3,
+  "private-card-transfer": 3,
+  "character-steal": 3,
+  "inherit-cards": 3,
+  "match-start": 4,
+  damage: 4,
+  dying: 4,
+  rescue: 4,
+  elimination: 4,
+  "sheriff-penalty": 4,
+  "match-result": 4
+};
+
+function decoratePresentation(state, event) {
+  let sceneId = event.sceneId || state.activePresentationScene;
+  if (!sceneId) {
+    state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence + 1 : 1;
+    sceneId = `bang_scene_${state.presentationSceneSequence}`;
+  } else if (sceneId === state.activePresentationScene && Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, state.activePresentationSceneNumber);
+  }
+  const priority = Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] ?? 2;
+  return { ...event, sceneId, priority };
+}
+
+function runPresentationScene(state, callback) {
+  if (state.activePresentationScene) return callback();
+  const sceneNumber = (Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : 0) + 1;
+  state.activePresentationScene = `bang_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber = sceneNumber;
+  try { return callback(); }
+  finally {
+    delete state.activePresentationScene;
+    delete state.activePresentationSceneNumber;
+  }
+}
+
 function publicEvent(state, event, now) {
-  return appendPresentationEvent(state, event, {
+  return appendPresentationEvent(state, decoratePresentation(state, event), {
     now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "bang_event", limit: 50
   });
 }
@@ -46,7 +108,7 @@ function privateEvent(state, playerId, event, now) {
     events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
     sequence: Number(state.presentationSequence) || 0
   };
-  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+  const stored = appendPresentationEvent(envelope, decoratePresentation(state, { ...event, private: true }), {
     now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "bang_private", limit: 20
   });
   state.privatePresentationEvents[id] = envelope.events;
@@ -489,7 +551,7 @@ function startGame(state, actorId, now, random) {
 }
 
 export function createLobby({ capacity, host }) {
-  return { stateVersion: STATE_VERSION, capacity: assertCapacity(capacity), phase: "lobby", deadline: 0, players: [makePlayer({ ...host, isHost: true })], deck: [], discard: [], currentIndex: 0, turn: 0, pending: null, effectSequence: 0, winner: null, logs: [], logSequence: 0, presentationEvents: [], privatePresentationEvents: {}, presentationSequence: 0 };
+  return { stateVersion: STATE_VERSION, capacity: assertCapacity(capacity), phase: "lobby", deadline: 0, players: [makePlayer({ ...host, isHost: true })], deck: [], discard: [], currentIndex: 0, turn: 0, pending: null, effectSequence: 0, winner: null, logs: [], logSequence: 0, presentationEvents: [], privatePresentationEvents: {}, presentationSequence: 0, presentationSceneSequence: 0 };
 }
 export function addPlayer(state, player) {
   fail(state.phase !== "lobby", "game_started", "牌局已经开始。", 409); fail(state.players.length >= state.capacity, "room_full", "玩家席已满。", 409); fail(byId(state, player.id), "duplicate_player", "该玩家已在房间中。", 409);
@@ -505,7 +567,7 @@ export function vacateSeat(state, playerId) {
 }
 export function setPresence(state, playerId, connected) { const player = byId(state, playerId); if (player) player.connected = Boolean(connected); return player; }
 
-export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+function applyActionInternal(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const actor = requireActor(state, actorId); fail(!action?.type, "action_required", "缺少操作类型。");
   if (action.type === "setCapacity") { requireHost(state, actorId); fail(state.phase !== "lobby", "capacity_locked", "开局后不能修改人数。"); const capacity = assertCapacity(action.capacity); fail(capacity < state.players.length, "capacity_too_small", "人数不能少于已入座玩家。"); state.capacity = capacity; return; }
   if (action.type === "start") return startGame(state, actorId, now, random);
@@ -540,6 +602,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   throw new GameRuleError("action_not_allowed", "当前阶段不能执行这个操作。", 409);
 }
 
+export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
+}
+
 function resetMatchToLobby(state) {
   state.phase = "lobby"; state.pending = null; state.winner = null; state.deadline = 0; state.deck = []; state.discard = []; state.currentIndex = 0; state.turn = 0;
   for (const player of state.players) Object.assign(player, { role: null, characterId: null, life: 0, maxLife: 0, hand: [], equipment: [], alive: true, bangPlayed: 0 });
@@ -547,19 +613,21 @@ function resetMatchToLobby(state) {
 
 export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
   if (!state.deadline || now < state.deadline) return false;
-  const actor = byId(state, state.pending?.actorId) || current(state);
-  if (["draw", "drawChoice"].includes(state.phase)) performDraw(state, actor, "deck", null, now, random);
-  else if (state.phase === "kitChoice") { actor.hand.push(...state.pending.cards.slice(0, 2)); const returned = state.pending.cards[2]; if (returned) state.deck.push(returned); enterPlay(state, actor.id, now); }
-  else if (state.phase === "judgmentChoice") applyAction(state, actor.id, { type: "chooseJudgment", cardId: state.pending.cards[0]?.id, effectId: state.pending.id }, { now, random });
-  else if (state.phase === "play") endTurn(state, actor, now, random);
-  else if (state.phase === "defense") resolveDefense(state, actor, { type: "takeHit" }, now, random);
-  else if (state.phase === "duel") resolveDuel(state, actor, { type: "takeHit" }, now, random);
-  else if (state.phase === "dying") resolveDying(state, actor, { type: "giveUp" }, now, random);
-  else if (state.phase === "eliminationDiscard") resolveEliminationOrder(state, actor, { type: "orderEliminationDiscard", cardIds: state.pending.cardIds }, now, random);
-  else if (state.phase === "discardExcess") { const ids = shuffle(actor.hand, random).slice(0, state.pending.count).map((card) => card.id); applyAction(state, actor.id, { type: "discardCards", cardIds: ids, effectId: state.pending.id }, { now, random }); }
-  else if (state.phase === "generalStore") applyAction(state, state.pending.chooserIds[0], { type: "chooseStore", cardId: state.pending.choices[0]?.id, effectId: state.pending.id }, { now, random });
-  else return false;
-  return true;
+  return runPresentationScene(state, () => {
+    const actor = byId(state, state.pending?.actorId) || current(state);
+    if (["draw", "drawChoice"].includes(state.phase)) performDraw(state, actor, "deck", null, now, random);
+    else if (state.phase === "kitChoice") { actor.hand.push(...state.pending.cards.slice(0, 2)); const returned = state.pending.cards[2]; if (returned) state.deck.push(returned); enterPlay(state, actor.id, now); }
+    else if (state.phase === "judgmentChoice") applyAction(state, actor.id, { type: "chooseJudgment", cardId: state.pending.cards[0]?.id, effectId: state.pending.id }, { now, random });
+    else if (state.phase === "play") endTurn(state, actor, now, random);
+    else if (state.phase === "defense") resolveDefense(state, actor, { type: "takeHit" }, now, random);
+    else if (state.phase === "duel") resolveDuel(state, actor, { type: "takeHit" }, now, random);
+    else if (state.phase === "dying") resolveDying(state, actor, { type: "giveUp" }, now, random);
+    else if (state.phase === "eliminationDiscard") resolveEliminationOrder(state, actor, { type: "orderEliminationDiscard", cardIds: state.pending.cardIds }, now, random);
+    else if (state.phase === "discardExcess") { const ids = shuffle(actor.hand, random).slice(0, state.pending.count).map((card) => card.id); applyAction(state, actor.id, { type: "discardCards", cardIds: ids, effectId: state.pending.id }, { now, random }); }
+    else if (state.phase === "generalStore") applyAction(state, state.pending.chooserIds[0], { type: "chooseStore", cardId: state.pending.choices[0]?.id, effectId: state.pending.id }, { now, random });
+    else return false;
+    return true;
+  });
 }
 export function getDeadline(state) { return Number(state.deadline) || 0; }
 
@@ -604,6 +672,7 @@ export function buildSpectatorView(state) { return publicView(state, null); }
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game19 state");
   if (state.players.length > state.capacity || state.capacity < MIN_PLAYERS || state.capacity > MAX_PLAYERS) throw new Error("Invalid player capacity");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game19 presentation scene sequence");
   if (state.phase !== "lobby") {
     const cards = [...state.deck, ...state.discard, ...state.players.flatMap((player) => [...player.hand, ...player.equipment])];
     if (state.pending?.type === "kitChoice") cards.push(...state.pending.cards);
@@ -640,6 +709,10 @@ export function restoreState(serializedState) {
   normalizePresentationState(state);
   const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
   state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
+  const existingScenes = [...state.presentationEvents, ...Object.values(state.privatePresentationEvents).flat()]
+    .map((event) => /^bang_scene_(\d+)$/.exec(String(event?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : existingScenes;
   validateState(state);
   return state;
 }

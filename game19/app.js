@@ -96,7 +96,29 @@ function renderActions(){
 function renderSid(){if(own()?.characterId!=="sid_ketchum"||own().hand.length<2)return;addButton("西德：弃2张牌回血",()=>{const cards=own().hand;const answer=prompt(`输入要弃掉的两张牌序号（例如 1,3）：\n${cards.map((card,index)=>`${index+1}. ${cardName(card.type)} ${card.rank}${SUIT[card.suit]}`).join("\n")}`);if(answer==null)return;const indexes=answer.split(/[,，\s]+/).filter(Boolean).map((value)=>Number(value)-1);if(indexes.length!==2||new Set(indexes).size!==2||indexes.some((index)=>!cards[index]))return alert("请输入两个不同且有效的牌序号。");submit({type:"useSid",cardIds:indexes.map((index)=>cards[index].id)});});}
 function renderHand(role){setHidden(E.privateZone,role==="spectator");if(role==="spectator")return;const self=own();E.selfSummary.textContent=self?`${self.characterName||"未分配角色"} · ${self.role?ROLE[self.role]:""} · ${self.life}/${self.maxLife}生命`:"";E.myHand.innerHTML=self?.hand.map((card)=>cardHtml(card,{selectable:view.permissions.canPlay,selected:card.id===selectedCardId})).join("")||'<p class="muted">暂无手牌</p>';E.myHand.querySelectorAll("[data-card]").forEach((button)=>button.onclick=()=>{selectedCardId=button.dataset.card;selectedTargetId=null;renderHand(role);renderActions();});}
 function render(){const model=spectatorUi.render(view),role=model.memberRole;setHidden(E.hostTools,!view.permissions.canManage);setHidden(E.startGameButton,!view.permissions.canStart);setHidden(E.restartGameButton,!view.permissions.canRestart);setHidden(E.endGameButton,!view.permissions.canEnd);E.startGameButton.disabled=view.players.length!==view.capacity||view.players.some((p)=>!p.connected);E.roomPlayerCountSelect.value=String(view.capacity);E.roomPlayerCountSelect.disabled=!view.permissions.canSetCapacity;E.controlDock.dataset.role=role;E.notice.textContent=view.phase==="lobby"?`等待玩家：${view.players.length}/${view.capacity}`:`第 ${view.turn} 回合 · ${name(view.currentPlayerId)} 行动`;E.centerMoment.textContent=view.winner?.text||(view.phase==="lobby"?"酒馆尚未响起枪声":view.logs[0]?.text||`${name(view.currentPlayerId)} 的回合`);E.deckCount.textContent=view.deckCount;E.discardTop.innerHTML=view.discardTop?`<b>${escapeHtml(cardName(view.discardTop.type))}</b><span>${escapeHtml(view.discardTop.rank+SUIT[view.discardTop.suit])}</span>`:"<b>—</b><span>弃牌堆</span>";renderPlayers();renderActions();renderHand(role);E.logList.innerHTML=view.logs.map((item)=>`<div class="log-item">${escapeHtml(item.text)}</div>`).join("")||'<p class="muted">暂无记录</p>';if(view.deadline)countdown.start(view.deadline,PHASE_MS[view.phase]||20000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}}
-presentation=createPresentationTimeline({container:E.westernTable,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,labelElement:E.presentationLabel,textElement:E.presentationText,effectsElement:E.presentationEffects,resolveSource:eventSource,resolveTarget:eventTarget,labelFor:(event)=>presentationLabel(event.kind),beforePlay:playPresentationObject,durationMs:1800,reducedDurationMs:750,maxQueue:20});
+presentation=createPresentationTimeline({
+  container:E.westernTable,
+  trailPath:E.presentationTrail,
+  announcement:E.presentationAnnouncement,
+  labelElement:E.presentationLabel,
+  textElement:E.presentationText,
+  effectsElement:E.presentationEffects,
+  resolveSource:eventSource,
+  resolveTarget:eventTarget,
+  labelFor:(event)=>presentationLabel(event.kind),
+  beforePlay:playPresentationObject,
+  durationMs:1450,
+  reducedDurationMs:600,
+  maxQueue:18,
+  sceneKey:(event)=>event.sceneId||event.id,
+  priorityFor:(event)=>Number(event.priority)||0,
+  catchUpThreshold:2,
+  severeBacklogThreshold:5,
+  catchUpDurationMs:650,
+  severeDurationMs:330,
+  urgentPriority:4,
+  retainPriority:3
+});
 async function createRoom(){E.createRoomButton.disabled=true;try{await room.createRoom({name:cleanPlayerName(E.hostNameInput.value,"房主"),capacity:Number(E.playerCountSelect.value)});}catch(error){alert(`创建失败：${error.message}\n请确认已启动 game19 服务。`);}finally{E.createRoomButton.disabled=false;}}
 async function joinRoom(){E.joinRoomButton.disabled=true;try{const result=await room.joinRoom({code:E.roomCodeInput.value,name:cleanPlayerName(E.guestNameInput.value,"玩家"),intent:spectatorUi.getJoinIntent()});E.connectionStatus.textContent=spectatorUi.handleJoinResult(result).statusText;}catch(error){alert(`加入失败：${error.message}`);}finally{E.joinRoomButton.disabled=false;}}
 function init(){bindRoomCodeInput(E.roomCodeInput);E.hostModeButton.onclick=()=>setModeVisibility("host",{hostButton:E.hostModeButton,guestButton:E.guestModeButton,hostSetup:E.hostSetup,guestSetup:E.guestSetup,hostTools:E.hostTools});E.guestModeButton.onclick=()=>setModeVisibility("guest",{hostButton:E.hostModeButton,guestButton:E.guestModeButton,hostSetup:E.hostSetup,guestSetup:E.guestSetup,hostTools:E.hostTools});E.createRoomButton.onclick=createRoom;E.joinRoomButton.onclick=joinRoom;spectatorUi.bind();E.roomPlayerCountSelect.onchange=()=>submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)});E.startGameButton.onclick=()=>submit({type:"start"});E.restartGameButton.onclick=()=>submit({type:"restart"});E.endGameButton.onclick=()=>confirm("确定结束牌局吗？")&&submit({type:"end"});E.toggleLogButton.onclick=()=>{const hidden=E.logList.classList.toggle("collapsed");E.toggleLogButton.textContent=hidden?"展开":"收起";};room.checkServer().then((config)=>spectatorUi.applyConfig(config)).catch(()=>{});}
