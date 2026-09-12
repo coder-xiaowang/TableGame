@@ -130,6 +130,7 @@ test("响应窗口使用唯一编号，旧行动质疑不会串到新的阻挡�
   );
   assert.equal(state.phase, "challengeBlock");
   assert.equal(state.reaction.id, currentReactionId);
+  assert.equal("activePresentationScene" in state, false);
 });
 
 test("首个有效质疑会立即关闭所有玩家的当前响应窗口", () => {
@@ -154,6 +155,8 @@ test("权威演出事件对所有视角一致且不会泄露真实身份", () =>
   const spectatorMoment = buildSpectatorView(state).moments.at(-1);
   assert.deepEqual(spectatorMoment, playerMoment);
   assert.equal(playerMoment.kind, "claim");
+  assert.equal(playerMoment.priority, 3);
+  assert.match(playerMoment.sceneId, /^coup_scene_\d+$/);
   assert.equal(playerMoment.actorId, actor.id);
   assert.equal(playerMoment.claimedRole, "duke");
   assert.ok([0, 1].includes(playerMoment.claimSlot));
@@ -164,5 +167,30 @@ test("权威演出事件对所有视角一致且不会泄露真实身份", () =>
   assert.equal(challengeMoment.actorId, challenger.id);
   assert.equal(challengeMoment.targetId, actor.id);
   assert.equal(challengeMoment.claimSlot, null);
+  assert.equal(challengeMoment.priority, 4);
+  assert.notEqual(challengeMoment.sceneId, playerMoment.sceneId);
   assert.ok(challengeMoment.sequence > playerMoment.sequence);
+});
+
+test("演出场景编号可持久化、可从已有事件恢复且非法操作不会消耗编号", () => {
+  const state = started();
+  const actor = current(state);
+  applyAction(state, actor.id, { type: "declareAction", actionType: "tax" }, { now: now + 1, random });
+  const before = state.presentationSceneSequence;
+  assert.throws(() => applyAction(state, actor.id, { type: "declareAction", actionType: "income" }, { now: now + 2, random }), /当前阶段/);
+  assert.equal(state.presentationSceneSequence, before);
+  assert.equal("activePresentationScene" in state, false);
+
+  const snapshot = serializeState(state);
+  assert.equal(restoreState(snapshot).presentationSceneSequence, before);
+  delete snapshot.presentationSceneSequence;
+  assert.equal(restoreState(snapshot).presentationSceneSequence, before);
+});
+
+test("缺少演出场景字段的旧大厅快照仍可恢复", () => {
+  const legacy = createLobby({ capacity: 3, host: { id: "p1", name: "甲", connected: true } });
+  delete legacy.presentationSceneSequence;
+  const restored = restoreState(legacy);
+  assert.equal(restored.presentationSceneSequence, 0);
+  assert.doesNotThrow(() => validateState(restored));
 });

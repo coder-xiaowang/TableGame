@@ -58,6 +58,32 @@ function addLog(state, text, now) {
   if (state.logs.length > 120) state.logs.length = 120;
 }
 
+const MOMENT_PRIORITY = { claim: 3, action: 3, block: 4, challenge: 4 };
+
+function decorateMoment(state, moment) {
+  let sceneId = moment.sceneId || state.activePresentationScene;
+  if (!sceneId) {
+    state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence + 1 : 1;
+    sceneId = `coup_scene_${state.presentationSceneSequence}`;
+  } else if (sceneId === state.activePresentationScene && Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, state.activePresentationSceneNumber);
+  }
+  const priority = Number.isFinite(Number(moment.priority)) ? Number(moment.priority) : MOMENT_PRIORITY[moment.kind] ?? 2;
+  return { ...moment, sceneId, priority };
+}
+
+function runPresentationScene(state, callback) {
+  if (state.activePresentationScene) return callback();
+  const sceneNumber = (Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : 0) + 1;
+  state.activePresentationScene = `coup_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber = sceneNumber;
+  try { return callback(); }
+  finally {
+    delete state.activePresentationScene;
+    delete state.activePresentationSceneNumber;
+  }
+}
+
 function addMoment(state, { kind, actorId, targetId = null, actionType = null, claimedRole = null, showClaim = false, text }, now) {
   const nextSequence = (Number(state.momentSequence) || 0) + 1;
   const actor = playerById(state, actorId);
@@ -70,7 +96,7 @@ function addMoment(state, { kind, actorId, targetId = null, actionType = null, c
   const claimSlot = showClaim && claimedRole && activeSlots.length
     ? activeSlots[(visualHash >>> 0) % activeSlots.length]
     : null;
-  appendPresentationEvent(state, {
+  appendPresentationEvent(state, decorateMoment(state, {
     kind,
     actorId: String(actorId),
     targetId: targetId ? String(targetId) : null,
@@ -78,7 +104,7 @@ function addMoment(state, { kind, actorId, targetId = null, actionType = null, c
     claimedRole,
     claimSlot,
     text: String(text)
-  }, { now, eventsKey: "moments", sequenceKey: "momentSequence", idPrefix: "moment", limit: 30 });
+  }), { now, eventsKey: "moments", sequenceKey: "momentSequence", idPrefix: "moment", limit: 30 });
 }
 
 function setPhase(state, phase, now, seconds = 0) {
@@ -354,7 +380,7 @@ function submitExchange(state, actor, keepIds, now) {
 }
 
 export function createLobby({ capacity, host }) {
-  return { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], deck: [], currentIndex: 0, deadline: 0, winnerId: null, action: null, reaction: null, reactionSequence: 0, challenge: null, loss: null, exchange: null, moments: [], momentSequence: 0, logs: [], logSequence: 0 };
+  return { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], deck: [], currentIndex: 0, deadline: 0, winnerId: null, action: null, reaction: null, reactionSequence: 0, challenge: null, loss: null, exchange: null, moments: [], momentSequence: 0, presentationSceneSequence: 0, logs: [], logSequence: 0 };
 }
 
 export function addPlayer(state, player) {
@@ -388,7 +414,7 @@ export function setPresence(state, playerId, connected) {
   player.connected = Boolean(connected); return true;
 }
 
-export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+function applyActionInternal(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const actor = requireActor(state, actorId); const type = action?.type;
   if (type === "setCapacity") {
     requireHost(state, actorId); if (state.phase !== "lobby") throw new GameRuleError("game_started", "游戏开始后不能修改人数。", 409);
@@ -415,7 +441,11 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   throw new GameRuleError("action_unavailable", "当前阶段不能执行这个操作。", 409);
 }
 
-export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
+export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
+}
+
+function handleTimeoutInternal(state, { now = Date.now(), random = Math.random } = {}) {
   if (["lobby", "ended"].includes(state.phase) || !state.deadline || now < state.deadline) return false;
   if (state.phase === "action") {
     const actor = currentPlayer(state); const targets = livingPlayers(state).filter((p) => p.id !== actor.id);
@@ -441,6 +471,10 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
     const player = playerById(state, state.exchange.playerId); submitExchange(state, player, state.exchange.originalIds, now); return true;
   }
   return false;
+}
+
+export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => handleTimeoutInternal(state, { now, random }));
 }
 
 export function getDeadline(state) { return Number(state.deadline) || 0; }
@@ -487,6 +521,7 @@ export function buildSpectatorView(state) { return publicView(state, null); }
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game16 state");
   if (!Number.isInteger(state.reactionSequence) || state.reactionSequence < 0) throw new Error("Invalid game16 reaction sequence");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game16 presentation scene sequence");
   if (state.reaction && (!state.reaction.id || !state.reaction.kind)) throw new Error("Invalid game16 reaction window");
   try { validatePresentationState(state, { eventsKey: "moments", sequenceKey: "momentSequence" }); }
   catch { throw new Error("Invalid game16 presentation events"); }
@@ -508,5 +543,9 @@ export function restoreState(serializedState) {
     state.reaction.id = `reaction_${state.reactionSequence}`;
   }
   normalizePresentationState(state, { eventsKey: "moments", sequenceKey: "momentSequence" });
+  const existingScenes = state.moments
+    .map((moment) => /^coup_scene_(\d+)$/.exec(String(moment?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : existingScenes;
   validateState(state); return state;
 }

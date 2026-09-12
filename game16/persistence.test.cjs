@@ -51,6 +51,7 @@ test("SQLite重启恢复房间、身份、期限和旁观隐私", async (context
   const after = (await resume(running, host)).payload.view;
   const watched = (await resume(running, watcher)).payload.view;
   assert.deepEqual(after.players.find((p) => p.id === host.clientId).influences, before.players.find((p) => p.id === host.clientId).influences);
+  assert.deepEqual(after.moments, before.moments);
   assert.equal(after.deadline, before.deadline); assert.ok(after.players.every((p) => !p.connected));
   assert.equal(watched.roomRole, "spectator"); assert.ok(watched.players.flatMap((p) => p.influences).every((card) => card.role === null));
 });

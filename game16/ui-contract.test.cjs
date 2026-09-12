@@ -22,6 +22,9 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(script, /createSpectatorUi/); assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(script, /reactionId: view\.reaction\?\.id/); assert.match(script, /expectedVersion: renderedVersion/);
   assert.match(script, /createPresentationTimeline/); assert.match(script, /presentation\.sync\(view\.moments\)/); assert.match(script, /data-influence-slot/); assert.match(script, /moment\.actorId === view\.selfId/);
+  assert.match(script, /sceneKey: \(moment\) => moment\.sceneId \|\| moment\.id/);
+  assert.match(script, /catchUpThreshold: 2/); assert.match(script, /severeBacklogThreshold: 4/);
+  assert.match(script, /urgentPriority: 4/); assert.match(script, /retainPriority: 4/);
   assert.match(script, /setHidden\(E\.roomHeaderTools, false\)/);
   assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/);
   assert.match(styles, /@media \(min-width: 761px\)/);

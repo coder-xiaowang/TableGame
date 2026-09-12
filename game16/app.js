@@ -158,8 +158,17 @@ const presentation = createPresentationTimeline({
   resolveTarget: (moment) => seatFor(moment.targetId) || E.courtCenter,
   labelFor: (moment) => momentKindLabel(moment.kind),
   beforePlay: showClaimPulse,
-  durationMs: 2600,
-  reducedDurationMs: 1200
+  durationMs: 1600,
+  reducedDurationMs: 650,
+  maxQueue: 14,
+  sceneKey: (moment) => moment.sceneId || moment.id,
+  priorityFor: (moment) => Number(moment.priority) || 0,
+  catchUpThreshold: 2,
+  severeBacklogThreshold: 4,
+  catchUpDurationMs: 700,
+  severeDurationMs: 360,
+  urgentPriority: 4,
+  retainPriority: 4
 });
 
 function renderTargetChoices(actionType) {
