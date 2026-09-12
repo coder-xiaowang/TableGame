@@ -145,3 +145,47 @@ test("旁观者在两轮投票期间只看到提交进度而不会触发权限�
   assert.deepEqual(watched.submittedFirstVoteIds, [voter.id]);
   assert.equal(watched.firstVoteResult, null);
 });
+
+test("演出事件由服务器产生且秘密确认不会暴露局内人", () => {
+  const state = room();
+  const startEvent = state.presentationEvents.at(-1);
+  assert.equal(startEvent.kind, "round-start");
+  assert.equal(startEvent.actorId, state.masterId);
+  assert.equal("answer" in startEvent, false);
+  assert.equal("insiderId" in startEvent, false);
+
+  engine.applyAction(state, state.insiderId, { type: "acknowledgeSecret" }, { now: 2000 });
+  const progress = state.presentationEvents.at(-1);
+  assert.equal(progress.kind, "secret-progress");
+  assert.equal(progress.confirmedCount, 1);
+  assert.equal("actorId" in progress, false);
+  assert.equal("insiderId" in progress, false);
+  assert.equal(JSON.stringify(engine.buildSpectatorView(state).presentationEvents).includes(state.word.text), false);
+});
+
+test("密票演出只公开提交事实并把同次结算合并为一个场景", () => {
+  const state = room(); acknowledge(state);
+  const guesser = common(state);
+  engine.applyAction(state, state.masterId, { type: "markCorrectGuesser", playerId: guesser.id }, { now: 4000 });
+  engine.handleTimeout(state, { now: state.deadline });
+  const voters = state.players.filter((player) => player.id !== guesser.id);
+  voters.forEach((voter, index) => engine.applyAction(state, voter.id, { type: "submitFirstVote", accuse: false }, { now: 5000 + index }));
+  const sealed = state.presentationEvents.filter((event) => event.kind === "vote-sealed");
+  assert.equal(sealed.length, voters.length);
+  assert.ok(sealed.every((event) => !("accuse" in event) && !("targetId" in event)));
+  const finalScene = sealed.at(-1).sceneId;
+  assert.ok(state.presentationEvents.some((event) => event.sceneId === finalScene && event.kind === "first-vote-result"));
+  assert.ok(state.presentationEvents.some((event) => event.sceneId === finalScene && event.kind === "second-vote-start"));
+});
+
+test("旧快照恢复时自动补齐演出字段", () => {
+  const state = room();
+  const legacy = engine.serializeState(state);
+  delete legacy.presentationEvents;
+  delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
+  const restored = engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []);
+  assert.equal(restored.presentationSequence, 0);
+  assert.equal(restored.presentationSceneSequence, 0);
+});

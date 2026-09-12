@@ -64,6 +64,13 @@
           <small id="focusHint">主持人的回答会留在提问钟盘上</small>
           <div id="answerEchoes" class="answer-echoes" aria-label="主持人的最近回答"></div>
         </section>
+        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+          <svg class="presentation-trail-layer" aria-hidden="true">
+            <defs><marker id="insiderTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+            <path id="presentationTrail" class="presentation-trail" marker-end="url(#insiderTrailArrow)"></path>
+          </svg>
+          <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
+        </div>
       </section>
 
       <section id="controlDock" class="panel control-dock salon-console" data-role="player">

@@ -1,7 +1,7 @@
 "use strict";
 
 import {
-  bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown, createSessionStore,
+  bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown, createPresentationTimeline, createSessionStore,
   createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 
@@ -15,7 +15,7 @@ const E = Object.fromEntries([
   "hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay",
   "hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","startGameButton","nextRoundButton","endGameButton",
-  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","answerEchoes","controlDock","actionTitle","actionHint","actionButtons",
+  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","answerEchoes","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons",
   "timerText","timerBar","secretPanel","roleLabel","secretRole","secretWord","commonWins","insiderWins","failedRounds","toggleLogButton","logList",
   "spectatorPanel","spectatorCountBadge","spectatorList"
 ].map((id) => [id, $(id)]));
@@ -24,6 +24,7 @@ let mode = "host";
 let view = null;
 let spectatorUi = null;
 let selectingGuesser = false;
+let presentation = null;
 
 const sessions = createSessionStore({ gameId: "insider" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -37,6 +38,7 @@ const room = createAuthoritativeRoomClient({
       if (!view.permissions.canMarkCorrectGuesser) selectingGuesser = false;
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
@@ -65,6 +67,52 @@ function submit(action) {
 
 function player(id) { return view.players.find((item) => item.id === id) || null; }
 function nameOf(id) { return player(id)?.name || "玩家"; }
+function playerAnchor(id) { return id ? E.players.querySelector(`[data-player-anchor="${CSS.escape(String(id))}"]`) : null; }
+
+function presentationLabel(kind) {
+  return ({
+    "round-start": "新一轮问答", "secret-progress": "秘密封存", "questioning-start": "限时猜词",
+    "master-answer": "主持人回答", "correct-guess": "答案命中", "discussion-ready": "准备投票",
+    "first-vote-start": "审查猜中者", "vote-sealed": "秘密投票", "first-vote-result": "审查揭晓",
+    "second-vote-start": "最终指认", "tie-break-start": "平票裁决", "round-result": "身份揭晓"
+  })[kind] || "沙龙动态";
+}
+
+function eventSource(event) {
+  if (["correct-guess", "round-result", "first-vote-start", "first-vote-result", "second-vote-start"].includes(event.kind)) return document.querySelector(".public-focus");
+  return playerAnchor(event.actorId) || document.querySelector(".public-focus");
+}
+
+function eventTarget(event) {
+  if (["master-answer", "secret-progress", "questioning-start", "discussion-ready", "vote-sealed"].includes(event.kind)) return document.querySelector(".public-focus");
+  return playerAnchor(event.targetId) || document.querySelector(".public-focus");
+}
+
+function playPresentationObject(event) {
+  const source = eventSource(event), target = eventTarget(event);
+  const candidates = (event.targetIds || []).map(playerAnchor).filter(Boolean);
+  const highlighted = [...new Set([source, target, ...candidates].filter(Boolean))];
+  highlighted.forEach((element) => element.classList.add("presentation-focus"));
+  if (["correct-guess", "first-vote-result", "tie-break-start", "round-result"].includes(event.kind)) document.querySelector(".public-focus")?.classList.add("presentation-reveal");
+  let token = null;
+  if (source && target && source !== target) {
+    const stage = document.querySelector(".discussion-table").getBoundingClientRect();
+    const from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
+    token = document.createElement("span");
+    token.className = "presentation-token";
+    token.textContent = ({ "master-answer": ANSWER_LABEL[event.answer], "correct-guess": "✓", "discussion-ready": "举手", "vote-sealed": "封", "first-vote-start": "?", "first-vote-result": event.accused ? "!" : "✓", "tie-break-start": "衡", "round-result": "揭" })[event.kind] || "·";
+    token.style.setProperty("--from-x", `${from.left + from.width / 2 - stage.left}px`);
+    token.style.setProperty("--from-y", `${from.top + from.height / 2 - stage.top}px`);
+    token.style.setProperty("--to-x", `${to.left + to.width / 2 - stage.left}px`);
+    token.style.setProperty("--to-y", `${to.top + to.height / 2 - stage.top}px`);
+    E.presentationEffects.append(token);
+  }
+  return () => {
+    highlighted.forEach((element) => element.classList.remove("presentation-focus"));
+    document.querySelector(".public-focus")?.classList.remove("presentation-reveal");
+    token?.remove();
+  };
+}
 
 function enterRoom() {
   setHidden(E.setupPanel, true);
@@ -321,5 +369,29 @@ async function init() {
   selectMode("host");
   try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* 创建或加入时显示连接错误 */ }
 }
+
+presentation = createPresentationTimeline({
+  container: document.querySelector(".discussion-table"),
+  trailPath: E.presentationTrail,
+  announcement: E.presentationAnnouncement,
+  labelElement: E.presentationLabel,
+  textElement: E.presentationText,
+  effectsElement: E.presentationEffects,
+  resolveSource: eventSource,
+  resolveTarget: eventTarget,
+  labelFor: (event) => presentationLabel(event.kind),
+  beforePlay: playPresentationObject,
+  durationMs: 1350,
+  reducedDurationMs: 540,
+  maxQueue: 16,
+  sceneKey: (event) => event.sceneId || event.id,
+  priorityFor: (event) => Number(event.priority) || 0,
+  catchUpThreshold: 2,
+  severeBacklogThreshold: 5,
+  catchUpDurationMs: 620,
+  severeDurationMs: 320,
+  urgentPriority: 4,
+  retainPriority: 3
+});
 
 init();

@@ -2,6 +2,7 @@ import {
   MASTER_ANSWERS, MAX_PLAYERS, MIN_PLAYERS, QUESTION_SECONDS, ROLE, SECRET_SECONDS,
   TIE_BREAK_SECONDS, VOTE_SECONDS, assertCapacity, assignRoles, chooseWord
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -55,6 +56,17 @@ function addLog(state, text, now) {
   state.logs = state.logs.slice(0, 80);
 }
 
+function newPresentationScene(state) {
+  state.presentationSceneSequence = (Number(state.presentationSceneSequence) || 0) + 1;
+  return `insider_scene_${state.presentationSceneSequence}`;
+}
+
+function present(state, kind, text, now, details = {}, sceneId = null) {
+  return appendPresentationEvent(state, {
+    kind, text, sceneId: sceneId || newPresentationScene(state), priority: 1, ...details
+  }, { now, idPrefix: "insider_event", limit: 70 });
+}
+
 function activeRoles(state) {
   return state.players.filter((player) => player.role);
 }
@@ -71,22 +83,24 @@ function allSubmitted(players, votes) {
   return players.every((player) => Object.hasOwn(votes, player.id));
 }
 
-function beginQuestioning(state, now) {
+function beginQuestioning(state, now, sceneId = null) {
   state.phase = "questioning";
   state.questionStartedAt = now;
   state.deadline = now + QUESTION_SECONDS * 1000;
   addLog(state, "身份确认完毕，开始限时猜词。", now);
+  present(state, "questioning-start", "秘密确认完毕，限时猜词开始", now, { priority: 3, actorId: state.masterId }, sceneId);
 }
 
-function beginFirstVote(state, now) {
+function beginFirstVote(state, now, sceneId = null) {
   state.phase = "firstVote";
   state.deadline = now + VOTE_SECONDS * 1000;
   state.firstVotes = {};
   state.players.forEach((player) => { player.readyToVote = false; });
   addLog(state, `开始审查猜中者 ${byId(state, state.guessedById)?.name || "玩家"}。`, now);
+  present(state, "first-vote-start", `开始审查猜中者 ${byId(state, state.guessedById)?.name || "玩家"}`, now, { priority: 3, targetId: state.guessedById }, sceneId);
 }
 
-function finishRound(state, winnerSide, reason, now, accusedId = null) {
+function finishRound(state, winnerSide, reason, now, accusedId = null, sceneId = null) {
   state.phase = "roundEnd";
   state.deadline = 0;
   const winnerIds = winnerSide === "insider"
@@ -101,35 +115,43 @@ function finishRound(state, winnerSide, reason, now, accusedId = null) {
   else state.stats.failedRounds += 1;
   const label = winnerSide === "common" ? "普通阵营获胜" : winnerSide === "insider" ? "局内人获胜" : "本轮全员失败";
   addLog(state, `${label}：${reason}`, now);
+  present(state, "round-result", `${label}：${reason}`, now, {
+    priority: 5, winnerSide, accusedId, insiderId: state.insiderId, answer: state.word.text,
+    targetId: accusedId || state.insiderId
+  }, sceneId);
 }
 
-function resolveFirstVote(state, now) {
+function resolveFirstVote(state, now, sceneId = null) {
   const voters = firstVoters(state);
   const yesCount = voters.filter((player) => state.firstVotes[player.id] === true).length;
   const accused = yesCount > voters.length / 2;
   const guesserIsInsider = state.guessedById === state.insiderId;
   state.firstVoteResult = { votes: clone(state.firstVotes), yesCount, eligibleCount: voters.length, accused };
+  present(state, "first-vote-result", `${yesCount}/${voters.length}票指控猜中者，指控${accused ? "成立" : "未成立"}`, now, {
+    priority: 4, targetId: state.guessedById, yesCount, eligibleCount: voters.length, accused
+  }, sceneId);
   if (accused) {
-    if (guesserIsInsider) finishRound(state, "common", "多数玩家正确认出猜中者就是局内人。", now, state.guessedById);
-    else finishRound(state, "insider", "多数玩家错误指控了一名普通猜中者。", now, state.guessedById);
+    if (guesserIsInsider) finishRound(state, "common", "多数玩家正确认出猜中者就是局内人。", now, state.guessedById, sceneId);
+    else finishRound(state, "insider", "多数玩家错误指控了一名普通猜中者。", now, state.guessedById, sceneId);
     return;
   }
   if (guesserIsInsider) {
-    finishRound(state, "insider", "局内人说出答案后成功避开了第一次指控。", now, state.guessedById);
+    finishRound(state, "insider", "局内人说出答案后成功避开了第一次指控。", now, state.guessedById, sceneId);
     return;
   }
   state.phase = "secondVote";
   state.deadline = now + VOTE_SECONDS * 1000;
   state.secondVotes = {};
   addLog(state, "猜中者已被排除，开始寻找真正的局内人。", now);
+  present(state, "second-vote-start", "猜中者已被排除，开始秘密指认局内人", now, { priority: 3 }, sceneId);
 }
 
-function resolveAccusation(state, accusedId, now) {
-  if (accusedId === state.insiderId) finishRound(state, "common", "最终指控命中了真正的局内人。", now, accusedId);
-  else finishRound(state, "insider", "最终指控了错误的玩家。", now, accusedId);
+function resolveAccusation(state, accusedId, now, sceneId = null) {
+  if (accusedId === state.insiderId) finishRound(state, "common", "最终指控命中了真正的局内人。", now, accusedId, sceneId);
+  else finishRound(state, "insider", "最终指控了错误的玩家。", now, accusedId, sceneId);
 }
 
-function resolveSecondVote(state, now) {
+function resolveSecondVote(state, now, sceneId = null) {
   const candidates = secondCandidates(state);
   const counts = Object.fromEntries(candidates.map((player) => [player.id, 0]));
   for (const targetId of Object.values(state.secondVotes)) {
@@ -139,13 +161,16 @@ function resolveSecondVote(state, now) {
   const leaders = candidates.filter((player) => counts[player.id] === maximum).map((player) => player.id);
   state.secondVoteResult = { votes: clone(state.secondVotes), counts: clone(counts), leaders: [...leaders], accusedId: leaders.length === 1 ? leaders[0] : null };
   if (leaders.length === 1) {
-    resolveAccusation(state, leaders[0], now);
+    resolveAccusation(state, leaders[0], now, sceneId);
     return;
   }
   state.phase = "tieBreak";
   state.tieCandidates = leaders;
   state.deadline = now + TIE_BREAK_SECONDS * 1000;
   addLog(state, `最高票出现平票，由猜中者 ${byId(state, state.guessedById)?.name || "玩家"} 裁决。`, now);
+  present(state, "tie-break-start", `最高票出现平票，由 ${byId(state, state.guessedById)?.name || "猜中者"} 裁决`, now, {
+    priority: 4, actorId: state.guessedById, targetIds: [...leaders], counts: clone(counts)
+  }, sceneId);
 }
 
 function startRound(state, now, random) {
@@ -175,6 +200,9 @@ function startRound(state, now, random) {
   state.tieCandidates = [];
   state.result = null;
   addLog(state, `第${state.round}轮身份已经分配，主持人为 ${byId(state, state.masterId).name}。`, now);
+  present(state, "round-start", `第${state.round}轮开始，主持人 ${byId(state, state.masterId).name} 正在查看答案`, now, {
+    priority: 4, actorId: state.masterId, round: state.round
+  });
 }
 
 function resetToLobby(state) {
@@ -204,7 +232,8 @@ export function createLobby({ capacity, host }) {
     players: [makePlayer({ ...host, isHost: true })], masterId: null, insiderId: null, word: null, recentWordIds: [],
     questionStartedAt: 0, guessElapsedMs: 0, guessedById: null, answerHistory: [], answerSequence: 0,
     firstVotes: {}, secondVotes: {}, firstVoteResult: null, secondVoteResult: null, tieCandidates: [], result: null,
-    stats: { commonWins: 0, insiderWins: 0, failedRounds: 0 }, logs: [], logSequence: 0
+    stats: { commonWins: 0, insiderWins: 0, failedRounds: 0 }, logs: [], logSequence: 0,
+    presentationEvents: [], presentationSequence: 0, presentationSceneSequence: 0
   };
 }
 
@@ -281,7 +310,11 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(![ROLE.MASTER, ROLE.INSIDER].includes(actor.role), "secret_not_required", "你的身份不需要秘密确认。", 403);
     fail(actor.secretAcknowledged, "already_acknowledged", "你已经确认过了。", 409);
     actor.secretAcknowledged = true;
-    if (activeRoles(state).filter((player) => [ROLE.MASTER, ROLE.INSIDER].includes(player.role)).every((player) => player.secretAcknowledged)) beginQuestioning(state, now);
+    const sceneId = newPresentationScene(state);
+    const confirmedCount = activeRoles(state).filter((player) => [ROLE.MASTER, ROLE.INSIDER].includes(player.role) && player.secretAcknowledged).length;
+    // Deliberately anonymous: naming the confirmer could expose the hidden insider.
+    present(state, "secret-progress", `一份秘密信息已经封存（${confirmedCount}/2）`, now, { priority: 1, confirmedCount, requiredCount: 2 }, sceneId);
+    if (confirmedCount === 2) beginQuestioning(state, now, sceneId);
     return;
   }
   if (type === "showMasterAnswer") {
@@ -290,6 +323,9 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(!MASTER_ANSWERS.includes(action.answer), "invalid_answer", "回答必须是“是”“不是”或“不知道”。");
     state.answerHistory.unshift({ id: ++state.answerSequence, answer: action.answer, at: now });
     state.answerHistory = state.answerHistory.slice(0, 12);
+    present(state, "master-answer", `主持人回答：${{ yes: "是", no: "不是", unknown: "不知道" }[action.answer]}`, now, {
+      priority: 2, actorId: actor.id, answer: action.answer
+    });
     return;
   }
   if (type === "markCorrectGuesser") {
@@ -303,14 +339,17 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     state.deadline = now + state.guessElapsedMs;
     state.players.forEach((player) => { player.readyToVote = false; });
     addLog(state, `${guesser.name} 说出了正确答案，开始寻找局内人。`, now);
+    present(state, "correct-guess", `${guesser.name} 说出了正确答案`, now, { priority: 4, actorId: actor.id, targetId: guesser.id });
     return;
   }
   if (type === "readyToVote") {
     fail(state.phase !== "discussion", "wrong_phase", "当前不在讨论阶段。", 409);
     fail(actor.readyToVote, "already_ready", "你已经准备投票。", 409);
     actor.readyToVote = true;
+    const sceneId = newPresentationScene(state);
+    present(state, "discussion-ready", `${actor.name} 已准备投票`, now, { priority: 1, actorId: actor.id }, sceneId);
     const online = state.players.filter((player) => player.connected);
-    if (online.length && online.every((player) => player.readyToVote)) beginFirstVote(state, now);
+    if (online.length && online.every((player) => player.readyToVote)) beginFirstVote(state, now, sceneId);
     return;
   }
   if (type === "submitFirstVote") {
@@ -319,7 +358,9 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(Object.hasOwn(state.firstVotes, actor.id), "already_voted", "你已经提交投票。", 409);
     fail(typeof action.accuse !== "boolean", "invalid_vote", "请选择是否指控猜中者。");
     state.firstVotes[actor.id] = action.accuse;
-    if (allSubmitted(firstVoters(state), state.firstVotes)) resolveFirstVote(state, now);
+    const sceneId = newPresentationScene(state);
+    present(state, "vote-sealed", `${actor.name} 已封存审查票`, now, { priority: 1, actorId: actor.id, ballot: "first" }, sceneId);
+    if (allSubmitted(firstVoters(state), state.firstVotes)) resolveFirstVote(state, now, sceneId);
     return;
   }
   if (type === "submitSecondVote") {
@@ -328,7 +369,9 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     const target = byId(state, action.targetId);
     fail(!target || !secondCandidates(state).some((player) => player.id === target.id), "invalid_vote_target", "该玩家不能成为本次候选人。", 409);
     state.secondVotes[actor.id] = target.id;
-    if (allSubmitted(state.players, state.secondVotes)) resolveSecondVote(state, now);
+    const sceneId = newPresentationScene(state);
+    present(state, "vote-sealed", `${actor.name} 已封存指认票`, now, { priority: 1, actorId: actor.id, ballot: "second" }, sceneId);
+    if (allSubmitted(state.players, state.secondVotes)) resolveSecondVote(state, now, sceneId);
     return;
   }
   if (type === "resolveTie") {
@@ -336,7 +379,7 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     fail(actor.id !== state.guessedById, "guesser_required", "只有猜中者可以裁决平票。", 403);
     fail(!state.tieCandidates.includes(String(action.targetId)), "invalid_tie_target", "请选择一名平票候选人。", 409);
     state.secondVoteResult.accusedId = String(action.targetId);
-    resolveAccusation(state, String(action.targetId), now);
+    resolveAccusation(state, String(action.targetId), now, newPresentationScene(state));
     return;
   }
   throw new GameRuleError("unknown_action", "无法识别这个操作。");
@@ -344,22 +387,23 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
 
 export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
   if (!state.deadline || now < state.deadline) return false;
+  const sceneId = newPresentationScene(state);
   if (state.phase === "secretReveal") {
     state.players.forEach((player) => { if ([ROLE.MASTER, ROLE.INSIDER].includes(player.role)) player.secretAcknowledged = true; });
-    beginQuestioning(state, now);
+    beginQuestioning(state, now, sceneId);
   } else if (state.phase === "questioning") {
-    finishRound(state, null, "5分钟内没有人猜出正确答案。", now);
+    finishRound(state, null, "5分钟内没有人猜出正确答案。", now, null, sceneId);
   } else if (state.phase === "discussion") {
-    beginFirstVote(state, now);
+    beginFirstVote(state, now, sceneId);
   } else if (state.phase === "firstVote") {
-    resolveFirstVote(state, now);
+    resolveFirstVote(state, now, sceneId);
   } else if (state.phase === "secondVote") {
-    resolveSecondVote(state, now);
+    resolveSecondVote(state, now, sceneId);
   } else if (state.phase === "tieBreak") {
     const index = Math.min(state.tieCandidates.length - 1, Math.max(0, Math.floor(Number(random()) * state.tieCandidates.length)));
     const targetId = state.tieCandidates[index];
     state.secondVoteResult.accusedId = targetId;
-    resolveAccusation(state, targetId, now);
+    resolveAccusation(state, targetId, now, sceneId);
   } else return false;
   return true;
 }
@@ -415,6 +459,7 @@ function buildPublicView(state, viewer) {
     result: clone(state.result),
     stats: clone(state.stats),
     logs: clone(state.logs),
+    presentationEvents: clone(state.presentationEvents),
     players: state.players.map((player) => ({
       id: player.id, name: player.name, isHost: player.isHost, connected: player.connected,
       isMaster: player.id === state.masterId, isGuesser: player.id === state.guessedById,
@@ -441,6 +486,8 @@ export function validateState(state) {
   }
   if (["discussion", "firstVote", "secondVote", "tieBreak", "roundEnd"].includes(state.phase) && state.result == null && !byId(state, state.guessedById)) throw new Error("Invalid game20 guesser");
   if (state.phase === "tieBreak" && (!state.tieCandidates.length || state.tieCandidates.some((id) => !secondCandidates(state).some((player) => player.id === id)))) throw new Error("Invalid game20 tie candidates");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game20 presentation scene sequence");
+  validatePresentationState(state);
   return true;
 }
 
@@ -449,6 +496,12 @@ export function serializeState(state) { validateState(state); return clone(state
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game20 state version: ${serializedState?.stateVersion}`);
   const state = clone(serializedState);
+  normalizePresentationState(state);
+  const latestScene = state.presentationEvents.reduce((maximum, event) => {
+    const match = /^insider_scene_(\d+)$/.exec(String(event?.sceneId || ""));
+    return Math.max(maximum, Number(match?.[1]) || 0);
+  }, 0);
+  state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, latestScene);
   validateState(state);
   return state;
 }

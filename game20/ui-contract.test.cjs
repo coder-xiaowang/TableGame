@@ -23,6 +23,9 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
   assert.ok(tableAt >= 0 && dockAt > tableAt && archiveAt > dockAt, "问答钟盘、发言卡和档案带应形成独立纵向层级");
   assert.ok(privateAt > dockAt, "私人身份和当前决策必须合并在同一个操作区");
   assert.match(html, /id="answerEchoes"/);
+  assert.match(html, /id="presentationEffects"/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
 
   assert.match(script, /data-target-id=/);
   assert.match(script, /data-player-anchor=/);
@@ -30,6 +33,12 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
   assert.match(script, /view\.answerHistory/);
   assert.match(script, /type: "markCorrectGuesser"/);
   assert.match(script, /type: "submitSecondVote"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script, /catchUpThreshold: 2/);
+  assert.match(script, /severeBacklogThreshold: 5/);
+  assert.match(script, /urgentPriority: 4/);
   assert.doesNotMatch(script, /https?:\/\//);
 
   assert.match(css, /@media \(max-width: 720px\)/);
@@ -38,6 +47,9 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
   assert.match(css, /\.control-dock\[data-role="spectator"\] \{ position: relative/);
   assert.match(css, /\.salon-archive \{ display: grid; grid-template-columns:/);
   assert.match(css, /\.public-focus[\s\S]*?border-radius: 50%/);
+  assert.match(css, /\.presentation-effects/);
+  assert.match(css, /\.presentation-trail\.active/);
+  assert.match(css, /\.presentation-token/);
   assert.match(css, /@media \(max-width: 430px\)[\s\S]*?\.players \{ grid-template-columns: 1fr/);
 
   const elementBlock = script.match(/const E = Object\.fromEntries\(\[([\s\S]*?)\]\.map/)[1];

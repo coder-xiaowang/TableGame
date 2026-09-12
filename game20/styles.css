@@ -176,8 +176,25 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .log-item { padding: 6px 8px; border-left: 3px solid var(--gold); background: rgba(255,255,255,.68); font-size: .7rem; }
 .spectator-list { max-height: 170px; overflow: auto; padding: 0 11px 11px; }
 
+/* Server-authored salon moments. The layer never blocks game controls. */
+.presentation-effects { position: absolute; inset: 0; z-index: 12; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.presentation-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.presentation-trail { fill: none; stroke: #d95f68; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 9 8; opacity: 0; filter: drop-shadow(0 0 5px rgba(217,95,104,.58)); }
+.presentation-trail.active { opacity: .92; animation: salon-trail 1.05s ease-out both; }
+.presentation-trail-layer marker path { fill: #d95f68; }
+.presentation-announcement { position: absolute; top: 13%; left: 50%; display: grid; gap: 3px; width: min(440px, 76%); padding: 10px 17px; border: 1px solid rgba(235,203,128,.7); border-radius: 4px 18px 4px 18px; color: #fff8df; text-align: center; background: rgba(37,41,67,.94); box-shadow: 0 10px 28px rgba(37,41,67,.3); opacity: 0; transform: translate(-50%, -10px) scale(.96); }
+.presentation-announcement.active { opacity: 1; transform: translate(-50%, 0) scale(1); animation: salon-announcement 1.25s ease both; }
+.presentation-announcement span { color: #ebcb80; font-size: .59rem; font-weight: 900; letter-spacing: .17em; }
+.presentation-announcement strong { font: 800 clamp(.78rem, 1.6vw, 1.02rem)/1.35 Georgia, "Noto Serif SC", serif; }
+.presentation-token { position: absolute; left: 0; top: 0; z-index: 2; display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 7px; border: 2px solid #e8c36e; border-radius: 50%; color: #fff8df; background: var(--coral-dark); box-shadow: 0 0 18px rgba(217,95,104,.7); font-size: .68rem; font-weight: 900; animation: salon-token 1.1s cubic-bezier(.2,.75,.25,1) both; }
+.player-seat.presentation-focus { filter: none; border-color: #d95f68; box-shadow: 0 0 0 5px rgba(217,95,104,.22), 0 0 32px rgba(217,95,104,.64); }
+.public-focus.presentation-focus, .public-focus.presentation-reveal { box-shadow: inset 0 0 0 9px rgba(255,255,255,.05), 0 0 0 8px rgba(235,203,128,.2), 0 0 48px rgba(217,95,104,.65); }
+
 @keyframes target-pulse { to { box-shadow: 0 0 0 6px rgba(223,93,90,.2), 0 0 34px rgba(223,93,90,.58); } }
 @keyframes echo-arrive { from { opacity: 0; transform: translateY(6px) scale(.85); } }
+@keyframes salon-trail { from { stroke-dashoffset: 70; opacity: 0; } 22% { opacity: .95; } to { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes salon-token { from { transform: translate(calc(var(--from-x) - 50%), calc(var(--from-y) - 50%)) scale(.65); opacity: 0; } 18% { opacity: 1; } to { transform: translate(calc(var(--to-x) - 50%), calc(var(--to-y) - 50%)) scale(1); opacity: 0; } }
+@keyframes salon-announcement { 0%,100% { opacity: 0; } 12%,82% { opacity: 1; } }
 
 @media (max-width: 1050px) {
   .player-seat { width: 140px; }
@@ -204,12 +221,17 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .public-focus { position: static; order: 1; width: min(290px, 90%); aspect-ratio: auto; min-height: 175px; margin: 0 auto; padding: 27px 18px 19px; transform: none; }
   .public-focus::before { font-size: 4rem; }
   .public-focus strong { margin: 4px 0; font-size: 1.08rem; }
+  .presentation-announcement { top: 62px; width: calc(100% - 28px); }
   .answer-echoes { margin-top: 8px; }
   .control-dock { bottom: max(5px, env(safe-area-inset-bottom)); grid-template-columns: 1fr; width: calc(100% - 12px); max-height: 58vh; margin: -5px auto 0; padding: 10px; overflow-y: auto; }
   .secret-panel.private-zone { padding: 8px 10px 8px 49px; }
   .control-dock[data-role="spectator"] { position: relative; bottom: auto; }
   .salon-archive { grid-template-columns: 1fr; margin-top: 9px; }
   .log { max-height: 190px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-trail.active, .presentation-token, .presentation-announcement.active { animation-duration: .18s; }
 }
 
 @media (max-width: 430px) {
