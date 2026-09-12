@@ -74,8 +74,49 @@ function addLog(state, text, now) {
   if (state.logs.length > 100) state.logs.length = 100;
 }
 
+const PRESENTATION_PRIORITY = {
+  "turn-start": 1,
+  "private-draw": 2,
+  "initial-hand": 2,
+  "card-play": 2,
+  "card-discard": 3,
+  "pig-dirtied": 3,
+  "pig-protected": 3,
+  "pig-cleaned": 3,
+  "exchange-reveal": 3,
+  "exchange-private": 3.5,
+  "rain-resolve": 4,
+  "barn-destroyed": 4,
+  "game-start": 4,
+  "game-won": 5
+};
+
+function decoratePresentation(state, event) {
+  let sceneId = event.sceneId || state.activePresentationScene;
+  if (!sceneId) {
+    state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence + 1 : 1;
+    sceneId = `dirty_pig_scene_${state.presentationSceneSequence}`;
+  } else if (sceneId === state.activePresentationScene && Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, state.activePresentationSceneNumber);
+  }
+  const priority = Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] ?? 2;
+  return { ...event, sceneId, priority };
+}
+
+function runPresentationScene(state, callback) {
+  if (state.activePresentationScene) return callback();
+  const sceneNumber = (Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : 0) + 1;
+  state.activePresentationScene = `dirty_pig_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber = sceneNumber;
+  try { return callback(); }
+  finally {
+    delete state.activePresentationScene;
+    delete state.activePresentationSceneNumber;
+  }
+}
+
 function publicEvent(state, event, now) {
-  return appendPresentationEvent(state, event, {
+  return appendPresentationEvent(state, decoratePresentation(state, event), {
     now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "dirty_pig_event", limit: 60
   });
 }
@@ -88,7 +129,7 @@ function privateEvent(state, playerId, event, now) {
     events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
     sequence: Number(state.presentationSequence) || 0
   };
-  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+  const stored = appendPresentationEvent(envelope, decoratePresentation(state, { ...event, private: true }), {
     now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "dirty_pig_private", limit: 24
   });
   state.privatePresentationEvents[id] = envelope.events;
@@ -360,7 +401,8 @@ export function createLobby({ capacity, host }) {
     logSequence: 0,
     presentationEvents: [],
     privatePresentationEvents: {},
-    presentationSequence: 0
+    presentationSequence: 0,
+    presentationSceneSequence: 0
   };
 }
 
@@ -408,7 +450,7 @@ export function setPresence(state, playerId, connected) {
   return true;
 }
 
-export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+function applyActionInternal(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const actor = requireActor(state, actorId);
   const type = action?.type;
 
@@ -445,13 +487,19 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   throw new GameRuleError("unknown_action", "无法识别这个回合操作。");
 }
 
+export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
+}
+
 export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
   if (state.phase !== "playing" || !state.deadline || now < state.deadline) return false;
-  const actor = currentPlayer(state);
-  if (!actor?.hand.length) return false;
-  state.revealedExchange = null;
-  discardCard(state, actor, { cardId: actor.hand[0].id }, now, random, true);
-  return true;
+  return runPresentationScene(state, () => {
+    const actor = currentPlayer(state);
+    if (!actor?.hand.length) return false;
+    state.revealedExchange = null;
+    discardCard(state, actor, { cardId: actor.hand[0].id }, now, random, true);
+    return true;
+  });
 }
 
 export function getDeadline(state) {
@@ -548,6 +596,7 @@ export function buildSpectatorView(state) {
 
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game14 state");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game14 presentation scene sequence");
   if (state.phase !== "lobby") {
     const actionCards = [
       ...state.deck,
@@ -595,6 +644,10 @@ export function restoreState(serializedState) {
   normalizePresentationState(state);
   const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
   state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
+  const existingScenes = [...state.presentationEvents, ...Object.values(state.privatePresentationEvents).flat()]
+    .map((event) => /^dirty_pig_scene_(\d+)$/.exec(String(event?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : existingScenes;
   validateState(state);
   return state;
 }

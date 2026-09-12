@@ -55,6 +55,10 @@ test("shared presentation layer anchors events to real farms and pigs", () => {
   const css = read("styles.css");
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script, /catchUpThreshold: 2/);
+  assert.match(script, /severeBacklogThreshold: 5/);
+  assert.match(script, /urgentPriority: 4/);
   assert.match(script, /farm\.dataset\.playerId/);
   assert.match(script, /pig\.dataset\.player/);
   assert.match(html, /id="farmTable"/);

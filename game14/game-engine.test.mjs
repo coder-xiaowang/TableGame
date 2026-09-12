@@ -240,6 +240,7 @@ test("presentation keeps initial and replacement hands private", () => {
   assert.ok(spectatorEvents.every((event) => !event.private && event.cardTypes == null));
   assert.deepEqual(hostEvents.filter((event) => !event.private), spectatorEvents);
   assert.deepEqual(guestEvents.filter((event) => !event.private), spectatorEvents);
+  assert.equal(hostEvents.find((event) => event.kind === "initial-hand").sceneId, hostEvents.find((event) => event.kind === "game-start").sceneId);
 });
 
 test("a targeted card produces ordered wind-up, resolution, private draw and next-turn events", () => {
@@ -249,10 +250,15 @@ test("a targeted card produces ordered wind-up, resolution, private draw and nex
   const mud = giveFromDeck(state, actor, "mud");
   play(state, actor.id, mud, actor.id, pig.id, 2_000);
   assert.deepEqual(state.presentationEvents.slice(-3).map((event) => event.kind), ["card-play", "pig-dirtied", "turn-start"]);
+  assert.equal(new Set(state.presentationEvents.slice(-3).map((event) => event.sceneId)).size, 1);
   const resolution = state.presentationEvents.find((event) => event.kind === "pig-dirtied");
   assert.equal(resolution.targetId, actor.id);
   assert.equal(resolution.targetPigId, pig.id);
-  assert.ok(engine.buildView(state, actor.id).presentationEvents.some((event) => event.kind === "private-draw" && event.private && event.cardType));
+  const actorEvents = engine.buildView(state, actor.id).presentationEvents;
+  const privateDraw = actorEvents.findLast((event) => event.kind === "private-draw" && event.private && event.cardType);
+  assert.ok(privateDraw);
+  assert.equal(privateDraw.sceneId, resolution.sceneId);
+  assert.ok(resolution.priority > privateDraw.priority);
   assert.ok(engine.buildView(state, "p2").presentationEvents.every((event) => event.kind !== "private-draw"));
   assert.ok(engine.buildSpectatorView(state).presentationEvents.every((event) => !event.private));
 });
@@ -270,6 +276,7 @@ test("rain publishes only affected public pig positions and no hand values", () 
   assert.equal(event.affectedPigs.length, 3);
   assert.ok(event.affectedPigs.every((item) => item.playerId && item.pigId));
   assert.equal(event.cardTypes, undefined);
+  assert.equal(event.priority, 4);
 });
 
 test("three-card exchange reveals old cards publicly but sends new cards only to the owner", () => {
@@ -282,6 +289,9 @@ test("three-card exchange reveals old cards publicly but sends new cards only to
   assert.deepEqual(reveal.cardTypes, ["rod", "rod", "rod"]);
   assert.ok(publicEvents.every((event) => !event.private && event.kind !== "exchange-private"));
   assert.ok(engine.buildView(state, actor.id).presentationEvents.some((event) => event.kind === "exchange-private" && event.private && event.cardTypes.length === 3));
+  const privateExchange = engine.buildView(state, actor.id).presentationEvents.find((event) => event.kind === "exchange-private");
+  assert.equal(privateExchange.sceneId, reveal.sceneId);
+  assert.ok(privateExchange.priority > reveal.priority);
   assert.ok(engine.buildView(state, "p2").presentationEvents.every((event) => event.kind !== "exchange-private"));
 });
 
@@ -290,9 +300,25 @@ test("legacy version-2 snapshots without presentation fields still restore", () 
   delete legacy.presentationEvents;
   delete legacy.privatePresentationEvents;
   delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
   const restored = engine.restoreState(legacy);
   assert.deepEqual(restored.presentationEvents, []);
   assert.deepEqual(restored.privatePresentationEvents, {});
   assert.equal(restored.presentationSequence, 0);
+  assert.equal(restored.presentationSceneSequence, 0);
   assert.doesNotThrow(() => engine.validateState(restored));
+});
+
+test("scene sequence persists, is inferred from events and is not consumed by rejected actions", () => {
+  const state = startedState();
+  const actor = state.players[state.currentIndex];
+  const before = state.presentationSceneSequence;
+  assert.throws(() => engine.applyAction(state, actor.id, { type: "not-real" }), /无法识别/);
+  assert.equal(state.presentationSceneSequence, before);
+  assert.equal("activePresentationScene" in state, false);
+
+  const snapshot = engine.serializeState(state);
+  assert.equal(engine.restoreState(snapshot).presentationSceneSequence, before);
+  delete snapshot.presentationSceneSequence;
+  assert.equal(engine.restoreState(snapshot).presentationSceneSequence, before);
 });

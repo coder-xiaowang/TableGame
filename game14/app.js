@@ -404,9 +404,17 @@ presentation = createPresentationTimeline({
   resolveTarget: presentationTarget,
   labelFor: (event) => presentationLabel(event.kind),
   beforePlay: playPresentationObject,
-  durationMs: 1500,
-  reducedDurationMs: 650,
-  maxQueue: 28
+  durationMs: 1350,
+  reducedDurationMs: 580,
+  maxQueue: 18,
+  sceneKey: (event) => event.sceneId || event.id,
+  priorityFor: (event) => Number(event.priority) || 0,
+  catchUpThreshold: 2,
+  severeBacklogThreshold: 5,
+  catchUpDurationMs: 620,
+  severeDurationMs: 320,
+  urgentPriority: 4,
+  retainPriority: 3
 });
 
 function selectMode(nextMode) {
