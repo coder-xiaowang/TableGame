@@ -71,7 +71,7 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .host-tools label { display: flex; align-items: center; gap: 7px; color: #d8e5df; }
 .host-tools select { min-height: 40px; width: 70px; }
 
-.game-grid { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(430px, 1.75fr) minmax(210px, 0.7fr); gap: 18px; align-items: stretch; }
+.game-grid { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(430px, 1.75fr) minmax(210px, 0.7fr); gap: 18px; align-items: stretch; }
 .panel { padding: 18px; }
 .panel-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
 .panel-title button { min-height: 30px; padding: 3px 9px; font-size: .72rem; }
@@ -103,6 +103,25 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .pot-area { min-width: 90px; display: flex; align-items: center; gap: 12px; }
 .pot-area .token { position: static; width: 53px; flex: none; }
 .pot-area div:last-child { display: grid; }.pot-area b { font: 900 2rem "Arial Black"; }.pot-area span { color: #777267; font-size: .68rem; }
+.presentation-effects { position: absolute; inset: 0; z-index: 12; overflow: hidden; border-radius: 18px; pointer-events: none; }
+.presentation-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.presentation-trail { fill: none; stroke: #f06449; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 12 9; opacity: 0; filter: drop-shadow(0 0 7px rgb(240 100 73 / 55%)); }
+#noThanksTrailArrow path { fill: #f06449; }
+.presentation-trail.active { opacity: 1; animation: no-thanks-trail .55s linear infinite; }
+.presentation-announcement { position: absolute; top: 34%; left: 50%; display: grid; width: min(430px, 54%); padding: 11px 16px; border: 2px solid rgb(243 198 78 / 88%); border-radius: 15px; color: white; background: linear-gradient(135deg, rgb(14 68 53 / 96%), rgb(25 97 76 / 94%)); box-shadow: 0 13px 34px rgb(23 32 28 / 32%); opacity: 0; transform: translate(-50%, -12px) scale(.95); text-align: center; }
+.presentation-announcement span { color: var(--yellow); font-size: .64rem; font-weight: 900; letter-spacing: .16em; }
+.presentation-announcement b { margin-top: 3px; font-size: clamp(.84rem, 1.5vw, 1.08rem); }
+.presentation-announcement.active { animation: no-thanks-announcement 1.4s ease both; }
+.presentation-token { position: absolute; z-index: 14; left: var(--from-x, 50%); top: var(--from-y, 50%); display: grid; place-items: center; min-width: 34px; min-height: 34px; padding: 5px 8px; border: 3px solid white; border-radius: 8px; color: white; background: var(--coral); box-shadow: 0 7px 18px rgb(23 32 28 / 35%); font: 900 .9rem "Arial Black"; transform: translate(-50%, -50%); animation: no-thanks-token .78s cubic-bezier(.2,.72,.22,1) forwards; }
+.presentation-token-chip-paid { min-width: 27px; min-height: 27px; padding: 0; border-width: 2px; border-radius: 50%; color: #755d13; background: var(--yellow); }
+.presentation-token-game-result { border-radius: 50%; color: var(--green-dark); background: var(--yellow); }
+.player-item.presentation-source { box-shadow: 0 0 0 4px rgb(243 198 78 / 38%), 0 0 24px rgb(243 198 78 / 55%); }
+.player-item.presentation-target, .number-card.presentation-target, .pot-area.presentation-target { animation: no-thanks-target .42s ease-in-out 3 alternate; }
+.deck-visual.presentation-source, .number-card.presentation-source { filter: drop-shadow(0 0 13px rgb(243 198 78 / 92%)); }
+@keyframes no-thanks-trail { to { stroke-dashoffset: -42; } }
+@keyframes no-thanks-announcement { 0%,100% { opacity: 0; transform: translate(-50%, -12px) scale(.95); } 13%,82% { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes no-thanks-token { to { left: var(--to-x, 50%); top: var(--to-y, 50%); transform: translate(-50%, -50%) rotate(6deg) scale(.92); } }
+@keyframes no-thanks-target { to { filter: drop-shadow(0 0 14px rgb(240 100 73 / 84%)); transform: translateY(-3px) scale(1.035); } }
 .timer-box { width: min(500px, 100%); margin: 0 auto 15px; }
 .timer-box > div:first-child { display: flex; justify-content: space-between; margin-bottom: 5px; color: #777267; font-size: .74rem; }
 .shared-timer-bar { color: var(--coral); }
@@ -146,6 +165,8 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
   .players-panel { order: 2; }.table-panel { min-height: 490px; }.log-panel { grid-column: auto; order: 3; }
   .table-center { gap: 14px; padding-inline: 0; }.deck-visual, .number-card { width: 96px; }.deck-visual { font-size: 1.05rem; }.pot-area { min-width: 65px; flex-direction: column; gap: 3px; text-align: center; }
   .action-area { grid-template-columns: 1fr; }.my-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }.score-row { grid-template-columns: 25px 1fr auto; gap: 7px; }.score-row span:nth-of-type(2), .score-row span:nth-of-type(3) { display: none; }
+  .presentation-announcement { top: 27%; width: calc(100% - 28px); padding: 8px 10px; }
+  .presentation-trail { stroke-width: 3; }
 }
 
 /* Compact room header and game-first responsive hierarchy. */
@@ -208,4 +229,11 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
   .room-header-tools .host-tools label { min-width: 0; }
   .room-header-tools .host-tools select, .room-header-tools .host-tools button { width: 100%; }
   .rule-details { max-height: 65vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-trail.active { animation: none; }
+  .presentation-announcement.active { animation-duration: .58s; }
+  .presentation-token { animation-duration: .5s; }
+  .player-item.presentation-target, .number-card.presentation-target, .pot-area.presentation-target { animation: none; filter: drop-shadow(0 0 10px rgb(240 100 73 / 70%)); }
 }

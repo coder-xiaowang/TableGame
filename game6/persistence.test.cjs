@@ -55,6 +55,7 @@ test("game6 restores hands, a secret locked card and action deduplication from S
   const before = (await resume(running.baseUrl,host)).payload.view;
   const card = before.players[0].hand[0];
   assert.equal((await action(running.baseUrl,host,"persist-select",{type:"selectCard",card})).response.status,200);
+  const presentationBeforeRestart = (await resume(running.baseUrl,host)).payload.view.presentationEvents;
   await closeServer(running.server);
 
   running = await startServer(engine,filename);
@@ -66,6 +67,7 @@ test("game6 restores hands, a secret locked card and action deduplication from S
   assert.equal(guestView.players[0].selectedCard,null);
   assert.ok(guestView.players[0].hand.every((item) => item === null));
   assert.ok(hostView.players.every((player) => !player.connected));
+  assert.deepEqual(hostView.presentationEvents,presentationBeforeRestart);
   const duplicate = await action(running.baseUrl,host,"persist-select",{type:"selectCard",card:hostView.players[0].hand.at(-1)});
   assert.equal(duplicate.response.status,200);
   assert.equal(duplicate.payload.duplicate,true);

@@ -3,10 +3,26 @@ import {
   PLACE_ANIMATION_MS, REVEAL_MS, ROW_COUNT, ROW_LIMIT, SCORE_LIMIT, TURN_END_MS,
   rowBullheads, shuffledDeck, targetRowIndex
 } from "../rules.mjs";
+import {
+  appendPresentationEvent, normalizePresentationState, validatePresentationState
+} from "../../shared/server/presentation-events.mjs";
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+
+const PRESENTATION_LIMIT = 70;
+const PRESENTATION_PRIORITY = Object.freeze({
+  "selection-locked":1,
+  "turn-start":1,
+  "card-place":2,
+  "row-choice":3,
+  "cards-revealed":4,
+  "row-capture":4,
+  "round-start":4,
+  "round-end":4,
+  "game-result":5
+});
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -58,6 +74,28 @@ function addLog(state, text, now) {
   if (state.logs.length > 100) state.logs.length = 100;
 }
 
+function ensurePresentationState(state) {
+  normalizePresentationState(state);
+  const latestScene = state.presentationEvents
+    .map((event) => /^bullheads_scene_(\d+)$/.exec(String(event?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence)
+    ? Math.max(state.presentationSceneSequence,latestScene)
+    : latestScene;
+  validatePresentationState(state);
+  return state;
+}
+
+function publicEvent(state, event, now) {
+  ensurePresentationState(state);
+  const scene = state.presentationSceneSequence += 1;
+  return appendPresentationEvent(state,{
+    ...event,
+    sceneId:`bullheads_scene_${scene}`,
+    priority:Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] || 1
+  },{now,idPrefix:"bullheads_event",limit:PRESENTATION_LIMIT});
+}
+
 function randomIndex(length, random) {
   const sample = Math.max(0,Math.min(0.999999999999,Number(random()) || 0));
   return Math.floor(sample * length);
@@ -105,10 +143,16 @@ function finishRound(state, now) {
     const best = Math.min(...state.players.map((player) => player.score));
     state.winners = state.players.filter((player) => player.score === best).map((player) => player.id);
     state.phase = "gameEnd";
-    addLog(state,`游戏结束，${state.players.filter((player) => state.winners.includes(player.id)).map((player) => player.name).join("、")} 获胜`,now);
+    const winnerNames = state.players.filter((player) => state.winners.includes(player.id)).map((player) => player.name).join("、");
+    addLog(state,`游戏结束，${winnerNames} 获胜`,now);
+    publicEvent(state,{
+      kind:"game-result",actorId:state.winners[0] || null,winnerIds:[...state.winners],score:best,
+      text:`${winnerNames} 以 ${best} 个牛头赢得整场游戏`
+    },now);
   } else {
     state.phase = "roundEnd";
     addLog(state,`第 ${state.round} 局结束，等待房主开始下一局`,now);
+    publicEvent(state,{kind:"round-end",round:state.round,text:`第 ${state.round} 局结束，等待开始下一局`},now);
   }
 }
 
@@ -119,6 +163,7 @@ function finishTurn(state, now) {
   state.turn += 1;
   state.phase = "selecting";
   state.deadline = now + ACTION_SECONDS * 1000;
+  publicEvent(state,{kind:"turn-start",turn:state.turn,text:`第 ${state.turn} 回合开始，请秘密选择一张牌`},now);
 }
 
 function revealedPlay(state, playerId, card) {
@@ -145,6 +190,18 @@ function stageAnimation(state, play, rowIndex, now, forceCapture = false) {
     endsAt:now + duration
   };
   state.deadline = state.animation.endsAt;
+  publicEvent(state,{
+    kind:capturedCards.length ? "row-capture" : "card-place",
+    actorId:play.playerId,
+    card:play.card,
+    rowIndex,
+    capturedCards:[...capturedCards],
+    points:rowBullheads(capturedCards),
+    forcedChoice:Boolean(forceCapture),
+    text:capturedCards.length
+      ? `${playerById(state,play.playerId)?.name || "玩家"} 用 ${play.card} 收走第 ${rowIndex + 1} 列，获得 ${rowBullheads(capturedCards)} 个牛头`
+      : `${playerById(state,play.playerId)?.name || "玩家"} 将 ${play.card} 放入第 ${rowIndex + 1} 列`
+  },now);
 }
 
 function stageNextPlay(state, now) {
@@ -166,6 +223,10 @@ function stageNextPlay(state, now) {
     state.phase = "choosingRow";
     state.animation = null;
     state.deadline = now + ACTION_SECONDS * 1000;
+    publicEvent(state,{
+      kind:"row-choice",actorId:play.playerId,card:play.card,
+      text:`${playerById(state,play.playerId)?.name || "玩家"} 的 ${play.card} 小于所有列尾，必须选择一列收走`
+    },now);
     return;
   }
   stageAnimation(state,play,rowIndex,now);
@@ -204,6 +265,10 @@ function revealSelections(state, now) {
   state.animation = null;
   state.deadline = now + REVEAL_MS;
   addLog(state,`本回合出牌：${state.playQueue.map((play) => `${playerById(state,play.playerId).name} ${play.card}`).join("，")}`,now);
+  publicEvent(state,{
+    kind:"cards-revealed",plays:state.playQueue.map((play) => ({...play})),
+    text:`全员亮牌：${state.playQueue.map((play) => `${playerById(state,play.playerId).name} ${play.card}`).join("，")}`
+  },now);
 }
 
 function chooseRandomCard(state, player, random, now, reason) {
@@ -233,6 +298,10 @@ function startRound(state, random, now) {
   state.phase = "selecting";
   state.deadline = now + ACTION_SECONDS * 1000;
   addLog(state,`第 ${state.round} 局开始`,now);
+  publicEvent(state,{
+    kind:"round-start",round:state.round,rowCards:state.rows.map((row) => row[0]),
+    text:`第 ${state.round} 局开始，四条牌列已经建立`
+  },now);
 }
 
 export function createLobby({capacity,host}) {
@@ -240,7 +309,8 @@ export function createLobby({capacity,host}) {
     stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),
     round:0,turn:0,players:[makePlayer({...host,isHost:true})],rows:[],playQueue:[],
     revealedPlays:[],pendingPlayerId:null,pendingCard:null,animation:null,
-    deadline:0,logs:[],logSequence:0,animationSequence:0,winners:[]
+    deadline:0,logs:[],logSequence:0,animationSequence:0,winners:[],
+    presentationEvents:[],presentationSequence:0,presentationSceneSequence:0
   };
 }
 
@@ -282,12 +352,18 @@ export function vacateSeat(state, playerId, {now=Date.now()}={}) {
 }
 
 export function setPresence(state, playerId, connected, {now=Date.now(),random=Math.random}={}) {
+  ensurePresentationState(state);
   const player = playerById(state,playerId);
   if (!player || player.connected === Boolean(connected)) return false;
   player.connected = Boolean(connected);
   if (!connected && state.phase === "selecting") {
-    chooseRandomCard(state,player,random,now,"离线");
+    const selected = chooseRandomCard(state,player,random,now,"离线");
     if (state.players.every((item) => item.selectedCard != null)) revealSelections(state,now);
+    else if (selected) publicEvent(state,{
+      kind:"selection-locked",actorId:player.id,automatic:true,reason:"离线",
+      lockedCount:state.players.filter((item) => item.selectedCard != null).length,totalPlayers:state.players.length,
+      text:`${player.name} 离线，由系统秘密锁定了一张牌`
+    },now);
   } else if (!connected && state.phase === "choosingRow" && state.pendingPlayerId === player.id) {
     const rowIndex = randomIndex(state.rows.length,random);
     addLog(state,`${player.name} 离线，系统随机选择了第 ${rowIndex + 1} 列`,now);
@@ -297,6 +373,7 @@ export function setPresence(state, playerId, connected, {now=Date.now(),random=M
 }
 
 export function applyAction(state, actorId, action, {now=Date.now(),random=Math.random}={}) {
+  ensurePresentationState(state);
   const actor = requireActor(state,actorId);
   const type = action?.type;
   if (type === "setCapacity") {
@@ -334,6 +411,11 @@ export function applyAction(state, actorId, action, {now=Date.now(),random=Math.
     if (!Number.isInteger(card) || !actor.hand.includes(card)) throw new GameRuleError("card_not_in_hand", "所选牌不在你的手牌中。", 409);
     actor.selectedCard = card;
     if (state.players.every((player) => player.selectedCard != null)) revealSelections(state,now);
+    else publicEvent(state,{
+      kind:"selection-locked",actorId:actor.id,automatic:false,
+      lockedCount:state.players.filter((player) => player.selectedCard != null).length,totalPlayers:state.players.length,
+      text:`${actor.name} 已秘密锁定手牌`
+    },now);
     return;
   }
   if (type === "chooseRow") {
@@ -347,6 +429,7 @@ export function applyAction(state, actorId, action, {now=Date.now(),random=Math.
 }
 
 export function handleTimeout(state, {now=Date.now(),random=Math.random}={}) {
+  ensurePresentationState(state);
   if (!state.deadline || now < state.deadline) return false;
   if (state.phase === "selecting") {
     for (const player of state.players) chooseRandomCard(state,player,random,now,"选牌超时");
@@ -377,6 +460,7 @@ export function handleTimeout(state, {now=Date.now(),random=Math.random}={}) {
 export function getDeadline(state) { return Number(state.deadline) || 0; }
 
 function buildPublicView(state, {viewerId=null,permissions}={}) {
+  ensurePresentationState(state);
   return {
     selfId:viewerId,phase:state.phase,capacity:state.capacity,round:state.round,turn:state.turn,
     rows:state.rows.map((row) => [...row]),
@@ -384,6 +468,7 @@ function buildPublicView(state, {viewerId=null,permissions}={}) {
     pendingPlayerId:state.pendingPlayerId,pendingCard:state.pendingCard,
     animation:state.animation ? {...state.animation,capturedCards:[...state.animation.capturedCards]} : null,
     deadline:state.deadline,logs:state.logs.map((entry) => ({...entry})),winners:[...state.winners],
+    presentationEvents:state.presentationEvents.map((event) => structuredClone(event)),
     players:state.players.map((player) => ({
       id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,
       score:player.score,captured:[...player.captured],hand:player.id === viewerId ? [...player.hand] : player.hand.map(() => null),
@@ -418,7 +503,10 @@ export function buildSpectatorView(state) {
   });
 }
 
-export function serializeState(state) { return structuredClone(state); }
+export function serializeState(state) {
+  ensurePresentationState(state);
+  return structuredClone(state);
+}
 
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game6 state version: ${serializedState?.stateVersion}`);
@@ -426,6 +514,7 @@ export function restoreState(serializedState) {
   state.revealedPlays ||= [];
   state.animation ??= null;
   state.animationSequence ||= 0;
+  ensurePresentationState(state);
   // Compatibility with the first protocol-v3 snapshot format. It never persisted
   // an automatic animation, so only a pending row choice needs reconstruction.
   if (state.phase === "choosingRow" && !state.revealedPlays.length) {

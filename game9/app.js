@@ -6,6 +6,7 @@ import {
   createAuthoritativeRoomClient,
   createCountdown,
   createLogEntry,
+  createPresentationTimeline,
   createSessionStore,
   createSpectatorUi,
   escapeHtml,
@@ -26,6 +27,7 @@ const E = Object.fromEntries([
   "spectatorSettingButton", "seatActionButton",
   "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "deckCount",
   "notice", "activeCard", "potCount", "timerText", "timerBar", "actionArea", "logList",
+  "deckSource", "potArea", "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText",
   "toggleLogButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "myArea",
   "myChips", "myCardScore", "myNetScore", "myCards", "resultPanel",
   "winnerText", "scoreTable", "removedCards", "resultActions", "playAgainButton"
@@ -34,6 +36,7 @@ const E = Object.fromEntries([
 let mode = "host";
 let view = null;
 let spectatorUi = null;
+let presentation = null;
 const sessions = createSessionStore({ gameId: "no-thanks" });
 const countdown = createCountdown({
   onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); }
@@ -48,6 +51,7 @@ const room = createAuthoritativeRoomClient({
       view = nextView;
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
     },
     onKicked() {
       spectatorUi?.handleSessionEnded("kicked");
@@ -232,7 +236,7 @@ function render() {
   E.activeCard.style.setProperty("--tilt", `${((Number(view.activeCard) || 0) % 7) - 3}deg`);
 
   E.playerList.innerHTML = view.players.map((player, index) => `
-    <article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${!player.connected ? "player-offline" : ""} ${view.phase === "playing" && index === view.currentIndex ? "player-current" : ""}">
+    <article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${!player.connected ? "player-offline" : ""} ${view.phase === "playing" && index === view.currentIndex ? "player-current" : ""}" data-player-id="${escapeHtml(player.id)}">
       <div><span class="status-dot"></span><b>${escapeHtml(player.name)}</b>${player.isHost ? '<em>房主</em>' : ""}</div>
       <div class="player-stats"><span>${player.cards.length} 张牌</span><span>牌面 ${player.cardScore}</span><span>${player.chips == null ? "筹码 ?" : `筹码 ${player.chips}`}</span></div>
       <div class="public-card-runs" aria-label="${escapeHtml(player.name)}的公开数字牌">${cardRunsHtml(player.cards)}</div>
@@ -292,6 +296,91 @@ function render() {
     E.removedCards.innerHTML = view.removed.map((card) => `<span>${card}</span>`).join("");
   }
 }
+
+function playerElement(playerId) {
+  if (!playerId) return null;
+  return [...E.playerList.querySelectorAll("[data-player-id]")]
+    .find((element) => element.dataset.playerId === String(playerId)) || null;
+}
+
+function presentationSource(event) {
+  if (["game-start", "card-revealed"].includes(event.kind)) return E.deckSource;
+  if (event.kind === "card-taken") return E.activeCard;
+  return playerElement(event.actorId) || E.activeCard;
+}
+
+function presentationTarget(event) {
+  if (["game-start", "card-revealed"].includes(event.kind)) return E.activeCard;
+  if (event.kind === "chip-paid") return E.potArea;
+  if (event.kind === "card-taken") return playerElement(event.actorId) || E.myArea;
+  if (event.kind === "game-result") return playerElement(event.actorId) || E.activeCard;
+  return E.activeCard;
+}
+
+function presentationLabel(kind) {
+  return ({
+    "game-start": "新局开场",
+    "chip-paid": "不，谢谢！",
+    "card-taken": "收下数字牌",
+    "card-revealed": "翻开新牌",
+    "game-result": "本局结算"
+  })[kind] || "牌桌动态";
+}
+
+function pointInStage(element) {
+  if (!element || !E.presentationEffects) return null;
+  const rect = element.getBoundingClientRect();
+  const stage = E.presentationEffects.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2 - stage.left, y: rect.top + rect.height / 2 - stage.top };
+}
+
+function playPresentationObject(event) {
+  const source = presentationSource(event);
+  const target = presentationTarget(event);
+  source?.classList.add("presentation-source");
+  target?.classList.add("presentation-target");
+  const token = document.createElement("span");
+  token.className = `presentation-token presentation-token-${event.kind}`;
+  token.textContent = event.kind === "chip-paid" ? "●" : event.kind === "game-result" ? "★" : String(event.cardValue ?? "→");
+  const from = pointInStage(source);
+  const to = pointInStage(target);
+  if (from && to) {
+    token.style.setProperty("--from-x", `${from.x}px`);
+    token.style.setProperty("--from-y", `${from.y}px`);
+    token.style.setProperty("--to-x", `${to.x}px`);
+    token.style.setProperty("--to-y", `${to.y}px`);
+  }
+  E.presentationEffects?.append(token);
+  return () => {
+    source?.classList.remove("presentation-source");
+    target?.classList.remove("presentation-target");
+    token.remove();
+  };
+}
+
+presentation = createPresentationTimeline({
+  container: E.presentationEffects,
+  trailPath: E.presentationTrail,
+  announcement: E.presentationAnnouncement,
+  labelElement: E.presentationLabel,
+  textElement: E.presentationText,
+  effectsElement: E.presentationEffects,
+  resolveSource: presentationSource,
+  resolveTarget: presentationTarget,
+  labelFor: (event) => presentationLabel(event.kind),
+  beforePlay: playPresentationObject,
+  durationMs: 1400,
+  reducedDurationMs: 560,
+  maxQueue: 16,
+  sceneKey: (event) => event.sceneId || event.id,
+  priorityFor: (event) => Number(event.priority) || 0,
+  catchUpThreshold: 2,
+  severeBacklogThreshold: 5,
+  catchUpDurationMs: 620,
+  severeDurationMs: 320,
+  urgentPriority: 4,
+  retainPriority: 3
+});
 
 async function init() {
   bindRoomCodeInput(E.roomCodeInput);

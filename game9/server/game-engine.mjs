@@ -1,9 +1,23 @@
 import { cardScore, finalScore, startingChips } from "../rules.js";
+import {
+  appendPresentationEvent,
+  normalizePresentationState,
+  validatePresentationState
+} from "../../shared/server/presentation-events.mjs";
 
 export const ACTION_SECONDS = 30;
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 7;
 export const SUPPORTS_SPECTATORS = true;
+
+const PRESENTATION_LIMIT = 50;
+const PRESENTATION_PRIORITY = Object.freeze({
+  "card-revealed": 1,
+  "chip-paid": 2,
+  "card-taken": 3,
+  "game-start": 4,
+  "game-result": 5
+});
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -45,6 +59,37 @@ function addLog(state, text, now = Date.now()) {
     at: now
   });
   if (state.logs.length > 100) state.logs.length = 100;
+}
+
+function ensurePresentationState(state) {
+  normalizePresentationState(state);
+  const latestScene = state.presentationEvents.reduce((maximum, event) => {
+    const match = String(event?.sceneId || "").match(/no_thanks_scene_(\d+)/);
+    return Math.max(maximum, Number(match?.[1]) || 0);
+  }, 0);
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < latestScene) {
+    state.presentationSceneSequence = latestScene;
+  }
+  validatePresentationState(state);
+  return state;
+}
+
+function beginPresentationScene(state) {
+  ensurePresentationState(state);
+  state.presentationSceneSequence += 1;
+  return `no_thanks_scene_${state.presentationSceneSequence}`;
+}
+
+function emitPresentation(state, sceneId, event, now) {
+  return appendPresentationEvent(state, {
+    ...event,
+    sceneId,
+    priority: PRESENTATION_PRIORITY[event.kind] || 1
+  }, {
+    now,
+    idPrefix: "no_thanks_event",
+    limit: PRESENTATION_LIMIT
+  });
 }
 
 function requireHost(state, actorId) {
@@ -106,9 +151,17 @@ function finishGame(state, now) {
     .map((id) => state.players.find((player) => player.id === id)?.name)
     .join("、");
   addLog(state, `${names} 以 ${best} 分获胜`, now);
+  const sceneId = beginPresentationScene(state);
+  emitPresentation(state, sceneId, {
+    kind: "game-result",
+    actorId: state.winners[0] || null,
+    winnerIds: [...state.winners],
+    score: best,
+    text: `${names} 以 ${best} 分赢得本局`
+  }, now);
 }
 
-function takeCard(state, player, { now, fromTimeout = false }) {
+function takeCard(state, player, { now, fromTimeout = false, sceneId = beginPresentationScene(state) }) {
   const card = state.activeCard;
   const collected = state.pot;
   player.cards.push(card);
@@ -119,12 +172,27 @@ function takeCard(state, player, { now, fromTimeout = false }) {
     `${player.name} 拿下 ${card}${collected ? `，并获得 ${collected} 枚筹码` : ""}${fromTimeout ? "（超时）" : ""}`,
     now
   );
+  emitPresentation(state, sceneId, {
+    kind: "card-taken",
+    actorId: player.id,
+    cardValue: card,
+    chipCount: collected,
+    fromTimeout,
+    text: `${player.name}${fromTimeout ? "因超时自动" : ""}拿下 ${card}${collected ? `，收走 ${collected} 枚筹码` : ""}`
+  }, now);
   state.pot = 0;
   if (!state.deck.length) {
     finishGame(state, now);
     return;
   }
   state.activeCard = state.deck.pop();
+  const revealSceneId = beginPresentationScene(state);
+  emitPresentation(state, revealSceneId, {
+    kind: "card-revealed",
+    actorId: player.id,
+    cardValue: state.activeCard,
+    text: `翻开新的数字牌 ${state.activeCard}`
+  }, now);
   beginTurn(state, now);
 }
 
@@ -141,7 +209,10 @@ export function createLobby({ capacity, host }) {
     deadline: 0,
     winners: [],
     logs: [],
-    logSequence: 0
+    logSequence: 0,
+    presentationEvents: [],
+    presentationSequence: 0,
+    presentationSceneSequence: 0
   };
 }
 
@@ -209,6 +280,7 @@ export function applyAction(state, actorId, action, {
   now = Date.now(),
   random = Math.random
 } = {}) {
+  ensurePresentationState(state);
   const type = action?.type;
 
   if (type === "setCapacity") {
@@ -251,6 +323,13 @@ export function applyAction(state, actorId, action, {
     state.activeCard = state.deck.pop();
     state.phase = "playing";
     addLog(state, `游戏开始，${state.players[state.currentIndex].name} 首先行动`, now);
+    const sceneId = beginPresentationScene(state);
+    emitPresentation(state, sceneId, {
+      kind: "game-start",
+      actorId: state.players[state.currentIndex].id,
+      cardValue: state.activeCard,
+      text: `游戏开始，${state.players[state.currentIndex].name} 面对 ${state.activeCard} 首先行动`
+    }, now);
     beginTurn(state, now);
     return;
   }
@@ -282,6 +361,16 @@ export function applyAction(state, actorId, action, {
     state.pot += 1;
     addLog(state, `${player.name} 说了“不，谢谢”，牌上增加 1 枚筹码`, now);
     state.currentIndex = (state.currentIndex + 1) % state.players.length;
+    const nextPlayer = state.players[state.currentIndex];
+    const sceneId = beginPresentationScene(state);
+    emitPresentation(state, sceneId, {
+      kind: "chip-paid",
+      actorId: player.id,
+      targetId: nextPlayer?.id || null,
+      cardValue: state.activeCard,
+      potCount: state.pot,
+      text: `${player.name} 支付 1 枚筹码拒绝 ${state.activeCard}，轮到 ${nextPlayer?.name || "下一位玩家"}`
+    }, now);
     beginTurn(state, now);
     return;
   }
@@ -293,14 +382,16 @@ export function applyAction(state, actorId, action, {
 }
 
 export function handleTimeout(state, { now = Date.now() } = {}) {
+  ensurePresentationState(state);
   if (state.phase !== "playing" || !state.deadline || now < state.deadline) return false;
   const player = state.players[state.currentIndex];
   addLog(state, `${player.name} 行动超时，自动拿下 ${state.activeCard}`, now);
-  takeCard(state, player, { now, fromTimeout: true });
+  takeCard(state, player, { now, fromTimeout: true, sceneId: beginPresentationScene(state) });
   return true;
 }
 
 function buildPublicState(state, { viewerId = null, permissions }) {
+  ensurePresentationState(state);
   const reveal = state.phase === "ended";
   return {
     selfId: viewerId,
@@ -314,6 +405,7 @@ function buildPublicState(state, { viewerId = null, permissions }) {
     winners: [...state.winners],
     removed: reveal ? [...state.removed] : [],
     logs: state.logs.map((entry) => ({ ...entry })),
+    presentationEvents: state.presentationEvents.map((event) => structuredClone(event)),
     permissions,
     players: state.players.map((player) => ({
       id: player.id,

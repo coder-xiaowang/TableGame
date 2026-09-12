@@ -117,6 +117,7 @@ test("game9 restores an active room and action deduplication after restart", asy
   assert.equal(resumed.payload.view.activeCard, beforeRestart.payload.view.activeCard);
   assert.equal(resumed.payload.view.deckCount, beforeRestart.payload.view.deckCount);
   assert.equal(resumed.payload.view.pot, beforeRestart.payload.view.pot);
+  assert.deepEqual(resumed.payload.view.presentationEvents, beforeRestart.payload.view.presentationEvents);
   assert.ok(resumed.payload.view.players.every((player) => !player.connected));
 
   const duplicate = await post(running.baseUrl, "/api/actions", {

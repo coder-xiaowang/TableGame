@@ -76,6 +76,15 @@
     </section>
 
     <section class="game-layout hidden" id="roomPanel">
+      <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+        <svg class="presentation-trail-layer" aria-hidden="true">
+          <defs><marker id="bullheadsTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+          <path id="presentationTrail" class="presentation-trail" marker-end="url(#bullheadsTrailArrow)"></path>
+        </svg>
+        <div id="presentationAnnouncement" class="presentation-announcement">
+          <span id="presentationLabel"></span><b id="presentationText"></b>
+        </div>
+      </div>
       <aside class="sidebar">
         <div class="panel player-panel">
           <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
@@ -123,7 +132,7 @@
           <div class="revealed-plays" id="revealedPlays"></div>
         </div>
 
-        <div class="panel board-panel">
+        <div class="panel board-panel" id="boardPanel">
           <div class="section-head">
             <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
             <div class="badges"><span id="roundBadge">第 0 局</span><span id="turnBadge">第 0 / 10 回合</span></div>

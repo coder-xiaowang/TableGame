@@ -20,6 +20,8 @@ test("server deals unique cards and redacts every other hand",() => {
   assert.ok(first.players[1].hand.every((card) => card === null));
   assert.ok(second.players[0].hand.every((card) => card === null));
   assert.equal("playQueue" in first,false);
+  assert.equal(state.presentationEvents.at(-1).kind,"round-start");
+  assert.equal(state.presentationEvents.at(-1).priority,4);
 });
 
 test("spectator view independently redacts every hand and secret selection",() => {
@@ -32,6 +34,11 @@ test("spectator view independently redacts every hand and secret selection",() =
   assert.equal(spectator.players[0].selectedCard,null);
   assert.ok(spectator.players.every((player) => player.hand.every((card) => card === null)));
   assert.equal("playQueue" in spectator,false);
+  const locked = spectator.presentationEvents.at(-1);
+  assert.equal(locked.kind,"selection-locked");
+  assert.equal(locked.actorId,"p1");
+  assert.equal(Object.hasOwn(locked,"card"),false);
+  assert.equal(JSON.stringify(locked).includes(String(chosen)),false);
   assert.deepEqual(spectator.permissions,{
     canManage:false,canKick:false,canSetCapacity:false,canStart:false,
     canEnd:false,canSelect:false,canChooseRow:false
@@ -70,6 +77,10 @@ test("selected cards remain private until all players lock and server resolves i
   assert.deepEqual(state.revealedPlays.map(({card,status}) => ({card,status})),[
     {card:41,status:"waiting"},{card:61,status:"waiting"}
   ]);
+  const revealEvent = state.presentationEvents.at(-1);
+  assert.equal(revealEvent.kind,"cards-revealed");
+  assert.deepEqual(revealEvent.plays.map(({card}) => card),[41,61]);
+  assert.deepEqual(engine.buildSpectatorView(state).presentationEvents,engine.buildView(state,"p1").presentationEvents);
   engine.handleTimeout(state,{now:state.deadline});
   assert.equal(state.phase,"placing");
   assert.equal(state.animation.card,41);
@@ -100,11 +111,18 @@ test("sixth card captures a row while too-small card waits for an authorized cho
   assert.equal(state.phase,"choosingRow");
   assert.equal(state.pendingPlayerId,"p2");
   assert.equal(state.pendingCard,5);
+  assert.equal(state.presentationEvents.at(-1).kind,"row-choice");
   assert.throws(() => engine.applyAction(state,"p1",{type:"chooseRow",rowIndex:1},{now:2100}),/当前不需要你/);
   engine.applyAction(state,"p2",{type:"chooseRow",rowIndex:1},{now:2200});
   assert.equal(state.phase,"placing");
   assert.equal(state.animation.type,"captureAndPlace");
   assert.equal(state.animation.points,3);
+  const choiceCapture = state.presentationEvents.at(-1);
+  assert.equal(choiceCapture.kind,"row-capture");
+  assert.equal(choiceCapture.actorId,"p2");
+  assert.equal(choiceCapture.rowIndex,1);
+  assert.deepEqual(choiceCapture.capturedCards,[30]);
+  assert.equal(choiceCapture.points,3);
   assert.deepEqual(state.rows[1],[30]);
   engine.handleTimeout(state,{now:state.deadline});
   assert.deepEqual(state.rows[1],[5]);
@@ -123,6 +141,8 @@ test("selection and row-choice deadlines are executed by the server",() => {
   assert.equal(engine.handleTimeout(state,{now:deadline-1,random:() => 0}),false);
   assert.equal(engine.handleTimeout(state,{now:deadline,random:() => 0}),true);
   assert.equal(state.phase,"revealing");
+  assert.equal(state.presentationEvents.at(-1).kind,"cards-revealed");
+  assert.equal(state.presentationEvents.filter((event) => event.kind === "selection-locked" && event.automatic).length,0);
   engine.handleTimeout(state,{now:state.deadline,random:() => 0});
   if (state.phase === "choosingRow") {
     const rowDeadline = state.deadline;
@@ -165,6 +185,21 @@ test("serialized state restores the pending secret selection",() => {
   const restored = engine.restoreState(engine.serializeState(state));
   assert.equal(restored.players[0].selectedCard,card);
   assert.equal(engine.buildView(restored,"p2").players[0].selectedCard,null);
+  assert.deepEqual(restored.presentationEvents,state.presentationEvents);
+});
+
+test("legacy snapshots without presentation fields restore and continue from sequence one",() => {
+  const state = readyState();
+  const legacy = engine.serializeState(state);
+  delete legacy.presentationEvents;
+  delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
+  const restored = engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents,[]);
+  const card = restored.players[0].hand[0];
+  engine.applyAction(restored,"p1",{type:"selectCard",card},{now:3000});
+  assert.equal(restored.presentationEvents.at(-1).sequence,1);
+  assert.equal(restored.presentationEvents.at(-1).sceneId,"bullheads_scene_1");
 });
 
 test("a restored in-flight animation commits once and continues the public queue",() => {

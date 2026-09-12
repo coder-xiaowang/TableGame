@@ -67,7 +67,7 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .danger { background: #f0d5d1; color: var(--red); }
 .small { padding: 7px 10px; background: #eee8d9; color: var(--ink); font-size: .75rem; }
 .wide { width: 100%; margin-top: 10px; }
-.game-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }
+.game-layout { position: relative; isolation: isolate; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }
 .game-layout > .room-role-banner { grid-column: 1 / -1; }
 .sidebar { display: grid; gap: 14px; position: sticky; top: 16px; }
 .room-code { margin: 8px 0 14px; color: var(--green); font: 900 2.2rem/1 monospace; letter-spacing: .17em; }
@@ -182,6 +182,29 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .log.collapsed { display: none; }
 .log-item { border-bottom: 1px solid var(--line); padding: 7px 2px; color: var(--muted); font-size: .8rem; }
 
+/* Server-authored presentation layer; the existing staged card motion remains the physical placement renderer. */
+.presentation-effects { position: absolute; inset: 0; z-index: 30; overflow: hidden; border-radius: 20px; pointer-events: none; }
+.presentation-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.presentation-trail { fill: none; stroke: #d79831; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 12 9; opacity: 0; filter: drop-shadow(0 0 7px rgba(215,152,49,.68)); }
+#bullheadsTrailArrow path { fill: #d79831; }
+.presentation-trail.active { opacity: 1; animation: bullheads-trail .52s linear infinite; }
+.presentation-announcement { position: absolute; top: 31%; left: calc(260px + (100% - 278px) / 2); display: grid; width: min(440px,48%); padding: 10px 15px; border: 2px solid rgba(239,196,108,.88); border-radius: 15px; color: #fff9e8; background: linear-gradient(135deg,rgba(23,77,56,.96),rgba(35,48,39,.94)); box-shadow: 0 14px 35px rgba(35,48,39,.36); opacity: 0; transform: translate(-50%,-12px) scale(.95); text-align: center; }
+.presentation-announcement span { color: #efc46c; font-size: .64rem; font-weight: 900; letter-spacing: .16em; }
+.presentation-announcement b { margin-top: 3px; font-size: clamp(.82rem,1.5vw,1.08rem); }
+.presentation-announcement.active { animation: bullheads-announcement 1.25s ease both; }
+.presentation-token { position: absolute; z-index: 32; left: var(--from-x,50%); top: var(--from-y,50%); display: grid; place-items:center; min-width: 32px; height: 32px; padding: 0 7px; border: 2px solid #fff4d3; border-radius: 50%; color: white; background: var(--green); box-shadow: 0 7px 20px rgba(35,48,39,.35); font-weight: 900; transform: translate(-50%,-50%); animation: bullheads-token .72s cubic-bezier(.2,.72,.22,1) forwards; }
+.presentation-token-row-choice { color: #fff; background: var(--red); }
+.presentation-token-cards-revealed,.presentation-token-round-start,.presentation-token-game-result { color: #593d0f; background: #efc46c; }
+.player.presentation-source { box-shadow: 0 0 0 4px rgba(215,152,49,.28),0 0 24px rgba(215,152,49,.48); }
+.player.presentation-score-target { animation: bullheads-score .42s ease-in-out 3 alternate; }
+.card-row.presentation-target { border-color: var(--gold); box-shadow: inset 0 0 0 3px rgba(215,152,49,.2),0 0 22px rgba(215,152,49,.2); }
+.revealed-play.presentation-reveal { animation: bullheads-reveal .42s ease-out both; }
+@keyframes bullheads-trail { to { stroke-dashoffset:-42; } }
+@keyframes bullheads-announcement { 0%,100% { opacity:0; transform:translate(-50%,-12px) scale(.95); } 13%,82% { opacity:1; transform:translate(-50%,0) scale(1); } }
+@keyframes bullheads-token { to { left:var(--to-x,50%); top:var(--to-y,50%); transform:translate(-50%,-50%) rotate(7deg) scale(.9); } }
+@keyframes bullheads-score { to { border-color:var(--red); box-shadow:inset 4px 0 var(--red),0 0 0 5px rgba(168,58,50,.18); transform:translateY(-2px); } }
+@keyframes bullheads-reveal { from { opacity:.25; transform:translateY(10px) rotate(-3deg); } to { opacity:1; transform:translateY(0) rotate(0); } }
+
 @keyframes collect-warning {
   from { transform: translateY(0); opacity: 1; }
   to { transform: translateY(4px); opacity: .38; }
@@ -206,6 +229,7 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .sidebar { position: static; grid-template-columns: repeat(2, 1fr); }
   .sidebar .rules { grid-column: 1 / -1; }
   .turn-console { grid-template-columns: minmax(250px,.68fr) minmax(0,1.32fr); }
+  .presentation-announcement { left:50%; width:min(440px,70%); }
 }
 @media (max-width: 720px) {
   .turn-console {
@@ -235,11 +259,17 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .revealed-play { flex-basis: 82px; padding-inline: 6px; }
   .revealed-plays { margin-inline: -4px; }
   .timer { width: 112px; }
+  .presentation-announcement { top:23%; width:calc(100% - 28px); padding:8px 10px; }
+  .presentation-trail { stroke-width:3; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .flying-card { display: none; }
+  .presentation-trail.active { animation: none; }
+  .presentation-announcement.active { animation-duration: .52s; }
+  .presentation-token { animation-duration: .48s; }
+  .player.presentation-score-target,.revealed-play.presentation-reveal { animation:none; }
 }
 
 /* Compact room chrome: keep management near the title and preserve the table for play. */

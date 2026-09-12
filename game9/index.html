@@ -74,6 +74,15 @@
 
     <section id="roomPanel" class="room-shell hidden">
       <div class="game-grid">
+        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+          <svg class="presentation-trail-layer" aria-hidden="true">
+            <defs><marker id="noThanksTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+            <path id="presentationTrail" class="presentation-trail" marker-end="url(#noThanksTrailArrow)"></path>
+          </svg>
+          <div id="presentationAnnouncement" class="presentation-announcement">
+            <span id="presentationLabel"></span><b id="presentationText"></b>
+          </div>
+        </div>
         <aside class="players-panel panel">
           <div class="panel-title"><span>玩家席</span><b id="playerCountBadge">0 / 4</b></div>
           <div id="playerList" class="player-list"></div>
@@ -87,9 +96,9 @@
           <p id="notice" class="notice">等待玩家加入房间</p>
 
           <div class="table-center">
-            <div class="deck-visual" aria-label="牌堆"><span>NO</span><span>THANKS!</span></div>
+            <div id="deckSource" class="deck-visual" aria-label="牌堆"><span>NO</span><span>THANKS!</span></div>
             <div id="activeCard" class="number-card empty">?</div>
-            <div class="pot-area">
+            <div id="potArea" class="pot-area">
               <div class="token large"></div>
               <div><b id="potCount">0</b><span>牌上筹码</span></div>
             </div>

@@ -54,3 +54,19 @@ test("game6 preserves reveal timeline, board rows and countdown controls",() => 
   assert.match(script,/createCountdown/);
   assert.match(script,/renderCountdown/);
 });
+
+test("game6 uses the shared authoritative presentation timeline without duplicating staged card flight",() => {
+  assert.match(html,/id="presentationEffects"/);
+  assert.match(html,/id="presentationTrail"/);
+  assert.match(html,/id="presentationAnnouncement"/);
+  assert.match(html,/id="boardPanel"/);
+  assert.match(script,/createPresentationTimeline/);
+  assert.match(script,/presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script,/sceneKey:\(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script,/catchUpThreshold:2/);
+  assert.match(script,/severeBacklogThreshold:5/);
+  assert.match(script,/!\["card-place","row-capture"\]\.includes\(event\.kind\)/);
+  assert.match(styles,/\.presentation-effects/);
+  assert.match(styles,/pointer-events: none/);
+  assert.match(styles,/@media \(prefers-reduced-motion: reduce\)/);
+});

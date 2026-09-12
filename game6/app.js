@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
+  createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden,
   setModeVisibility
 } from "/shared/client/index.js";
 import {
@@ -18,12 +18,14 @@ const E = Object.fromEntries([
   "spectatorSettingButton","seatActionButton",
   "startGameButton","endGameButton","playerCountBadge","playerList","notice","roundBadge",
   "turnBadge","revealPanel","revealProgress","revealedPlays","rows","turnConsole","actionTitle","actionArea","timerText","timerBar","handCount","hand",
-  "turnHandPanel","selectionState","logList","toggleLogButton","spectatorPanel","spectatorCountBadge","spectatorList"
+  "turnHandPanel","selectionState","logList","toggleLogButton","spectatorPanel","spectatorCountBadge","spectatorList",
+  "boardPanel","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText"
 ].map((id) => [id,$(id)]));
 
 let mode = "host";
 let view = null;
 let spectatorUi = null;
+let presentation = null;
 const sessions = createSessionStore({gameId:"bullheads"});
 const countdown = createCountdown({
   onTick(value) { renderCountdown({textElement:E.timerText,barElement:E.timerBar},value); }
@@ -33,7 +35,7 @@ const room = createAuthoritativeRoomClient({
   sessionStore:sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode); },
   handlers:{
-    onView(nextView) { view = nextView; enterRoom(); render(); },
+    onView(nextView) { view = nextView; enterRoom(); render(); presentation?.sync(nextView.presentationEvents); },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
@@ -355,6 +357,117 @@ function render() {
   }
   playPlacementAnimation();
 }
+
+function playerPanel(playerId) {
+  if (!playerId) return null;
+  return [...E.playerList.querySelectorAll("[data-player-panel]")]
+    .find((element) => element.dataset.playerPanel === String(playerId)) || null;
+}
+
+function revealedCard(event) {
+  if (!event?.actorId || !Number.isInteger(Number(event.card))) return null;
+  return [...E.revealedPlays.querySelectorAll("[data-animation-source]")]
+    .find((element) => element.dataset.animationSource === `${event.actorId}:${event.card}`)
+    ?.querySelector(".number-card") || null;
+}
+
+function rowElement(rowIndex) {
+  return Number.isInteger(Number(rowIndex)) ? E.rows.querySelector(`[data-row="${Number(rowIndex)}"]`) : null;
+}
+
+function presentationSource(event) {
+  if (["card-place","row-capture","row-choice"].includes(event.kind)) return revealedCard(event) || E.revealPanel;
+  if (event.kind === "selection-locked") return playerPanel(event.actorId) || E.turnConsole;
+  if (event.kind === "game-result") return playerPanel(event.actorId) || E.boardPanel;
+  return event.kind === "cards-revealed" ? E.revealPanel : E.boardPanel;
+}
+
+function presentationTarget(event) {
+  if (["card-place","row-capture"].includes(event.kind)) return rowElement(event.rowIndex) || E.rows;
+  if (event.kind === "row-choice") return playerPanel(event.actorId) || E.rows;
+  if (event.kind === "selection-locked") return E.turnConsole;
+  if (event.kind === "game-result") return playerPanel(event.actorId) || E.boardPanel;
+  return event.kind === "cards-revealed" ? E.rows : E.boardPanel;
+}
+
+function presentationLabel(kind) {
+  return ({
+    "selection-locked":"秘密选牌",
+    "cards-revealed":"全员亮牌",
+    "card-place":"依序入列",
+    "row-choice":"等待选列",
+    "row-capture":"收列罚分",
+    "turn-start":"下一回合",
+    "round-start":"新一局",
+    "round-end":"本局结束",
+    "game-result":"整场结算"
+  })[kind] || "牌桌动态";
+}
+
+function pointInPresentation(element) {
+  if (!element || !E.presentationEffects) return null;
+  const rect = element.getBoundingClientRect();
+  const stage = E.presentationEffects.getBoundingClientRect();
+  return {x:rect.left + rect.width / 2 - stage.left,y:rect.top + rect.height / 2 - stage.top};
+}
+
+function playPresentationEvent(event) {
+  const source = presentationSource(event);
+  const target = presentationTarget(event);
+  const scoreTarget = event.kind === "row-capture" ? playerPanel(event.actorId) : null;
+  source?.classList.add("presentation-source");
+  target?.classList.add("presentation-target");
+  scoreTarget?.classList.add("presentation-score-target");
+  const revealed = event.kind === "cards-revealed" ? [...E.revealedPlays.children] : [];
+  for (const element of revealed) element.classList.add("presentation-reveal");
+
+  let token = null;
+  if (!["card-place","row-capture"].includes(event.kind)) {
+    token = document.createElement("span");
+    token.className = `presentation-token presentation-token-${event.kind}`;
+    token.textContent = ({"selection-locked":"✓","cards-revealed":"亮","row-choice":"?","game-result":"★","round-start":String(event.round || 1),"round-end":"✓","turn-start":"→"})[event.kind] || "→";
+    const from = pointInPresentation(source);
+    const to = pointInPresentation(target);
+    if (from && to) {
+      token.style.setProperty("--from-x",`${from.x}px`);
+      token.style.setProperty("--from-y",`${from.y}px`);
+      token.style.setProperty("--to-x",`${to.x}px`);
+      token.style.setProperty("--to-y",`${to.y}px`);
+    }
+    E.presentationEffects?.append(token);
+  }
+  return () => {
+    source?.classList.remove("presentation-source");
+    target?.classList.remove("presentation-target");
+    scoreTarget?.classList.remove("presentation-score-target");
+    for (const element of revealed) element.classList.remove("presentation-reveal");
+    token?.remove();
+  };
+}
+
+presentation = createPresentationTimeline({
+  container:E.presentationEffects,
+  trailPath:E.presentationTrail,
+  announcement:E.presentationAnnouncement,
+  labelElement:E.presentationLabel,
+  textElement:E.presentationText,
+  effectsElement:E.presentationEffects,
+  resolveSource:presentationSource,
+  resolveTarget:presentationTarget,
+  labelFor:(event) => presentationLabel(event.kind),
+  beforePlay:playPresentationEvent,
+  durationMs:1250,
+  reducedDurationMs:520,
+  maxQueue:20,
+  sceneKey:(event) => event.sceneId || event.id,
+  priorityFor:(event) => Number(event.priority) || 0,
+  catchUpThreshold:2,
+  severeBacklogThreshold:5,
+  catchUpDurationMs:580,
+  severeDurationMs:300,
+  urgentPriority:4,
+  retainPriority:3
+});
 
 function endGame() {
   if (confirm("确定结束当前游戏并返回准备阶段吗？所有累计分数将被清空。")) submit({type:"end"});

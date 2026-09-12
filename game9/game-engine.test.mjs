@@ -49,6 +49,9 @@ test("the server starts a deterministic game and owns the deadline", () => {
   assert.equal(state.activeCard != null, true);
   assert.equal(state.deadline, 1000 + ACTION_SECONDS * 1000);
   assert.equal(state.players.every((player) => player.chips === 11), true);
+  assert.equal(state.presentationEvents.at(-1).kind, "game-start");
+  assert.equal(state.presentationEvents.at(-1).priority, 4);
+  assert.equal(Object.hasOwn(state.presentationEvents.at(-1), "removed"), false);
 });
 
 test("only the current player can pass or take", () => {
@@ -64,6 +67,10 @@ test("only the current player can pass or take", () => {
   assert.equal(current.chips, 10);
   assert.equal(state.pot, 1);
   assert.equal(state.deadline, 2000 + ACTION_SECONDS * 1000);
+  const event = state.presentationEvents.at(-1);
+  assert.equal(event.kind, "chip-paid");
+  assert.equal(event.actorId, current.id);
+  assert.equal(event.potCount, 1);
 });
 
 test("timeout is decided by the server clock and takes the card once", () => {
@@ -75,6 +82,9 @@ test("timeout is decided by the server clock and takes the card once", () => {
   assert.equal(handleTimeout(state, { now: state.deadline }), true);
   assert.deepEqual(current.cards, [card]);
   assert.equal(state.logs.some((entry) => entry.text.includes("超时")), true);
+  const timeoutEvents = state.presentationEvents.filter((event) => event.kind === "card-taken" && event.fromTimeout);
+  assert.equal(timeoutEvents.length, 1);
+  assert.equal(timeoutEvents[0].cardValue, card);
 });
 
 test("views hide removed cards and other players' chips until settlement", () => {
@@ -101,9 +111,41 @@ test("a complete server-owned game settles and reveals final information", () =>
   assert.equal(view.removed.length, 9);
   assert.equal(view.players.every((player) => player.finalScore != null && player.chips != null), true);
   assert.equal(view.winners.length > 0, true);
+  assert.equal(state.presentationEvents.at(-1).kind, "game-result");
+  assert.equal(state.presentationEvents.at(-1).priority, 5);
   applyAction(state, "host", { type: "restart" }, { now: now + 1 });
   assert.equal(state.phase, "lobby");
   assert.equal(state.players.every((player) => player.cards.length === 0 && player.chips === 0), true);
+});
+
+test("taking a card and revealing its successor are distinct ordered scenes", () => {
+  const state = readyState();
+  applyAction(state, "host", { type: "start" }, { now: 1000, random: () => 0 });
+  const current = state.players[state.currentIndex];
+  const taken = state.activeCard;
+  applyAction(state, current.id, { type: "take" }, { now: 2000 });
+  const events = state.presentationEvents.slice(-2);
+  assert.deepEqual(events.map((event) => event.kind), ["card-taken", "card-revealed"]);
+  assert.equal(events[0].cardValue, taken);
+  assert.notEqual(events[0].sceneId, events[1].sceneId);
+  assert.ok(events[0].sequence < events[1].sequence);
+});
+
+test("public presentation events are spectator-safe and legacy rooms normalize on read", () => {
+  const state = readyState();
+  delete state.presentationEvents;
+  delete state.presentationSequence;
+  delete state.presentationSceneSequence;
+  const legacyView = buildView(state, "host");
+  assert.deepEqual(legacyView.presentationEvents, []);
+
+  applyAction(state, "host", { type: "start" }, { now: 1000, random: () => 0 });
+  const playerView = buildView(state, "host");
+  const spectatorView = buildSpectatorView(state);
+  assert.deepEqual(spectatorView.presentationEvents, playerView.presentationEvents);
+  const serialized = JSON.stringify(spectatorView.presentationEvents);
+  assert.equal(state.removed.some((card) => serialized.includes(`\"removed\":${card}`)), false);
+  assert.ok(spectatorView.presentationEvents.every((event) => !Object.hasOwn(event, "chips")));
 });
 
 test("presence belongs to server state", () => {

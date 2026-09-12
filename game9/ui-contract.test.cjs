@@ -55,3 +55,23 @@ test("手机端依次显示牌桌、个人状态、玩家和辅助信息", () =>
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.game-grid \.support-panel \{ grid-column: auto; order: 4; \}/);
   assert.match(css, /\.rule-details \{ max-height: 58vh; overflow: auto/);
 });
+
+test("统一演出层具备服务器事件时间线、场景合并与自适应追赶", () => {
+  const html = read("index.html");
+  const script = read("app.js");
+  const css = read("styles.css");
+
+  assert.match(html, /id="presentationEffects"/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(html, /id="deckSource"/);
+  assert.match(html, /id="potArea"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script, /catchUpThreshold: 2/);
+  assert.match(script, /severeBacklogThreshold: 5/);
+  assert.match(script, /data-player-id/);
+  assert.match(css, /\.presentation-effects/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
