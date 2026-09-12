@@ -5,6 +5,7 @@ import {
   cleanPlayerName,
   createAuthoritativeRoomClient,
   createCountdown,
+  createPresentationTimeline,
   createSessionStore,
   createSpectatorUi,
   escapeHtml,
@@ -25,8 +26,12 @@ const E = Object.fromEntries([
   "spectatorPanel", "spectatorCountBadge", "spectatorList",
   "startGameButton", "restartGameButton", "endGameButton", "notice", "exchangeReveal", "deckCount",
   "discardCount", "discardTop", "players", "actionTitle", "actionHint", "actionButtons", "timerText",
-  "timerBar", "controlDock", "handZone", "handHint", "hand", "toggleLogButton", "logList"
+  "timerBar", "controlDock", "handZone", "handHint", "hand", "toggleLogButton", "logList",
+  "farmTable", "deckSource", "discardSource", "presentationEffects", "presentationTrail",
+  "presentationAnnouncement", "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
+E.deckSource = E.deckCount?.closest("span") || E.farmTable;
+E.discardSource = E.discardCount?.closest("span") || E.farmTable;
 
 const CARD_META = {
   mud: { icon: "●", label: "泥巴", note: "让自己一只干净小猪变脏" },
@@ -43,6 +48,7 @@ let view = null;
 let selectedCardId = null;
 let revealTimer = null;
 let spectatorUi = null;
+let presentation = null;
 
 const sessions = createSessionStore({ gameId: "dirty-pig" });
 const countdown = createCountdown({
@@ -63,6 +69,7 @@ const room = createAuthoritativeRoomClient({
       if (!view.hand.some((card) => card.id === selectedCardId)) selectedCardId = null;
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
     },
     onKicked() {
       spectatorUi?.handleSessionEnded("kicked");
@@ -175,6 +182,7 @@ function renderPlayers() {
       <header><div><b>${escapeHtml(player.name)}</b>${player.id === view.selfId ? " · 你" : ""}<small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"} · 手牌 ${player.handCount}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header>
       <div class="pig-row">${player.pigs.map((pig, index) => pigHtml(player, pig, index, legalKeys)).join("") || '<p class="waiting">等待游戏开始</p>'}</div>
     </article>`).join("");
+  E.players.querySelectorAll(".player-farm").forEach((farm, index) => { farm.dataset.playerId = view.players[index]?.id || ""; });
 
   E.players.querySelectorAll("[data-kick]").forEach((button) => {
     button.addEventListener("click", () => kickPlayer(button.dataset.kick));
@@ -333,6 +341,73 @@ function render() {
     E.timerBar.style.width = "0";
   }
 }
+
+function farmFor(playerId) {
+  if (!playerId) return null;
+  return [...E.players.querySelectorAll(".player-farm")].find((farm) => farm.dataset.playerId === String(playerId)) || null;
+}
+
+function pigFor(playerId, pigId) {
+  if (!playerId || !pigId) return null;
+  return [...E.players.querySelectorAll(".pig")].find((pig) => pig.dataset.player === String(playerId) && pig.dataset.pig === String(pigId)) || null;
+}
+
+function presentationSource(event) {
+  if (["private-draw", "initial-hand", "exchange-private"].includes(event.kind)) return E.deckSource;
+  return farmFor(event.actorId) || E.farmTable;
+}
+
+function presentationTarget(event) {
+  if (["private-draw", "initial-hand", "exchange-private"].includes(event.kind)) return E.handZone;
+  if (event.targetPigId) return pigFor(event.targetId, event.targetPigId);
+  if (["card-discard", "exchange-reveal"].includes(event.kind)) return E.discardSource;
+  return event.targetId ? farmFor(event.targetId) : E.farmTable;
+}
+
+function presentationLabel(kind) {
+  return ({
+    "game-start": "农场开局", "turn-start": "轮到行动", "card-play": "行动前摇", "pig-dirtied": "跳进泥坑",
+    "rain-resolve": "大雨来袭", "pig-protected": "加固猪舍", "pig-cleaned": "农夫洗猪", "barn-destroyed": "闪电命中",
+    "card-discard": "直接弃牌", "private-draw": "秘密补牌", "initial-hand": "领取手牌", "exchange-reveal": "公开验牌",
+    "exchange-private": "获得新牌", "game-won": "脏猪获胜"
+  })[kind] || "农场变化";
+}
+
+function playPresentationObject(event) {
+  const source = presentationSource(event);
+  const target = presentationTarget(event);
+  const affected = (event.affectedPigs || []).map((item) => pigFor(item.playerId, item.pigId)).filter(Boolean);
+  source?.classList.add("presentation-source");
+  target?.classList.add("presentation-target");
+  for (const pig of affected) pig.classList.add("presentation-rain");
+  const token = document.createElement("span");
+  token.className = `presentation-token ${event.private ? "private" : ""}`;
+  const cardTypes = Array.isArray(event.cardTypes) ? event.cardTypes : event.cardType ? [event.cardType] : [];
+  token.textContent = cardTypes.length ? cardTypes.map((type) => CARD_META[type]?.label || type).join(" · ") : ({ "turn-start": "→", "game-won": "★", "rain-resolve": "☂" })[event.kind] || "•";
+  E.presentationEffects?.append(token);
+  return () => {
+    source?.classList.remove("presentation-source");
+    target?.classList.remove("presentation-target");
+    for (const pig of affected) pig.classList.remove("presentation-rain");
+    token.remove();
+  };
+}
+
+presentation = createPresentationTimeline({
+  container: E.farmTable,
+  trailPath: E.presentationTrail,
+  announcement: E.presentationAnnouncement,
+  labelElement: E.presentationLabel,
+  textElement: E.presentationText,
+  effectsElement: E.presentationEffects,
+  resolveSource: presentationSource,
+  resolveTarget: presentationTarget,
+  labelFor: (event) => presentationLabel(event.kind),
+  beforePlay: playPresentationObject,
+  durationMs: 1500,
+  reducedDurationMs: 650,
+  maxQueue: 28
+});
 
 function selectMode(nextMode) {
   mode = nextMode;

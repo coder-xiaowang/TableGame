@@ -229,3 +229,70 @@ test("turn timeout discards one card without applying its effect", () => {
   assert.equal(state.discard.some((card) => card.id === firstId), true);
   assert.equal(state.currentIndex, 1);
 });
+
+test("presentation keeps initial and replacement hands private", () => {
+  const state = startedState();
+  const hostEvents = engine.buildView(state, "p1").presentationEvents;
+  const guestEvents = engine.buildView(state, "p2").presentationEvents;
+  const spectatorEvents = engine.buildSpectatorView(state).presentationEvents;
+  assert.ok(hostEvents.some((event) => event.kind === "initial-hand" && event.private && event.cardTypes.length === 3));
+  assert.ok(guestEvents.some((event) => event.kind === "initial-hand" && event.private && event.cardTypes.length === 3));
+  assert.ok(spectatorEvents.every((event) => !event.private && event.cardTypes == null));
+  assert.deepEqual(hostEvents.filter((event) => !event.private), spectatorEvents);
+  assert.deepEqual(guestEvents.filter((event) => !event.private), spectatorEvents);
+});
+
+test("a targeted card produces ordered wind-up, resolution, private draw and next-turn events", () => {
+  const state = startedState();
+  const actor = state.players[0];
+  const pig = actor.pigs[0];
+  const mud = giveFromDeck(state, actor, "mud");
+  play(state, actor.id, mud, actor.id, pig.id, 2_000);
+  assert.deepEqual(state.presentationEvents.slice(-3).map((event) => event.kind), ["card-play", "pig-dirtied", "turn-start"]);
+  const resolution = state.presentationEvents.find((event) => event.kind === "pig-dirtied");
+  assert.equal(resolution.targetId, actor.id);
+  assert.equal(resolution.targetPigId, pig.id);
+  assert.ok(engine.buildView(state, actor.id).presentationEvents.some((event) => event.kind === "private-draw" && event.private && event.cardType));
+  assert.ok(engine.buildView(state, "p2").presentationEvents.every((event) => event.kind !== "private-draw"));
+  assert.ok(engine.buildSpectatorView(state).presentationEvents.every((event) => !event.private));
+});
+
+test("rain publishes only affected public pig positions and no hand values", () => {
+  const state = startedState();
+  const host = state.players[0];
+  const guest = state.players[1];
+  host.pigs[0].dirty = true;
+  guest.pigs[0].dirty = true;
+  guest.pigs[1].dirty = true;
+  const rain = giveFromDeck(state, host, "rain");
+  play(state, host.id, rain, null, null, 3_000);
+  const event = engine.buildSpectatorView(state).presentationEvents.find((item) => item.kind === "rain-resolve");
+  assert.equal(event.affectedPigs.length, 3);
+  assert.ok(event.affectedPigs.every((item) => item.playerId && item.pigId));
+  assert.equal(event.cardTypes, undefined);
+});
+
+test("three-card exchange reveals old cards publicly but sends new cards only to the owner", () => {
+  const state = startedState();
+  const actor = state.players[0];
+  for (let index = 0; index < 3; index += 1) giveFromDeck(state, actor, "rod", index);
+  engine.applyAction(state, actor.id, { type: "exchangeHand" }, { now: 4_000, random: noShuffle });
+  const publicEvents = engine.buildSpectatorView(state).presentationEvents;
+  const reveal = publicEvents.find((event) => event.kind === "exchange-reveal");
+  assert.deepEqual(reveal.cardTypes, ["rod", "rod", "rod"]);
+  assert.ok(publicEvents.every((event) => !event.private && event.kind !== "exchange-private"));
+  assert.ok(engine.buildView(state, actor.id).presentationEvents.some((event) => event.kind === "exchange-private" && event.private && event.cardTypes.length === 3));
+  assert.ok(engine.buildView(state, "p2").presentationEvents.every((event) => event.kind !== "exchange-private"));
+});
+
+test("legacy version-2 snapshots without presentation fields still restore", () => {
+  const legacy = structuredClone(startedState());
+  delete legacy.presentationEvents;
+  delete legacy.privatePresentationEvents;
+  delete legacy.presentationSequence;
+  const restored = engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []);
+  assert.deepEqual(restored.privatePresentationEvents, {});
+  assert.equal(restored.presentationSequence, 0);
+  assert.doesNotThrow(() => engine.validateState(restored));
+});

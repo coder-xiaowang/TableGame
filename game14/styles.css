@@ -227,3 +227,93 @@ button.small { padding: 6px 10px; font-size: .78rem; }
   .control-dock .section-head h2 { max-width: 72vw; overflow: hidden; font-size: 1rem; text-overflow: ellipsis; white-space: nowrap; }
   .timer { min-width: 56px; padding-block: 4px 10px; }
 }
+
+/* Server-authored farm presentation layer. */
+.farm-table { isolation: isolate; }
+.presentation-effects {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.presentation-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.presentation-trail {
+  fill: none;
+  stroke: rgba(255,220,112,.98);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 13 9;
+  opacity: 0;
+  filter: drop-shadow(0 0 7px rgba(79,51,23,.72));
+}
+#farmTrailArrow path { fill: #ffdc70; }
+.presentation-trail.active { opacity: 1; animation: dirty-pig-trail .62s linear infinite; }
+.presentation-announcement {
+  position: absolute;
+  top: 43%;
+  left: 50%;
+  display: grid;
+  width: min(430px,62%);
+  padding: 10px 15px;
+  border: 2px solid rgba(255,226,143,.88);
+  border-radius: 16px;
+  color: #fff8dc;
+  background: linear-gradient(135deg,rgba(72,47,29,.94),rgba(105,77,40,.9));
+  box-shadow: 0 13px 35px rgba(45,29,17,.42),inset 0 0 20px rgba(255,239,178,.08);
+  opacity: 0;
+  transform: translate(-50%,-12px) scale(.95);
+  text-align: center;
+}
+.presentation-announcement span { color: #ffdc70; font-size: .65rem; font-weight: 900; letter-spacing: .15em; }
+.presentation-announcement b { margin-top: 3px; font-size: clamp(.82rem,1.5vw,1.06rem); }
+.presentation-announcement.active { animation: dirty-pig-announcement 1.5s ease both; }
+.presentation-token {
+  position: absolute;
+  top: 57%;
+  left: 50%;
+  max-width: min(390px,70%);
+  padding: 7px 11px;
+  border: 2px solid rgba(105,70,39,.42);
+  border-radius: 12px;
+  color: #5b371f;
+  background: linear-gradient(145deg,#fff6d8,#e5bc70);
+  box-shadow: 0 9px 24px rgba(49,31,16,.35);
+  transform: translate(-50%,-50%) rotate(-2deg);
+  text-align: center;
+  font-size: .73rem;
+  font-weight: 900;
+  animation: dirty-pig-token 1.5s ease both;
+}
+.presentation-token.private { border-style: dashed; color: #f8ffe9; background: linear-gradient(145deg,#728455,#465b3b); }
+.player-farm.presentation-source { box-shadow: 0 0 0 4px rgba(255,218,101,.48),0 0 30px rgba(255,218,101,.68); }
+.pig.presentation-target { animation: dirty-pig-target .48s ease-in-out 3 alternate; }
+.pig.presentation-rain::before {
+  content: "☂";
+  position: absolute;
+  inset: 5px auto auto 7px;
+  z-index: 2;
+  color: #447eae;
+  font-size: 1.15rem;
+  filter: drop-shadow(0 2px 2px #fff);
+  animation: dirty-pig-rain .48s ease-in-out 3 alternate;
+}
+@keyframes dirty-pig-trail { to { stroke-dashoffset: -44; } }
+@keyframes dirty-pig-announcement { 0%,100% { opacity: 0; transform: translate(-50%,-12px) scale(.95); } 12%,82% { opacity: 1; transform: translate(-50%,0) scale(1); } }
+@keyframes dirty-pig-token { 0%,100% { opacity: 0; transform: translate(-50%,-50%) scale(.72) rotate(-7deg); } 18%,76% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-2deg); } }
+@keyframes dirty-pig-target { to { box-shadow: 0 0 0 6px rgba(255,214,79,.55),0 0 32px rgba(255,167,46,.78); transform: translateY(-4px) scale(1.04); } }
+@keyframes dirty-pig-rain { to { transform: translateY(8px) rotate(8deg); opacity: .55; } }
+
+@media (max-width: 760px) {
+  .presentation-announcement { top: 36%; width: calc(100% - 28px); padding: 8px 10px; }
+  .presentation-token { top: 49%; max-width: calc(100% - 36px); }
+  .presentation-trail { stroke-width: 3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-trail.active { animation: none; }
+  .presentation-announcement.active,.presentation-token { animation-duration: .65s; }
+  .pig.presentation-target,.pig.presentation-rain::before { animation: none; }
+  .pig.presentation-target { box-shadow: 0 0 0 5px rgba(255,214,79,.55); }
+}

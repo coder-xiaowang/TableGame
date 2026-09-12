@@ -48,3 +48,18 @@ test("手机端优先显示农场并保留吸附行动手牌区", () => {
   assert.match(css, /\.rule-details\s*\{[^}]*max-height:\s*58vh;[^}]*overflow:\s*auto;/s);
   assert.doesNotMatch(css, /\.rule-card\s*\{[^}]*display:\s*none|\.log-card\s*\{[^}]*display:\s*none/);
 });
+
+test("shared presentation layer anchors events to real farms and pigs", () => {
+  const html = read("index.html");
+  const script = read("app.js");
+  const css = read("styles.css");
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /farm\.dataset\.playerId/);
+  assert.match(script, /pig\.dataset\.player/);
+  assert.match(html, /id="farmTable"/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(css, /\.presentation-token/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});

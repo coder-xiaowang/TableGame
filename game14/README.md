@@ -57,6 +57,12 @@ SPECTATORS_ENABLED=1
 node --test game14/rules.test.mjs game14/game-engine.test.mjs game14/authoritative-server.test.cjs game14/persistence.test.cjs game14/spectator-mode.test.cjs
 ```
 
+## 桌面互动演出
+
+game14 已接入共享演出事件层。服务器为出牌、目标小猪、状态结算、公开弃牌、私人补牌、三张换牌和胜负生成有序事件；浏览器只播放当前视图获准看到的公开或私人演出，动画不参与规则推进。
+
+迁移目标、隐私边界和实机验收清单见 [PRESENTATION_MIGRATION.md](PRESENTATION_MIGRATION.md)。
+
 测试覆盖：
 
 - 原版54张行动牌、5～6人57张行动牌和人数配置；

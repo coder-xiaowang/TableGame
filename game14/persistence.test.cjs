@@ -93,6 +93,7 @@ test("SQLite restart restores the room, private hands, deadline and action dedup
   const hostAfter = (await resume(running, host)).payload.view;
   const guestAfter = (await resume(running, guest)).payload.view;
   assert.deepEqual(hostAfter.hand.map((card) => card.id), before.hand.map((card) => card.id));
+  assert.deepEqual(hostAfter.presentationEvents, before.presentationEvents);
   assert.equal(hostAfter.deadline, before.deadline);
   assert.ok(hostAfter.players.every((player) => !player.connected));
   assert.notDeepEqual(hostAfter.hand.map((card) => card.id), guestAfter.hand.map((card) => card.id));

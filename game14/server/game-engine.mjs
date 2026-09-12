@@ -11,6 +11,7 @@ import {
   pigsPerPlayer,
   shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 2;
@@ -71,6 +72,28 @@ function makePlayer({ id, name, isHost = false, connected = false }) {
 function addLog(state, text, now) {
   state.logs.unshift({ id: `log_${state.logSequence += 1}`, text, at: now });
   if (state.logs.length > 100) state.logs.length = 100;
+}
+
+function publicEvent(state, event, now) {
+  return appendPresentationEvent(state, event, {
+    now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "dirty_pig_event", limit: 60
+  });
+}
+
+function privateEvent(state, playerId, event, now) {
+  const id = String(playerId || "");
+  if (!id) return null;
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object") state.privatePresentationEvents = {};
+  const envelope = {
+    events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
+    sequence: Number(state.presentationSequence) || 0
+  };
+  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+    now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "dirty_pig_private", limit: 24
+  });
+  state.privatePresentationEvents[id] = envelope.events;
+  state.presentationSequence = envelope.sequence;
+  return stored;
 }
 
 function setDeadline(state, now) {
@@ -172,14 +195,18 @@ function finishGame(state, winner, now) {
   state.phase = "ended";
   state.winnerId = winner.id;
   state.deadline = 0;
+  publicEvent(state, { kind: "game-won", actorId: winner.id, text: `${winner.name} 的所有小猪都变脏了，赢得本局` }, now);
   addLog(state, `${winner.name} 的所有小猪都变脏了，获得本局胜利！`, now);
 }
 
 function finishTurn(state, actor, now, random) {
   if (hasWon(actor)) return finishGame(state, actor, now);
-  actor.hand.push(drawCard(state, random));
+  const drawn = drawCard(state, random);
+  actor.hand.push(drawn);
+  privateEvent(state, actor.id, { kind: "private-draw", actorId: actor.id, cardType: drawn.type, text: `你补到了“${CARD_LABELS[drawn.type]}”` }, now);
   state.currentIndex = (state.currentIndex + 1) % state.players.length;
   setDeadline(state, now);
+  publicEvent(state, { kind: "turn-start", actorId: currentPlayer(state).id, text: `${currentPlayer(state).name} 开始行动` }, now);
 }
 
 function playCard(state, actor, action, now, random) {
@@ -192,41 +219,54 @@ function playCard(state, actor, action, now, random) {
   let target = null;
   if (card.type !== CARD_TYPES.RAIN) target = assertTarget(state, actor, card, action);
   removeHandCard(actor, card.id);
+  publicEvent(state, {
+    kind: "card-play", actorId: actor.id, targetId: target?.player.id || null, targetPigId: target?.pig.id || null,
+    cardType: card.type, text: `${actor.name} 打出“${CARD_LABELS[card.type]}”`
+  }, now);
 
   if (card.type === CARD_TYPES.MUD) {
     target.pig.dirty = true;
     state.discard.push(card);
+    publicEvent(state, { kind: "pig-dirtied", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, text: `${actor.name} 的一只小猪跳进泥坑` }, now);
     addLog(state, `${actor.name} 让自己的一只小猪跳进泥巴，变成了脏小猪。`, now);
   } else if (card.type === CARD_TYPES.RAIN) {
     let washed = 0;
+    const affectedPigs = [];
     for (const player of state.players) {
       for (const pig of player.pigs) {
         if (pig.dirty && !pig.barn) {
           pig.dirty = false;
           washed += 1;
+          affectedPigs.push({ playerId: player.id, pigId: pig.id });
         }
       }
     }
     state.discard.push(card);
+    publicEvent(state, { kind: "rain-resolve", actorId: actor.id, cardType: card.type, affectedPigs, text: `大雨洗净了 ${washed} 只露天脏猪` }, now);
     addLog(state, `${actor.name} 召来一场大雨，洗干净了 ${washed} 只露天脏猪。`, now);
   } else if (card.type === CARD_TYPES.BARN) {
     target.pig.barn = card;
+    publicEvent(state, { kind: "pig-protected", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, protection: "barn", text: `${actor.name} 为小猪盖起猪舍` }, now);
     addLog(state, `${actor.name} 给自己的一只小猪盖了猪舍。`, now);
   } else if (card.type === CARD_TYPES.ROD) {
     target.pig.rod = card;
+    publicEvent(state, { kind: "pig-protected", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, protection: "rod", text: `${actor.name} 为猪舍装上避雷针` }, now);
     addLog(state, `${actor.name} 给一座猪舍装上了避雷针。`, now);
   } else if (card.type === CARD_TYPES.DOOR) {
     target.pig.door = card;
+    publicEvent(state, { kind: "pig-protected", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, protection: "door", text: `${actor.name} 封住了猪舍大门` }, now);
     addLog(state, `${actor.name} 把一座脏猪猪舍的门封了起来。`, now);
   } else if (card.type === CARD_TYPES.FARMER) {
     target.pig.dirty = false;
     state.discard.push(card);
+    publicEvent(state, { kind: "pig-cleaned", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, text: `${actor.name} 派农夫洗净了 ${target.player.name} 的小猪` }, now);
     addLog(state, `${actor.name} 派农夫把 ${target.player.name} 的一只脏猪洗干净了。`, now);
   } else if (card.type === CARD_TYPES.LIGHTNING) {
     state.discard.push(card, target.pig.barn);
     if (target.pig.door) state.discard.push(target.pig.door);
     target.pig.barn = null;
     target.pig.door = null;
+    publicEvent(state, { kind: "barn-destroyed", actorId: actor.id, targetId: target.player.id, targetPigId: target.pig.id, cardType: card.type, text: `${actor.name} 用闪电摧毁了 ${target.player.name} 的猪舍` }, now);
     addLog(state, `${actor.name} 用闪电摧毁了 ${target.player.name} 的一座猪舍。`, now);
   }
 
@@ -236,6 +276,7 @@ function playCard(state, actor, action, now, random) {
 function discardCard(state, actor, action, now, random, timeout = false) {
   const card = removeHandCard(actor, action.cardId);
   state.discard.push(card);
+  publicEvent(state, { kind: "card-discard", actorId: actor.id, cardType: card.type, timeout, text: timeout ? `${actor.name} 超时，系统替其弃掉“${CARD_LABELS[card.type]}”` : `${actor.name} 不发动效果，弃掉“${CARD_LABELS[card.type]}”` }, now);
   addLog(state, `${actor.name}${timeout ? "行动超时，系统替其" : "选择不发动效果，"}弃掉了一张${CARD_LABELS[card.type]}牌。`, now);
   finishTurn(state, actor, now, random);
 }
@@ -253,9 +294,12 @@ function exchangeHand(state, actor, now, random) {
     until: now + REVEAL_SECONDS * 1000
   };
   while (actor.hand.length < HAND_SIZE) actor.hand.push(drawCard(state, random));
+  publicEvent(state, { kind: "exchange-reveal", actorId: actor.id, cardTypes: shown.map((card) => card.type), text: `${actor.name} 公开三张无法使用的牌并全部更换` }, now);
+  privateEvent(state, actor.id, { kind: "exchange-private", actorId: actor.id, cardTypes: actor.hand.map((card) => card.type), text: `你换得了：${actor.hand.map((card) => CARD_LABELS[card.type]).join("、")}` }, now);
   addLog(state, `${actor.name} 公开了三张无法使用的手牌，并将它们全部更换。`, now);
   state.currentIndex = (state.currentIndex + 1) % state.players.length;
   setDeadline(state, now);
+  publicEvent(state, { kind: "turn-start", actorId: currentPlayer(state).id, text: `${currentPlayer(state).name} 开始行动` }, now);
 }
 
 function resetToLobby(state) {
@@ -292,6 +336,11 @@ function beginGame(state, now, random) {
   }
   state.currentIndex = Math.floor(random() * state.players.length);
   setDeadline(state, now);
+  publicEvent(state, { kind: "game-start", actorId: currentPlayer(state).id, text: `农场开局，${currentPlayer(state).name} 先行动` }, now);
+  for (const player of state.players) {
+    privateEvent(state, player.id, { kind: "initial-hand", actorId: player.id, cardTypes: player.hand.map((card) => card.type), text: `你的起手牌：${player.hand.map((card) => CARD_LABELS[card.type]).join("、")}` }, now);
+  }
+  publicEvent(state, { kind: "turn-start", actorId: currentPlayer(state).id, text: `${currentPlayer(state).name} 开始行动` }, now);
   addLog(state, `游戏开始，每位玩家拥有 ${pigCount} 只干净小猪，${currentPlayer(state).name} 先行动。`, now);
 }
 
@@ -308,7 +357,10 @@ export function createLobby({ capacity, host }) {
     winnerId: null,
     revealedExchange: null,
     logs: [],
-    logSequence: 0
+    logSequence: 0,
+    presentationEvents: [],
+    privatePresentationEvents: {},
+    presentationSequence: 0
   };
 }
 
@@ -417,6 +469,13 @@ function publicPig(pig) {
   };
 }
 
+function presentationFor(state, viewer) {
+  const privateEvents = viewer ? state.privatePresentationEvents?.[viewer.id] || [] : [];
+  return [...state.presentationEvents, ...privateEvents]
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((event) => ({ ...event }));
+}
+
 function buildPublicView(state, { viewer = null, permissions } = {}) {
   const current = currentPlayer(state);
   const myTurn = Boolean(viewer && state.phase === "playing" && current?.id === viewer.id);
@@ -432,6 +491,7 @@ function buildPublicView(state, { viewer = null, permissions } = {}) {
     winnerId: state.winnerId,
     revealedExchange: state.revealedExchange ? structuredClone(state.revealedExchange) : null,
     logs: state.logs.map((entry) => ({ ...entry })),
+    presentationEvents: presentationFor(state, viewer),
     players: state.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -488,22 +548,35 @@ export function buildSpectatorView(state) {
 
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game14 state");
-  if (state.phase === "lobby") return true;
-  const actionCards = [
-    ...state.deck,
-    ...state.discard,
-    ...state.players.flatMap((player) => [
-      ...player.hand,
-      ...player.pigs.flatMap((pig) => [pig.barn, pig.door, pig.rod].filter(Boolean))
-    ])
-  ];
-  const ids = actionCards.map((card) => card.id);
-  const expectedCards = actionCardCount(state.players.length);
-  if (actionCards.length !== expectedCards || new Set(ids).size !== expectedCards) {
-    throw new Error(`Action card conservation failed: ${actionCards.length}/${new Set(ids).size}`);
+  if (state.phase !== "lobby") {
+    const actionCards = [
+      ...state.deck,
+      ...state.discard,
+      ...state.players.flatMap((player) => [
+        ...player.hand,
+        ...player.pigs.flatMap((pig) => [pig.barn, pig.door, pig.rod].filter(Boolean))
+      ])
+    ];
+    const ids = actionCards.map((card) => card.id);
+    const expectedCards = actionCardCount(state.players.length);
+    if (actionCards.length !== expectedCards || new Set(ids).size !== expectedCards) {
+      throw new Error(`Action card conservation failed: ${actionCards.length}/${new Set(ids).size}`);
+    }
+    const expectedPigs = pigsPerPlayer(state.players.length);
+    if (state.players.some((player) => player.pigs.length !== expectedPigs)) throw new Error("Pig count mismatch");
   }
-  const expectedPigs = pigsPerPlayer(state.players.length);
-  if (state.players.some((player) => player.pigs.length !== expectedPigs)) throw new Error("Pig count mismatch");
+  try { validatePresentationState(state); }
+  catch { throw new Error("Invalid game14 public presentation events"); }
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object" || Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game14 private presentation events");
+  const sequences = new Set(state.presentationEvents.map((event) => event.sequence));
+  for (const events of Object.values(state.privatePresentationEvents)) {
+    try { validatePresentationState({ presentationEvents: events, presentationSequence: state.presentationSequence }); }
+    catch { throw new Error("Invalid game14 private presentation events"); }
+    for (const event of events) {
+      if (!event.private || sequences.has(event.sequence)) throw new Error("Invalid game14 private presentation event sequence");
+      sequences.add(event.sequence);
+    }
+  }
   return true;
 }
 
@@ -518,6 +591,10 @@ export function restoreState(serializedState) {
   }
   const state = structuredClone(serializedState);
   state.revealedExchange ??= null;
+  state.privatePresentationEvents = state.privatePresentationEvents && typeof state.privatePresentationEvents === "object" && !Array.isArray(state.privatePresentationEvents) ? state.privatePresentationEvents : {};
+  normalizePresentationState(state);
+  const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
+  state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
   validateState(state);
   return state;
 }
