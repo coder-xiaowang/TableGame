@@ -64,6 +64,7 @@ test("SQLite重启后恢复牌局、截止时间和旁观者隐私视图", async
   assert.deepEqual(after.discard, before.discard);
   assert.equal(after.deadline, before.deadline);
   assert.equal(after.phase, before.phase);
+  assert.deepEqual(after.presentationEvents, before.presentationEvents);
   assert.ok(after.players.every((player) => !player.connected));
   assert.equal(watched.roomRole, "spectator");
   assert.ok(watched.players.every((player) => player.hand.every((card) => card.type === null)));

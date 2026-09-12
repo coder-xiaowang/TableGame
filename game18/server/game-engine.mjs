@@ -84,8 +84,68 @@ function addLog(state, text, now) {
   if (state.logs.length > 140) state.logs.length = 140;
 }
 
+const PRESENTATION_PRIORITY = {
+  "turn-start": 1,
+  "selection-ready": 1,
+  "round-start": 2,
+  "case-opened": 2,
+  "card-play": 2,
+  "pass-window": 2,
+  "child-search": 2,
+  "witness-look": 3,
+  "witness-insight": 3.5,
+  "child-insight": 3.5,
+  "child-detected": 3.5,
+  "dog-search": 3,
+  "dog-reveal": 4,
+  "trade-window": 3,
+  "trade-complete": 3,
+  "trade-private": 3.5,
+  "pass-transfer": 3,
+  "pass-transfer-private": 3.5,
+  "gossip-transfer": 3,
+  "gossip-transfer-private": 3.5,
+  accusation: 4,
+  "round-result": 4,
+  "match-result": 5
+};
+
+function nextPresentationSceneId(state) {
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence + 1 : 1;
+  return `dancing_scene_${state.presentationSceneSequence}`;
+}
+
+function advancePresentationScene(state) {
+  const sceneId = nextPresentationSceneId(state);
+  state.activePresentationScene = sceneId;
+  state.activePresentationSceneNumber = state.presentationSceneSequence;
+  return sceneId;
+}
+
+function decoratePresentation(state, event) {
+  let sceneId = event.sceneId || state.activePresentationScene;
+  if (!sceneId) sceneId = nextPresentationSceneId(state);
+  else if (sceneId === state.activePresentationScene && Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, state.activePresentationSceneNumber);
+  }
+  const priority = Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] ?? 2;
+  return { ...event, sceneId, priority };
+}
+
+function runPresentationScene(state, callback) {
+  if (state.activePresentationScene) return callback();
+  const sceneNumber = (Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : 0) + 1;
+  state.activePresentationScene = `dancing_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber = sceneNumber;
+  try { return callback(); }
+  finally {
+    delete state.activePresentationScene;
+    delete state.activePresentationSceneNumber;
+  }
+}
+
 function publicEvent(state, event, now) {
-  return appendPresentationEvent(state, event, {
+  return appendPresentationEvent(state, decoratePresentation(state, event), {
     now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "dancing_event", limit: 60
   });
 }
@@ -98,7 +158,7 @@ function privateEvent(state, playerId, event, now) {
     events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
     sequence: Number(state.presentationSequence) || 0
   };
-  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+  const stored = appendPresentationEvent(envelope, decoratePresentation(state, { ...event, private: true }), {
     now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "dancing_private", limit: 30
   });
   state.privatePresentationEvents[id] = envelope.events;
@@ -107,9 +167,10 @@ function privateEvent(state, playerId, event, now) {
 }
 
 function transferEvents(state, { kind, actorId, targetId, cardType, publicText, privateText }, now) {
-  publicEvent(state, { kind, actorId, targetId, text: publicText }, now);
+  const sceneId = advancePresentationScene(state);
+  publicEvent(state, { kind, actorId, targetId, sceneId, text: publicText }, now);
   for (const playerId of new Set([actorId, targetId])) {
-    privateEvent(state, playerId, { kind: `${kind}-private`, actorId, targetId, cardType, text: privateText }, now);
+    privateEvent(state, playerId, { kind: `${kind}-private`, actorId, targetId, cardType, sceneId, text: privateText }, now);
   }
 }
 
@@ -473,7 +534,8 @@ export function createLobby({ capacity, host }) {
     logSequence: 0,
     presentationEvents: [],
     privatePresentationEvents: {},
-    presentationSequence: 0
+    presentationSequence: 0,
+    presentationSceneSequence: 0
   };
 }
 
@@ -517,7 +579,7 @@ export function setPresence(state, playerId, connected) {
   return true;
 }
 
-export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+function applyActionInternal(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const actor = requireActor(state, actorId);
   const type = action?.type;
   if (type === "setCapacity") {
@@ -559,6 +621,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   throw new GameRuleError("action_unavailable", "当前阶段不能执行这个操作。", 409);
 }
 
+export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
+}
+
 function timeoutSelectForPending(state, pending, random) {
   for (const id of pending.participantIds) {
     if (pending.selections[id]) continue;
@@ -567,7 +633,7 @@ function timeoutSelectForPending(state, pending, random) {
   }
 }
 
-export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
+function handleTimeoutInternal(state, { now = Date.now(), random = Math.random } = {}) {
   if (["lobby", "ended"].includes(state.phase) || !state.deadline || now < state.deadline) return false;
   if (state.phase === "roundReview") {
     dealRound(state, now, random);
@@ -610,6 +676,10 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
     return true;
   }
   return false;
+}
+
+export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
+  return runPresentationScene(state, () => handleTimeoutInternal(state, { now, random }));
 }
 
 export function getDeadline(state) {
@@ -727,6 +797,7 @@ export function buildSpectatorView(state) {
 
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game18 state");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game18 presentation scene sequence");
   if (state.players.some((player) => !Number.isInteger(player.score) || player.score < 0 || !Array.isArray(player.hand))) throw new Error("Invalid player state");
   if (state.phase !== "lobby") {
     if (state.players.length < MIN_PLAYERS || state.players.length > MAX_PLAYERS) throw new Error("Invalid active player count");
@@ -765,6 +836,10 @@ export function restoreState(serializedState) {
   normalizePresentationState(state);
   const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
   state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
+  const existingScenes = [...state.presentationEvents, ...Object.values(state.privatePresentationEvents).flat()]
+    .map((event) => /^dancing_scene_(\d+)$/.exec(String(event?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) ? state.presentationSceneSequence : existingScenes;
   validateState(state);
   return state;
 }

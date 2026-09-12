@@ -251,6 +251,10 @@ test("presentation events keep witness values private while public direction sta
   const outsiderEvents = buildView(state, outsider.id).presentationEvents;
   const spectatorEvents = buildSpectatorView(state).presentationEvents;
   assert.ok(actorEvents.some((event) => event.kind === "witness-insight" && event.private && Array.isArray(event.cardTypes)));
+  const publicLook = actorEvents.find((event) => event.kind === "witness-look");
+  const privateLook = actorEvents.find((event) => event.kind === "witness-insight");
+  assert.equal(privateLook.sceneId, publicLook.sceneId);
+  assert.ok(privateLook.priority > publicLook.priority);
   assert.ok(targetEvents.some((event) => event.kind === "witness-look" && event.targetId === target.id));
   assert.ok(targetEvents.every((event) => event.kind !== "witness-insight"));
   assert.ok(outsiderEvents.every((event) => !event.private));
@@ -270,6 +274,8 @@ test("child identity is only presented to the child and culprit", () => {
   assert.ok(publicEvents.some((event) => event.kind === "child-search"));
   assert.ok(publicEvents.every((event) => event.kind !== "child-search" || event.targetId == null));
   assert.ok(buildView(state, actor.id).presentationEvents.some((event) => event.kind === "child-insight" && event.targetId === culprit.id));
+  const childView = buildView(state, actor.id).presentationEvents;
+  assert.equal(childView.find((event) => event.kind === "child-insight").sceneId, childView.find((event) => event.kind === "child-search").sceneId);
   assert.ok(buildView(state, culprit.id).presentationEvents.some((event) => event.kind === "child-detected" && event.private));
   const outsider = state.players.find((player) => ![actor.id, culprit.id].includes(player.id));
   assert.ok(buildView(state, outsider.id).presentationEvents.every((event) => !event.private));
@@ -280,10 +286,12 @@ test("legacy snapshots without presentation fields restore safely", () => {
   delete legacy.presentationEvents;
   delete legacy.privatePresentationEvents;
   delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
   const restored = restoreState(legacy);
   assert.deepEqual(restored.presentationEvents, []);
   assert.deepEqual(restored.privatePresentationEvents, {});
   assert.equal(restored.presentationSequence, 0);
+  assert.equal(restored.presentationSceneSequence, 0);
   assert.doesNotThrow(() => validateState(restored));
 });
 
@@ -305,6 +313,8 @@ test("trade presentation reveals exchanged card values only to both participants
   assert.ok(buildView(state, target.id).presentationEvents.some((event) => event.kind === "trade-private" && event.cardType === actorChoice.type));
   assert.ok(buildView(state, outsider.id).presentationEvents.every((event) => !event.private));
   assert.ok(buildSpectatorView(state).presentationEvents.filter((event) => event.kind === "trade-complete").every((event) => event.cardType == null));
+  const actorEvents = buildView(state, actor.id).presentationEvents;
+  assert.equal(actorEvents.findLast((event) => event.kind === "trade-private").sceneId, actorEvents.findLast((event) => event.kind === "trade-complete").sceneId);
 });
 
 test("pass-left presentation exposes direction publicly but keeps card values between endpoints", () => {
@@ -321,7 +331,24 @@ test("pass-left presentation exposes direction publicly but keeps card values be
   const publicMoves = buildSpectatorView(state).presentationEvents.filter((event) => event.kind === "pass-transfer");
   assert.equal(publicMoves.length, pending.participantIds.length);
   assert.ok(publicMoves.every((event) => event.actorId && event.targetId && event.cardType == null));
+  assert.equal(new Set(publicMoves.map((event) => event.sceneId)).size, pending.participantIds.length);
   for (const player of state.players) {
-    assert.ok(buildView(state, player.id).presentationEvents.some((event) => event.kind === "pass-transfer-private" && event.private && event.cardType));
+    const events = buildView(state, player.id).presentationEvents;
+    const privateMove = events.find((event) => event.kind === "pass-transfer-private" && event.private && event.cardType);
+    assert.ok(privateMove);
+    assert.ok(publicMoves.some((event) => event.sceneId === privateMove.sceneId));
   }
+});
+
+test("场景编号可持久化、可从事件恢复且非法操作不消耗编号", () => {
+  const lobby = createLobby({ capacity: 3, host: { id: "p1", name: "甲", connected: true } });
+  assert.throws(() => applyAction(lobby, "p1", { type: "not-real" }), /当前阶段/);
+  assert.equal(lobby.presentationSceneSequence, 0);
+  assert.equal("activePresentationScene" in lobby, false);
+
+  const state = startedState();
+  const snapshot = serializeState(state);
+  assert.equal(restoreState(snapshot).presentationSceneSequence, state.presentationSceneSequence);
+  delete snapshot.presentationSceneSequence;
+  assert.equal(restoreState(snapshot).presentationSceneSequence, state.presentationSceneSequence);
 });

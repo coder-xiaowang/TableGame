@@ -50,6 +50,10 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   assert.match(styles, /\.discard-zone, \.discard-area\s*\{[\s\S]*?top: 43%/);
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
+  assert.match(script, /catchUpThreshold: 2/);
+  assert.match(script, /severeBacklogThreshold: 6/);
+  assert.match(script, /urgentPriority: 4/);
   assert.match(html, /id="presentationTrail"/);
   assert.match(html, /id="presentationAnnouncement"/);
   assert.match(styles, /\.presentation-token/);
