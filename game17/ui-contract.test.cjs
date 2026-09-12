@@ -18,9 +18,14 @@ test("页面包含旁观、行情、私人区和移动端吸附操作结构", ()
   assert.match(html, /<details class="panel rules-card">/); assert.doesNotMatch(html, /<details class="panel rules-card" open>/);
   assert.ok(logAt >= 0 && spectatorAt > logAt, "旁观席必须位于交易记录之后");
   assert.match(html, /id="stockTicker"/); assert.match(html, /id="stockpiles"/); assert.match(html, /id="privateZone"/); assert.match(html, /id="controlDock"/);
+  assert.match(html, /id="presentationEffects"/); assert.match(html, /id="presentationTrail"/); assert.match(html, /id="presentationAnnouncement"/);
   assert.match(script, /createSpectatorUi/); assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(script, /setHidden\(E\.roomHeaderTools, false\)/);
+  assert.match(script, /createPresentationTimeline/); assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /data-company-id=/); assert.match(script, /data-pile-id=/); assert.match(script, /data-player-id=/);
+  assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/); assert.match(script, /catchUpThreshold: 2/); assert.match(script, /severeBacklogThreshold: 5/);
   assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/); assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /@media \(max-width: 760px\)/); assert.match(styles, /@media \(max-width: 520px\)/); assert.match(styles, /stockpiles \{ grid-template-columns: minmax\(0,1fr\)/);
   assert.doesNotMatch(styles, /sidebar \.rules-card[^}]*display:\s*none/); assert.doesNotMatch(styles, /sidebar \.log-card[^}]*display:\s*none/);
+  assert.match(styles, /\.presentation-effects/); assert.match(styles, /\.presentation-trail\.active/); assert.match(styles, /\.presentation-token/);
 });

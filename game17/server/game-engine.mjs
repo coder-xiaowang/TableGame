@@ -5,6 +5,7 @@ import {
   companyById, createInformationDecks, createMarketDeck, forecastById, movePrice,
   roundsFor, sharesHeld, shuffle, stockpileCount
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -62,6 +63,17 @@ function addLog(state, text, now = Date.now()) {
   if (state.logs.length > 160) state.logs.length = 160;
 }
 
+function newScene(state) {
+  state.presentationSceneSequence = (Number(state.presentationSceneSequence) || 0) + 1;
+  return `stockpile_scene_${state.presentationSceneSequence}`;
+}
+
+function present(state, event, now, sceneId = null) {
+  return appendPresentationEvent(state, { priority: 1, ...event, sceneId: sceneId || newScene(state) }, {
+    now, idPrefix: "stockpile_event", limit: 90
+  });
+}
+
 function setPhase(state, phase, now, seconds = 0, actorId = null) {
   state.phase = phase;
   state.currentActorId = actorId;
@@ -103,8 +115,9 @@ function resetToLobby(state, now = Date.now()) {
   setPhase(state, "lobby", now);
 }
 
-function resolvePriceMove(state, companyId, amount, now, reason) {
+function resolvePriceMove(state, companyId, amount, now, reason, sceneId = null) {
   const company = companyById(companyId);
+  const previousPrice = state.stockPrices[companyId];
   const result = movePrice(state.stockPrices[companyId], amount);
   for (const event of result.events) {
     if (event.type === "split") {
@@ -131,6 +144,7 @@ function resolvePriceMove(state, companyId, amount, now, reason) {
   }
   state.stockPrices[companyId] = result.price;
   addLog(state, `${reason}：${company.name} ${amount > 0 ? "+" : ""}${amount}，现价 $${result.price}。`, now);
+  present(state, { kind: "price-move", priority: result.events.length ? 5 : 4, text: `${company.name} ${amount > 0 ? "上涨" : "下跌"}至 $${result.price}`, companyId, amount, previousPrice, price: result.price, marketEvents: result.events.map((event) => event.type) }, now, sceneId);
 }
 
 function dealStartingStocks(state, random) {
@@ -174,16 +188,19 @@ function beginRound(state, now, random) {
     : order.map((player) => player.id);
   state.supplyBatch = 1;
   addLog(state, `第 ${state.round}/${state.totalRounds} 轮开始，内幕信息已经分配。`, now);
-  openNextSupply(state, now);
+  const sceneId = newScene(state);
+  present(state, { kind: "round-start", priority: 4, text: `第 ${state.round}/${state.totalRounds} 轮开市`, round: state.round }, now, sceneId);
+  openNextSupply(state, now, sceneId);
 }
 
-function openNextSupply(state, now) {
-  if (!state.supplyQueue.length) return beginBidding(state, now);
+function openNextSupply(state, now, sceneId = null) {
+  if (!state.supplyQueue.length) return beginBidding(state, now, sceneId);
   const actor = playerById(state, state.supplyQueue[0]);
   actor.supplyHand = [drawMarket(state), drawMarket(state)];
   const placementsDone = (state.players.length === 2 ? 4 : state.players.length) - state.supplyQueue.length;
   state.supplyBatch = state.players.length === 2 && placementsDone >= state.players.length ? 2 : 1;
   setPhase(state, "supply", now, SUPPLY_SECONDS, actor.id);
+  present(state, { kind: "supply-turn", priority: 1, text: `轮到 ${actor.name} 配置市场供给`, actorId: actor.id, batch: state.supplyBatch }, now, sceneId);
 }
 
 function submitSupply(state, actor, action, now) {
@@ -199,7 +216,9 @@ function submitSupply(state, actor, action, now) {
   actor.supplyHand = [];
   state.supplyQueue.shift();
   addLog(state, `${actor.name} 向市场放入了一张明牌和一张暗牌。`, now);
-  openNextSupply(state, now);
+  const sceneId = newScene(state);
+  present(state, { kind: "supply-place", priority: 3, text: `${actor.name} 公开放入${cardLabel(faceUp)}，并暗放一张牌`, actorId: actor.id, faceUpPileId: upPile.id, faceDownPileId: downPile.id, faceUpLabel: cardLabel(faceUp) }, now, sceneId);
+  openNextSupply(state, now, sceneId);
 }
 
 function bidTokenOwner(state, tokenId) {
@@ -207,7 +226,7 @@ function bidTokenOwner(state, tokenId) {
   return token ? playerById(state, token.ownerId) : null;
 }
 
-function beginBidding(state, now) {
+function beginBidding(state, now, sceneId = null) {
   const order = orderedPlayers(state);
   const tokenCount = biddingTokenCount(state.players.length);
   state.bidTokens = order.flatMap((player) => Array.from({ length: tokenCount }, (_, index) => ({
@@ -216,13 +235,15 @@ function beginBidding(state, now) {
   state.bidQueue = tokenCount === 2
     ? Array.from({ length: tokenCount }, (_, tokenIndex) => order.map((player) => `${player.id}_bid_${tokenIndex + 1}`)).flat()
     : order.map((player) => `${player.id}_bid_1`);
-  openNextBid(state, now);
+  present(state, { kind: "bidding-start", priority: 3, text: "市场供给完成，公开竞价开始" }, now, sceneId);
+  openNextBid(state, now, sceneId);
 }
 
-function openNextBid(state, now) {
-  if (!state.bidQueue.length) return resolveStockpiles(state, now);
+function openNextBid(state, now, sceneId = null) {
+  if (!state.bidQueue.length) return resolveStockpiles(state, now, sceneId);
   const owner = bidTokenOwner(state, state.bidQueue[0]);
   setPhase(state, "bidding", now, BID_SECONDS, owner.id);
+  present(state, { kind: "bid-turn", priority: 1, text: `等待 ${owner.name} 报价`, actorId: owner.id }, now, sceneId);
 }
 
 function placeBid(state, actor, action, now) {
@@ -237,16 +258,20 @@ function placeBid(state, actor, action, now) {
   if (ownOther.some((item) => item.pileId === pile.id)) throw new GameRuleError("duplicate_player_pile", "你的两个竞价标记不能位于同一股票堆。", 409);
   if (ownOther.reduce((sum, item) => sum + item.amount, 0) + amount > actor.cash) throw new GameRuleError("bid_exceeds_cash", "你的全部有效报价不能超过现有现金。", 409);
   state.bidQueue.shift();
+  const displacedOwnerId = top?.ownerId || null;
   if (top) {
     top.pileId = null; top.amount = null;
     if (!state.bidQueue.includes(top.id)) state.bidQueue.push(top.id);
   }
   token.pileId = pile.id; token.amount = amount;
   addLog(state, `${actor.name} 在 ${pile.id.replace("pile_", "股票堆 ")} 报价 ${cashText(amount)}。`, now);
-  openNextBid(state, now);
+  const sceneId = newScene(state);
+  present(state, { kind: "bid", priority: displacedOwnerId ? 4 : 3, text: `${actor.name} 在${pile.id.replace("pile_", "股票堆 ")}报价 ${cashText(amount)}${displacedOwnerId ? "，超过原报价" : ""}`, actorId: actor.id, targetId: displacedOwnerId, pileId: pile.id, amount }, now, sceneId);
+  openNextBid(state, now, sceneId);
 }
 
-function resolveStockpiles(state, now) {
+function resolveStockpiles(state, now, sceneId = null) {
+  const awards = [];
   for (const token of state.bidTokens) {
     const player = playerById(state, token.ownerId);
     const pile = state.stockpiles.find((item) => item.id === token.pileId);
@@ -265,15 +290,19 @@ function resolveStockpiles(state, now) {
       }
     }
     addLog(state, `${player.name} 以 ${cashText(token.amount)} 获得 ${pile.id.replace("pile_", "股票堆 ")}；其中已公开：${publicCards.join("、") || "无"}。`, now);
+    awards.push({ playerId: player.id, pileId: pile.id, amount: token.amount, publicCards });
     pile.cards = [];
   }
+  present(state, { kind: "stockpiles-resolved", priority: 5, text: "竞价结束，各股票堆完成交割", awards }, now, sceneId);
   state.actionQueue = orderedPlayers(state).flatMap((player) => player.actionCards.map((card) => ({ ownerId: player.id, cardId: card.id, actionType: card.actionType })));
-  openNextMarketAction(state, now);
+  openNextMarketAction(state, now, sceneId);
 }
 
-function openNextMarketAction(state, now) {
-  if (!state.actionQueue.length) return beginSelling(state, now);
+function openNextMarketAction(state, now, sceneId = null) {
+  if (!state.actionQueue.length) return beginSelling(state, now, sceneId);
   setPhase(state, "marketAction", now, MARKET_ACTION_SECONDS, state.actionQueue[0].ownerId);
+  const actor = currentPlayer(state);
+  present(state, { kind: "market-action-turn", priority: 1, text: `等待 ${actor?.name || "玩家"} 执行市场行动`, actorId: actor?.id || null }, now, sceneId);
 }
 
 function playMarketAction(state, actor, companyId, now) {
@@ -282,18 +311,23 @@ function playMarketAction(state, actor, companyId, now) {
   const cardIndex = actor.actionCards.findIndex((card) => card.id === pending.cardId);
   if (cardIndex < 0) throw new GameRuleError("action_card_missing", "行动牌已经不存在。", 409);
   const [card] = actor.actionCards.splice(cardIndex, 1); state.discard.push(card); state.actionQueue.shift();
-  resolvePriceMove(state, companyId, card.actionType === ACTION_TYPES.BOOM ? 2 : -2, now, `${actor.name} 使用${cardLabel(card)}`);
-  openNextMarketAction(state, now);
+  const sceneId = newScene(state);
+  present(state, { kind: "market-action", priority: 4, text: `${actor.name} 对${companyById(companyId).name}使用${cardLabel(card)}`, actorId: actor.id, companyId, actionType: card.actionType }, now, sceneId);
+  resolvePriceMove(state, companyId, card.actionType === ACTION_TYPES.BOOM ? 2 : -2, now, `${actor.name} 使用${cardLabel(card)}`, sceneId);
+  openNextMarketAction(state, now, sceneId);
 }
 
-function beginSelling(state, now) {
+function beginSelling(state, now, sceneId = null) {
   state.turnQueue = orderedPlayers(state).map((player) => player.id);
-  openNextSeller(state, now);
+  present(state, { kind: "selling-start", priority: 3, text: "市场行动完成，进入公开卖出阶段" }, now, sceneId);
+  openNextSeller(state, now, Math.random, sceneId);
 }
 
-function openNextSeller(state, now, random = Math.random) {
-  if (!state.turnQueue.length) return beginMovement(state, now, random);
+function openNextSeller(state, now, random = Math.random, sceneId = null) {
+  if (!state.turnQueue.length) return beginMovement(state, now, random, sceneId);
   setPhase(state, "selling", now, SELL_SECONDS, state.turnQueue[0]);
+  const actor = currentPlayer(state);
+  present(state, { kind: "sell-turn", priority: 1, text: `等待 ${actor?.name || "玩家"} 决定卖出`, actorId: actor?.id || null }, now, sceneId);
 }
 
 function normalizeSale(value) {
@@ -338,37 +372,44 @@ function submitSales(state, actor, sales, now, random) {
   credit(actor, proceeds, state, now);
   state.turnQueue.shift();
   addLog(state, proceeds ? `${actor.name} 卖出 ${publicDetails.join("；")}，获得 ${cashText(proceeds)}。` : `${actor.name} 本轮没有卖出股票。`, now);
-  openNextSeller(state, now, random);
+  const sceneId = newScene(state);
+  present(state, { kind: "sale", priority: proceeds ? 4 : 2, text: proceeds ? `${actor.name} 卖出 ${publicDetails.join("；")}，获得 ${cashText(proceeds)}` : `${actor.name} 本轮选择持有`, actorId: actor.id, proceeds, companyIds: normalized.filter((row) => row.normal || row.splitFull || row.splitHalf).map((row) => row.companyId) }, now, sceneId);
+  openNextSeller(state, now, random, sceneId);
 }
 
-function beginMovement(state, now, random) {
+function beginMovement(state, now, random, sceneId = null) {
   state.revealedInformation = [];
   state.movementQueue = [
     ...orderedPlayers(state).flatMap((player) => player.privateInformation.map((pair) => ({ ...pair, source: "player", ownerId: player.id }))),
     ...(state.publicInformation ? [{ ...state.publicInformation, source: "public", ownerId: null }] : []),
     ...state.hiddenInformation.map((pair) => ({ ...pair, source: "hidden", ownerId: null }))
   ];
+  present(state, { kind: "information-reveal-start", priority: 4, text: "全部内幕封条开启，行情开始结算" }, now, sceneId);
   processMovement(state, now, random);
 }
 
 function processMovement(state, now, random) {
   while (state.movementQueue.length) {
     const pair = state.movementQueue.shift();
+    const sceneId = newScene(state);
     state.revealedInformation.push(pair);
     const forecast = forecastById(pair.forecastId);
+    present(state, { kind: "information-reveal", priority: 4, text: `${companyById(pair.companyId).name} 行情揭晓：${forecast.label}`, companyId: pair.companyId, forecastId: pair.forecastId, forecastLabel: forecast.label, source: pair.source, ownerId: pair.source === "player" ? pair.ownerId : null }, now, sceneId);
     if (forecast.kind === "dividend") {
       state.pendingDividend = { companyId: pair.companyId, pair, queue: orderedPlayers(state).filter((player) => sharesHeld(player, pair.companyId) > 0).map((player) => player.id) };
       if (!state.pendingDividend.queue.length) { state.pendingDividend = null; continue; }
-      return openNextDividend(state,now, random);
+      return openNextDividend(state,now, random, sceneId);
     }
-    resolvePriceMove(state, pair.companyId, forecast.value, now, `行情公布 ${forecast.label}`);
+    resolvePriceMove(state, pair.companyId, forecast.value, now, `行情公布 ${forecast.label}`, sceneId);
   }
-  finishRound(state, now, random);
+  finishRound(state, now, random, newScene(state));
 }
 
-function openNextDividend(state, now, random) {
+function openNextDividend(state, now, random, sceneId = null) {
   if (!state.pendingDividend?.queue.length) { state.pendingDividend = null; return processMovement(state, now, random); }
   setPhase(state, "dividend", now, DIVIDEND_SECONDS, state.pendingDividend.queue[0]);
+  const actor = currentPlayer(state); const company = companyById(state.pendingDividend.companyId);
+  present(state, { kind: "dividend-turn", priority: 2, text: `${company.name} 分红，等待 ${actor?.name || "玩家"} 公开持股`, actorId: actor?.id || null, companyId: company.id }, now, sceneId);
 }
 
 function submitDividend(state, actor, action, now, random) {
@@ -381,17 +422,20 @@ function submitDividend(state, actor, action, now, random) {
   const shares = normal + split * 2; const payout = shares * DIVIDEND_PER_SHARE;
   credit(actor, payout, state, now); pending.queue.shift();
   addLog(state, shares ? `${actor.name} 公开 ${shares} 股并领取 ${cashText(payout)} 分红。` : `${actor.name} 放弃公开持股和本次分红。`, now);
-  openNextDividend(state, now, random);
+  const sceneId = newScene(state);
+  present(state, { kind: "dividend", priority: shares ? 4 : 2, text: shares ? `${actor.name} 公开 ${shares} 股，领取 ${cashText(payout)} 分红` : `${actor.name} 放弃本次分红`, actorId: actor.id, companyId: pending.companyId, shares, payout }, now, sceneId);
+  openNextDividend(state, now, random, sceneId);
 }
 
-function finishRound(state, now, random) {
-  if (state.round >= state.totalRounds) return finishGame(state, now);
+function finishRound(state, now, random, sceneId = null) {
+  if (state.round >= state.totalRounds) return finishGame(state, now, sceneId);
   state.firstPlayerIndex = (state.firstPlayerIndex + 1) % state.players.length;
   setPhase(state, "roundReview", now, REVIEW_SECONDS);
   addLog(state, `第 ${state.round} 轮行情结算完毕，${REVIEW_SECONDS} 秒后进入下一轮。`, now);
+  present(state, { kind: "round-review", priority: 5, text: `第 ${state.round} 轮收盘，${REVIEW_SECONDS} 秒后进入下一轮`, round: state.round }, now, sceneId);
 }
 
-function finishGame(state, now) {
+function finishGame(state, now, sceneId = null) {
   const bonuses = Object.fromEntries(state.players.map((player) => [player.id, 0]));
   for (const company of COMPANIES) {
     const counts = state.players.map((player) => ({ player, shares: sharesHeld(player, company.id) }));
@@ -410,6 +454,7 @@ function finishGame(state, now) {
   state.winnerIds = state.finalScores.filter((score) => score.total === best).map((score) => score.playerId);
   setPhase(state, "ended", now);
   addLog(state, `${state.winnerIds.map((id) => playerById(state, id).name).join("、")} 以最高净资产赢得本局。`, now);
+  present(state, { kind: "game-result", priority: 5, text: `${state.winnerIds.map((id) => playerById(state, id).name).join("、")} 以最高净资产赢得本局`, winnerIds: [...state.winnerIds] }, now, sceneId);
 }
 
 function beginGame(state, now, random) {
@@ -424,7 +469,7 @@ function beginGame(state, now, random) {
 }
 
 export function createLobby({ capacity, host }) {
-  const state = { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], logs: [], logSequence: 0 };
+  const state = { stateVersion: STATE_VERSION, phase: "lobby", capacity: assertCapacity(capacity), players: [makePlayer({ ...host, isHost: true })], logs: [], logSequence: 0, presentationEvents: [], presentationSequence: 0, presentationSceneSequence: 0 };
   resetToLobby(state); return state;
 }
 
@@ -512,7 +557,9 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
   } else if (state.phase === "dividend") {
     submitDividend(state, actor, { normal: 0, split: 0 }, now, random);
   } else return false;
-  addLog(state, `${actor.name} 操作超时，服务器执行了默认选择。`, now); return true;
+  addLog(state, `${actor.name} 操作超时，服务器执行了默认选择。`, now);
+  present(state, { kind: "timeout-default", priority: 2, text: `${actor.name} 操作超时，服务器完成默认选择`, actorId: actor.id }, now, state.presentationEvents.at(-1)?.sceneId || null);
+  return true;
 }
 
 export function getDeadline(state) { return Number(state.deadline) || 0; }
@@ -557,7 +604,7 @@ function publicView(state, viewer = null) {
     players: state.players.map((player) => playerView(player, viewer?.id || null, state.phase === "ended")),
     supplyHand: viewer ? viewer.supplyHand.map(clone) : [],
     finalScores: state.phase === "ended" ? state.finalScores.map(clone) : [], winnerIds: [...state.winnerIds],
-    logs: state.logs.map(clone), permissions: permissionsFor(state, viewer)
+    logs: state.logs.map(clone), presentationEvents: state.presentationEvents.map(clone), permissions: permissionsFor(state, viewer)
   };
 }
 
@@ -566,6 +613,8 @@ export function buildSpectatorView(state) { return publicView(state, null); }
 
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game17 state");
+  if (!Number.isInteger(state.presentationSceneSequence) || state.presentationSceneSequence < 0) throw new Error("Invalid game17 presentation scene sequence");
+  validatePresentationState(state);
   if (state.phase === "lobby") return true;
   if (state.players.length < MIN_PLAYERS || state.players.length > MAX_PLAYERS) throw new Error("Invalid player count");
   if (Object.values(state.stockPrices).some((price) => !Number.isInteger(price) || price < 1 || price > 10)) throw new Error("Invalid stock price");
@@ -583,5 +632,8 @@ export function validateState(state) {
 export function serializeState(state) { validateState(state); return clone(state); }
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game17 state version: ${serializedState?.stateVersion}`);
-  const state = clone(serializedState); validateState(state); return state;
+  const state = clone(serializedState); normalizePresentationState(state);
+  const latestScene = state.presentationEvents.reduce((maximum, event) => { const match = /^stockpile_scene_(\d+)$/.exec(String(event?.sceneId || "")); return Math.max(maximum, Number(match?.[1]) || 0); }, 0);
+  state.presentationSceneSequence = Math.max(Number(state.presentationSceneSequence) || 0, latestScene);
+  validateState(state); return state;
 }

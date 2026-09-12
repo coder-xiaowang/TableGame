@@ -128,3 +128,42 @@ test("拆股牌可卖一股转回普通区，分红可以只公开部分持股",
   applyAction(state, actor.id, { type: "submitDividend", normal: 1, split: 0 }, { now: 4200, random });
   assert.equal(actor.cash, beforeDividend + 2000); assert.ok(state.logs.some((entry) => entry.text.includes("公开 1 股"))); assert.equal(validateState(state), true);
 });
+
+test("市场供给演出公开落点但不泄露暗牌内容", () => {
+  const state = makeGame(3, rng(88)); const actor = currentPlayerForTest(state);
+  const [faceUp, faceDown] = actor.supplyHand; const [upPile, downPile] = [state.stockpiles[0], state.stockpiles.at(-1)];
+  applyAction(state, actor.id, { type: "placeSupply", faceUpCardId: faceUp.id, faceDownCardId: faceDown.id, faceUpPileId: upPile.id, faceDownPileId: downPile.id }, { now: 3000, random: rng(2) });
+  const event = state.presentationEvents.findLast((item) => item.kind === "supply-place");
+  assert.equal(event.faceUpPileId, upPile.id); assert.equal(event.faceDownPileId, downPile.id);
+  assert.equal("faceDownCardId" in event, false); assert.equal("faceDownLabel" in event, false);
+  assert.equal(JSON.stringify(buildSpectatorView(state).presentationEvents).includes(faceDown.id), false);
+});
+
+test("报价与下一位行动提示按同一市场场景发布", () => {
+  const random = rng(91); const state = makeGame(3, random);
+  while (state.phase === "supply") advance(state, random, state.deadline - 1);
+  const actorId = state.currentActorId; applyAction(state, actorId, { type: "placeBid", ...firstLegalBid(state) }, { now: 7000, random });
+  const bid = state.presentationEvents.findLast((event) => event.kind === "bid");
+  const next = state.presentationEvents.findLast((event) => event.kind === "bid-turn");
+  assert.equal(bid.sceneId, next.sceneId); assert.equal(bid.actorId, actorId);
+});
+
+test("行情事件只在公开后携带公司、幅度和结果价格", () => {
+  const random = rng(92); const state = makeGame(3, random); const actor = state.players[0]; const companyId = COMPANIES[0].id;
+  const actionIndex = state.marketDeck.findIndex((card) => card.kind === "action"); const [actionCard] = state.marketDeck.splice(actionIndex, 1);
+  actor.actionCards = [actionCard]; state.actionQueue = [{ ownerId: actor.id, cardId: actionCard.id, actionType: actionCard.actionType }]; state.phase = "marketAction"; state.currentActorId = actor.id;
+  applyAction(state, actor.id, { type: "playMarketAction", companyId }, { now: 8000, random });
+  const action = state.presentationEvents.findLast((event) => event.kind === "market-action");
+  const movement = state.presentationEvents.findLast((event) => event.kind === "price-move");
+  assert.equal(action.sceneId, movement.sceneId); assert.equal(movement.companyId, companyId); assert.equal(movement.price, state.stockPrices[companyId]);
+  assert.equal("privateInformation" in movement, false);
+});
+
+test("旧房间快照恢复时补齐演出字段", () => {
+  const state = makeGame(3, rng(93)); const legacy = serializeState(state);
+  delete legacy.presentationEvents; delete legacy.presentationSequence; delete legacy.presentationSceneSequence;
+  const restored = restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []); assert.equal(restored.presentationSequence, 0); assert.equal(restored.presentationSceneSequence, 0);
+});
+
+function currentPlayerForTest(state) { return state.players.find((player) => player.id === state.currentActorId); }

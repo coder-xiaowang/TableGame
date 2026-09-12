@@ -17,6 +17,10 @@ SPECTATORS_ENABLED=1
 SPECTATOR_LIMIT=10
 ```
 
+## 演出层
+
+供给入场、公开竞价、股票堆交割、行动牌、行情揭晓、涨跌/拆股/破产、卖出和分红都由服务端生成公开演出事件。暗牌内容、私人内幕和具体持仓不会写入事件。客户端按服务器场景分组播放并在快速结算时自动压缩队列，刷新或重连不会补播历史。详细设计与验收边界见 [PRESENTATION_MIGRATION.md](PRESENTATION_MIGRATION.md)。
+
 ## 测试
 
 ```bash

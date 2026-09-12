@@ -1,7 +1,7 @@
 "use strict";
 
 import {
-  bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
+  bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown, createPresentationTimeline,
   createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
@@ -20,17 +20,18 @@ const E = Object.fromEntries([
   "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect",
   "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList",
   "startGameButton", "restartGameButton", "endGameButton", "notice", "roundNumber", "roundTotal", "deckCount", "stockTicker", "informationPanel", "stockpiles",
-  "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "privateZone", "myCash", "myInformation", "myPortfolio", "toggleLogButton", "logList"
+  "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "privateZone", "myCash", "myInformation", "myPortfolio", "toggleLogButton", "logList",
+  "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
 
-let mode = "host"; let view = null; let spectatorUi = null;
+let mode = "host"; let view = null; let spectatorUi = null; let presentation = null;
 const sessions = createSessionStore({ gameId: "stockpile" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
 const room = createAuthoritativeRoomClient({
   protocolVersion: PROTOCOL_VERSION, sessionStore: sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
-    onView(nextView) { view = nextView; enterRoom(); render(); },
+    onView(nextView) { view = nextView; enterRoom(); render(); presentation?.sync(nextView.presentationEvents); },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); }, onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
 });
@@ -66,14 +67,53 @@ async function kickPlayer(playerId) {
   try { await room.kick(playerId); } catch (error) { alert(error.message); }
 }
 
+const playerAnchor = (id) => id ? E.players.querySelector(`[data-player-id="${CSS.escape(String(id))}"]`) : null;
+const pileAnchor = (id) => id ? E.stockpiles.querySelector(`[data-pile-id="${CSS.escape(String(id))}"]`) : null;
+const companyAnchor = (id) => id ? E.stockTicker.querySelector(`[data-company-id="${CSS.escape(String(id))}"]`) : null;
+function presentationLabel(kind) {
+  return ({ "round-start": "新一轮开市", "supply-turn": "配置供给", "supply-place": "供给入场", "bidding-start": "公开竞价", "bid-turn": "等待报价", bid: "最新报价", "stockpiles-resolved": "交易交割", "market-action-turn": "市场行动", "market-action": "干预行情", "selling-start": "卖出阶段", "sell-turn": "等待卖出", sale: "成交回报", "information-reveal-start": "内幕揭晓", "information-reveal": "行情公开", "price-move": "股价异动", "dividend-turn": "分红申报", dividend: "分红到账", "round-review": "本轮收盘", "game-result": "最终收盘", "timeout-default": "系统托管" })[kind] || "交易动态";
+}
+function eventSource(event) {
+  if (["round-start", "bidding-start", "stockpiles-resolved", "selling-start", "information-reveal-start", "round-review", "game-result"].includes(event.kind)) return document.querySelector(".market-head");
+  if (event.kind === "information-reveal") return playerAnchor(event.ownerId) || E.informationPanel;
+  if (["price-move", "dividend", "dividend-turn"].includes(event.kind)) return companyAnchor(event.companyId);
+  return playerAnchor(event.actorId) || document.querySelector(".market-head");
+}
+function eventTarget(event) {
+  if (["supply-place", "bid"].includes(event.kind)) return pileAnchor(event.pileId || event.faceUpPileId);
+  if (["market-action", "price-move", "information-reveal"].includes(event.kind)) return companyAnchor(event.companyId);
+  if (["dividend", "dividend-turn"].includes(event.kind)) return playerAnchor(event.actorId);
+  if (event.kind === "stockpiles-resolved") return playerAnchor(event.awards?.[0]?.playerId) || E.players;
+  if (event.kind === "sale") return companyAnchor(event.companyIds?.[0]) || playerAnchor(event.actorId);
+  return playerAnchor(event.targetId || event.actorId) || document.querySelector(".market-head");
+}
+function playPresentationObject(event) {
+  const source = eventSource(event), target = eventTarget(event);
+  const extras = [
+    ...(event.awards || []).flatMap((award) => [pileAnchor(award.pileId), playerAnchor(award.playerId)]),
+    ...(event.companyIds || []).map(companyAnchor), pileAnchor(event.faceDownPileId), playerAnchor(event.targetId)
+  ].filter(Boolean);
+  const highlighted = [...new Set([source, target, ...extras].filter(Boolean))];
+  highlighted.forEach((element) => element.classList.add("presentation-focus"));
+  if (event.kind === "price-move") target?.classList.add(event.amount > 0 ? "presentation-rise" : "presentation-fall");
+  let token = null;
+  if (source && target && source !== target) {
+    const stage = document.querySelector(".game-area").getBoundingClientRect(), from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
+    token = document.createElement("span"); token.className = "presentation-token";
+    token.textContent = ({ "supply-place": "入场", bid: money(event.amount), "stockpiles-resolved": "成交", "market-action": event.actionType === "boom" ? "+2" : "−2", "information-reveal": event.forecastLabel, "price-move": `${event.amount > 0 ? "+" : ""}${event.amount}`, sale: money(event.proceeds), dividend: money(event.payout), "timeout-default": "托管" })[event.kind] || "◆";
+    token.style.setProperty("--from-x", `${from.left + from.width / 2 - stage.left}px`); token.style.setProperty("--from-y", `${from.top + from.height / 2 - stage.top}px`); token.style.setProperty("--to-x", `${to.left + to.width / 2 - stage.left}px`); token.style.setProperty("--to-y", `${to.top + to.height / 2 - stage.top}px`); E.presentationEffects.append(token);
+  }
+  return () => { highlighted.forEach((element) => element.classList.remove("presentation-focus", "presentation-rise", "presentation-fall")); token?.remove(); };
+}
+
 function infoCard(pair, label) {
   if (!pair) return ""; const item = company(pair.companyId);
-  return `<article class="info-card" style="--company:${item.color}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b><strong>${escapeHtml(forecastLabel(pair.forecastId))}</strong></article>`;
+  return `<article class="info-card" data-info-company="${escapeHtml(item.id)}" style="--company:${item.color}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.name)}</b><strong>${escapeHtml(forecastLabel(pair.forecastId))}</strong></article>`;
 }
 
 function renderMarket() {
   E.roundNumber.textContent = String(view.round); E.roundTotal.textContent = String(view.totalRounds); E.deckCount.textContent = String(view.deckCount);
-  E.stockTicker.innerHTML = COMPANIES.map((item) => `<article style="--company:${item.color}"><span>${escapeHtml(item.short)}</span><b>$${view.stockPrices[item.id]}</b><div class="price-track"><i style="width:${view.stockPrices[item.id] * 10}%"></i></div></article>`).join("");
+  E.stockTicker.innerHTML = COMPANIES.map((item) => `<article data-company-id="${escapeHtml(item.id)}" style="--company:${item.color}"><span>${escapeHtml(item.short)}</span><b>$${view.stockPrices[item.id]}</b><div class="price-track"><i style="width:${view.stockPrices[item.id] * 10}%"></i></div></article>`).join("");
   const revealedIds = new Set(view.revealedInformation.map((pair) => pair.id));
   E.informationPanel.innerHTML = [
     view.publicInformation && !revealedIds.has(view.publicInformation.id) ? infoCard(view.publicInformation, "公开内幕") : "",
@@ -90,12 +130,12 @@ function marketCard(card) {
 function renderStockpiles() {
   E.stockpiles.innerHTML = view.stockpiles.map((pile, index) => {
     const bid = view.bidTokens.find((token) => token.pileId === pile.id);
-    return `<article class="stockpile ${view.phase === "bidding" && !bid ? "open" : ""}"><header><b>股票堆 ${index + 1}</b><span>${bid ? `${escapeHtml(nameOf(bid.ownerId))} · ${money(bid.amount)}` : "尚无报价"}</span></header><div class="pile-cards">${pile.cards.map(marketCard).join("") || '<span class="empty-pile">已被取得</span>'}</div></article>`;
+    return `<article data-pile-id="${escapeHtml(pile.id)}" class="stockpile ${view.phase === "bidding" && !bid ? "open" : ""}"><header><b>股票堆 ${index + 1}</b><span>${bid ? `${escapeHtml(nameOf(bid.ownerId))} · ${money(bid.amount)}` : "尚无报价"}</span></header><div class="pile-cards">${pile.cards.map(marketCard).join("") || '<span class="empty-pile">已被取得</span>'}</div></article>`;
   }).join("");
 }
 
 function renderPlayers() {
-  E.players.innerHTML = view.players.map((player) => `<article class="player-row ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId ? "current" : ""} ${!player.connected ? "offline" : ""}">
+  E.players.innerHTML = view.players.map((player) => `<article data-player-id="${escapeHtml(player.id)}" class="player-row ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId ? "current" : ""} ${!player.connected ? "offline" : ""}">
     <div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}${player.id === view.firstPlayerId ? " · 起始玩家" : ""}</small></div>
     <strong>${money(player.cash)}</strong><span>普通 ${player.portfolioCount} · 拆股 ${player.splitPortfolioCount}</span><span class="debt">${player.debts.length ? `欠费 ${player.debts.map(money).join("+")}` : "无欠费"}</span>
     ${view.permissions.canKick && !player.isHost ? `<button class="small" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</article>`).join("");
@@ -212,4 +252,5 @@ async function init() {
   E.endGameButton.onclick = () => { if (confirm("确定结束当前牌局并返回大厅吗？")) submit({ type: "end" }); }; E.toggleLogButton.onclick = () => { const collapsed = E.logList.classList.toggle("collapsed"); E.toggleLogButton.textContent = collapsed ? "展开" : "收起"; };
   selectMode("host"); try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* 创建或加入时显示错误 */ }
 }
+presentation = createPresentationTimeline({ container: document.querySelector(".game-area"), trailPath: E.presentationTrail, announcement: E.presentationAnnouncement, labelElement: E.presentationLabel, textElement: E.presentationText, effectsElement: E.presentationEffects, resolveSource: eventSource, resolveTarget: eventTarget, labelFor: (event) => presentationLabel(event.kind), beforePlay: playPresentationObject, durationMs: 1350, reducedDurationMs: 540, maxQueue: 18, sceneKey: (event) => event.sceneId || event.id, priorityFor: (event) => Number(event.priority) || 0, catchUpThreshold: 2, severeBacklogThreshold: 5, catchUpDurationMs: 620, severeDurationMs: 320, urgentPriority: 4, retainPriority: 3 });
 init();
