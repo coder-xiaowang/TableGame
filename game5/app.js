@@ -5,6 +5,7 @@ import {
   createPresentationTimeline,createSessionStore,createSpectatorUi,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
 } from "/shared/client/index.js";
 import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
+import {composePresentationText} from "./presentation.mjs";
 
 const PROTOCOL_VERSION=3;
 const $=(id)=>document.getElementById(id);
@@ -165,12 +166,6 @@ function presentationLabel(kind){
     "deck-recycled":"重新洗牌","game-won":"本局胜利"
   })[kind]||"牌桌事件";
 }
-function presentationText(event){
-  const events=event.sceneEvents||[event];
-  const played=events.find((item)=>item.kind==="card-play");
-  if(played&&played!==event&&event.text)return `${played.text}；${event.text}`;
-  return event.text||played?.text||"牌桌状态已经更新";
-}
 function playPresentationObject(event){
   const source=presentationSource(event);const target=presentationTarget(event);
   source?.classList.add("presentation-source");target?.classList.add("presentation-target");
@@ -193,7 +188,7 @@ presentation=createPresentationTimeline({
   container:E.unoStage,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,
   labelElement:E.presentationLabel,textElement:E.presentationText,effectsElement:E.presentationEffects,
   resolveSource:presentationSource,resolveTarget:presentationTarget,labelFor:(event)=>presentationLabel(event.kind),
-  textFor:presentationText,beforePlay:playPresentationObject,durationMs:1000,reducedDurationMs:450,maxQueue:18,
+  textFor:composePresentationText,beforePlay:playPresentationObject,durationMs:1000,reducedDurationMs:450,maxQueue:18,
   sceneKey:(event)=>event.sceneId||event.id,priorityFor:(event)=>Number(event.priority)||0,
   catchUpThreshold:2,severeBacklogThreshold:5,catchUpDurationMs:520,severeDurationMs:280,
   urgentPriority:4,retainPriority:3
