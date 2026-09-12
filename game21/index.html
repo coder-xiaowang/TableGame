@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-theme="spyfall-field-network">
 <main class="shell">
   <header id="hero" class="hero">
     <div class="hero-title"><p class="eyebrow">CLASSIFIED · SERVER AUTHORITY</p><h1>间谍危机 <span>SPYFALL</span></h1><p>所有人都知道身在何处——除了一名潜伏者。</p></div>
@@ -49,9 +49,58 @@
     </section>
   </section>
 
-  <section id="roomPanel" class="room-layout hidden">
-    <aside class="sidebar">
-      <details class="panel rule-card">
+  <section id="roomPanel" class="room-layout mission-console hidden">
+    <section class="mission-status-strip" aria-label="行动状态">
+      <div id="notice" class="notice">等待玩家加入。</div>
+      <section class="panel score-card compact-score">
+        <div><p class="eyebrow">AGENT RANKING</p><h2>行动组得分</h2></div><div id="scoreboard" class="scoreboard"></div>
+      </section>
+    </section>
+
+    <section class="operation-grid">
+      <aside class="location-vault" data-ui-role="location-intelligence">
+        <details class="panel locations-card" open>
+          <summary><span><span class="eyebrow">LOCATION ARCHIVE</span><b>30份地点档案</b></span><span>收起</span></summary>
+          <p class="vault-hint">所有行动地点都在这里。普通特工用它排除异常，间谍用它寻找线索。</p>
+          <div id="locationList" class="location-list"></div>
+        </details>
+      </aside>
+
+      <section class="game-area network-column">
+        <section id="intelligenceTable" class="intelligence-table field-network" data-ui-role="core-table">
+          <div class="map-grid" aria-hidden="true"></div>
+          <div class="table-title"><p class="eyebrow">LIVE FIELD NETWORK</p><h2 id="phaseTitle">等待行动开始</h2><span>第 <b id="roundNumber">0</b> / 5 轮</span></div>
+          <svg id="networkWires" class="network-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div id="players" class="players" aria-label="特工网络节点"></div>
+          <section class="public-focus network-core" aria-live="polite"><span id="focusLabel">CASE STATUS</span><strong id="focusText">地点尚未确定</strong><small id="focusHint">问答顺序和公开表决会显示在这里</small></section>
+          <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+            <svg class="presentation-trail-layer" aria-hidden="true">
+              <defs>
+                <marker id="spyfallArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                </marker>
+              </defs>
+              <path id="presentationTrail" class="presentation-trail" marker-end="url(#spyfallArrow)"></path>
+            </svg>
+            <div id="presentationAnnouncement" class="presentation-announcement">
+              <span id="presentationLabel"></span>
+              <strong id="presentationText"></strong>
+            </div>
+          </div>
+        </section>
+
+        <section id="controlDock" class="panel control-dock field-terminal" data-role="player">
+          <div class="action-zone">
+            <div class="action-head"><div><p class="eyebrow">FIELD COMMAND</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+            <p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div>
+          </div>
+          <section id="secretPanel" class="secret-panel private-zone hidden"><span>你的加密任务卡</span><strong id="secretRole">—</strong><p id="secretLocation"></p><small id="secretLocationRole"></small></section>
+        </section>
+      </section>
+    </section>
+
+    <section class="support-console" aria-label="行动辅助信息">
+      <details class="panel rule-card" data-ui-role="rules-entry">
         <summary><span><span class="eyebrow">FIELD MANUAL</span><b>详细规则</b></span><span>展开</span></summary>
         <div class="rule-details">
           <h3>身份与目标</h3><p>每轮只有一名间谍。普通特工知道地点和自己的地点身份，要找出间谍；间谍不知道地点，要隐藏自己或主动猜中地点。</p>
@@ -64,55 +113,15 @@
         </div>
       </details>
 
-      <details class="panel locations-card">
-        <summary><span><span class="eyebrow">LOCATION INDEX</span><b>30个候选地点</b></span><span>展开</span></summary>
-        <div id="locationList" class="location-list"></div>
-      </details>
-
-      <section class="panel score-card">
-        <p class="eyebrow">SCOREBOARD</p><h2>行动组得分</h2><div id="scoreboard" class="scoreboard"></div>
-      </section>
-
-      <section class="panel log-card">
+      <section class="panel log-card" data-ui-role="game-log">
         <div class="section-head"><div><p class="eyebrow">PUBLIC RECORD</p><h2>公开记录</h2></div><button id="toggleLogButton" class="small" type="button">收起</button></div>
         <div id="logList" class="log"></div>
       </section>
 
-      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" data-ui-role="spectators" open>
         <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
-    </aside>
-
-    <section class="game-area">
-      <div id="notice" class="notice">等待玩家加入。</div>
-      <section id="intelligenceTable" class="intelligence-table">
-        <div class="table-title"><p class="eyebrow">ACTIVE SURVEILLANCE</p><h2 id="phaseTitle">等待行动开始</h2><span>第 <b id="roundNumber">0</b> / 5 轮</span></div>
-        <div id="players" class="players"></div>
-        <section class="public-focus" aria-live="polite"><span id="focusLabel">CASE STATUS</span><strong id="focusText">地点尚未确定</strong><small id="focusHint">问答顺序和公开表决会显示在这里</small></section>
-        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
-          <svg class="presentation-trail-layer" aria-hidden="true">
-            <defs>
-              <marker id="spyfallArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z"></path>
-              </marker>
-            </defs>
-            <path id="presentationTrail" class="presentation-trail" marker-end="url(#spyfallArrow)"></path>
-          </svg>
-          <div id="presentationAnnouncement" class="presentation-announcement">
-            <span id="presentationLabel"></span>
-            <strong id="presentationText"></strong>
-          </div>
-        </div>
-      </section>
-
-      <section id="controlDock" class="panel control-dock" data-role="player">
-        <div class="action-zone">
-          <div class="action-head"><div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
-          <p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <section id="secretPanel" class="secret-panel private-zone hidden"><span>你的秘密档案</span><strong id="secretRole">—</strong><p id="secretLocation"></p><small id="secretLocationRole"></small></section>
-      </section>
     </section>
   </section>
 </main>
