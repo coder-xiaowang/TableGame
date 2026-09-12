@@ -865,3 +865,78 @@ select {
     .table-console .action-panel,
     .table-console .hand-panel { padding: 11px; }
 }
+
+/* Server-authored UNO presentation layer. */
+.main { position: relative; isolation: isolate; }
+.presentation-effects {
+    position: absolute;
+    inset: 0;
+    z-index: 24;
+    overflow: hidden;
+    border-radius: 13px;
+    pointer-events: none
+}
+.presentation-trail-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible }
+.presentation-trail {
+    fill: none;
+    stroke: #fff18a;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 12 10;
+    opacity: 0;
+    filter: drop-shadow(0 0 7px #7e2acb)
+}
+#unoTrailArrow path { fill: #fff18a }
+.presentation-trail.active { opacity: 1; animation: uno-trail .55s linear infinite }
+.presentation-announcement {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    display: grid;
+    width: min(430px,calc(100% - 28px));
+    padding: 10px 16px;
+    border: 2px solid #f5dc62;
+    border-radius: 14px;
+    background: linear-gradient(135deg,rgba(40,24,51,.95),rgba(91,35,125,.94));
+    color: #fff;
+    box-shadow: 0 13px 38px #0008,0 0 26px #b052e477;
+    opacity: 0;
+    transform: translate(-50%,-10px) scale(.95);
+    text-align: center
+}
+.presentation-announcement span { color: #ffe76f; font-size: 10px; font-weight: 900; letter-spacing: .15em }
+.presentation-announcement b { margin-top: 3px; font-size: clamp(.84rem,1.5vw,1.08rem) }
+.presentation-announcement.active { animation: uno-announcement 1.5s ease both }
+.presentation-token {
+    position: absolute;
+    top: 57%;
+    left: 50%;
+    max-width: min(460px,calc(100% - 34px));
+    padding: 8px 13px;
+    border: 2px solid #fff3a1;
+    border-radius: 999px;
+    background: linear-gradient(135deg,#df3038,#6730a0 72%);
+    color: #fff;
+    box-shadow: 0 10px 25px #0008;
+    font-weight: 900;
+    animation: uno-token 1.5s ease both
+}
+.presentation-token.private { border-style: dashed; background: linear-gradient(135deg,#266cb7,#643298) }
+.player.presentation-source,.draw-pile.presentation-source,.discard.presentation-source { box-shadow: 0 0 0 4px #ffe86c99,0 0 26px #a64de4cc }
+.player.presentation-target,.draw-pile.presentation-target,.discard.presentation-target,.hand-panel.presentation-target { animation: uno-target .45s ease-in-out 3 alternate }
+.presentation-reverse .table { animation: uno-reverse .6s ease both }
+@keyframes uno-trail { to { stroke-dashoffset: -22 } }
+@keyframes uno-announcement { 0%,100% { opacity: 0; transform: translate(-50%,-10px) scale(.95) } 14%,82% { opacity: 1; transform: translate(-50%,0) scale(1) } }
+@keyframes uno-token { 0% { opacity: 0; transform: translate(-50%,25px) scale(.72) rotate(-5deg) } 18%,76% { opacity: 1; transform: translate(-50%,0) scale(1) rotate(0) } 100% { opacity: 0; transform: translate(-50%,-18px) scale(.92) } }
+@keyframes uno-target { to { box-shadow: 0 0 0 5px #ffe66fbb,0 0 30px #8b3ccddd; transform: translateY(-3px) } }
+@keyframes uno-reverse { 45% { filter: hue-rotate(35deg) brightness(1.08) } }
+@media(max-width:720px) {
+    .presentation-announcement { top: 34%; padding: 8px 10px }
+    .presentation-token { top: 48% }
+    .presentation-trail { stroke-width: 3 }
+}
+@media(prefers-reduced-motion:reduce) {
+    .presentation-trail.active { animation: none }
+    .presentation-announcement.active,.presentation-token { animation-duration: .65s }
+    .player.presentation-target,.draw-pile.presentation-target,.discard.presentation-target,.hand-panel.presentation-target,.presentation-reverse .table { animation: none }
+}

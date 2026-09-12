@@ -2,6 +2,7 @@ import {
   ACTION_SECONDS, COLORS, INITIAL_HAND_SIZE, MAX_PLAYERS, MIN_PLAYERS,
   createDeck, describeCard, isDrawCard, isPlayable, shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
@@ -44,10 +45,38 @@ function addLog(state,text,now) {
   state.logs.unshift({id:`log_${state.logSequence+=1}`,text,at:now});
   if (state.logs.length>80) state.logs.length=80;
 }
+function publicEvent(state,event,now) {
+  return appendPresentationEvent(state,event,{
+    now,eventsKey:"presentationEvents",sequenceKey:"presentationSequence",idPrefix:"uno_event",limit:60
+  });
+}
+function privateEvent(state,playerId,event,now) {
+  const id=String(playerId||"");
+  if (!id) return null;
+  if (!state.privatePresentationEvents||typeof state.privatePresentationEvents!=="object") state.privatePresentationEvents={};
+  const envelope={events:Array.isArray(state.privatePresentationEvents[id])?state.privatePresentationEvents[id]:[],sequence:Number(state.presentationSequence)||0};
+  const stored=appendPresentationEvent(envelope,{...event,private:true},{
+    now,eventsKey:"events",sequenceKey:"sequence",idPrefix:"uno_private",limit:30
+  });
+  state.privatePresentationEvents[id]=envelope.events;
+  state.presentationSequence=envelope.sequence;
+  return stored;
+}
+function publicCard(card) {
+  return card?{id:card.id,color:card.color,type:card.type,value:card.value}:null;
+}
+function privateDrawEvent(state,player,cards,reason,now) {
+  if (!cards.length) return;
+  privateEvent(state,player.id,{
+    kind:"private-draw",actorId:player.id,reason,cards:cards.map(publicCard),count:cards.length,
+    text:`你摸到了 ${cards.map(describeCard).join("、")}`
+  },now);
+}
 function resetToLobby(state) {
   state.phase="lobby"; state.deck=[]; state.discard=[]; state.currentColor=null; state.currentIndex=0; state.direction=1;
   state.pendingDraw=0; state.pendingWild=null; state.pendingWinnerId=null; state.drawnCardId=null;
   state.unoVulnerableId=null; state.winnerId=null; state.deadline=0; state.logs=[]; state.logSequence=0;
+  state.presentationEvents=[]; state.privatePresentationEvents={};
   for (const player of state.players) { player.hand=[]; player.unoCalled=false; }
 }
 function topCard(state) { return state.discard.at(-1)||null; }
@@ -59,6 +88,7 @@ function recycle(state,random,now) {
   const top=state.discard.pop();
   state.deck=shuffle(state.discard,random);
   state.discard=[top];
+  publicEvent(state,{kind:"deck-recycled",text:"弃牌堆重新洗成摸牌堆"},now);
   addLog(state,"弃牌堆已重新洗成摸牌堆",now);
 }
 function drawRaw(state,random,now) {
@@ -66,7 +96,9 @@ function drawRaw(state,random,now) {
   return state.deck.pop();
 }
 function drawMany(state,player,count,random,now) {
-  for (let index=0;index<count;index+=1) player.hand.push(drawRaw(state,random,now));
+  const cards=[];
+  for (let index=0;index<count;index+=1) { const card=drawRaw(state,random,now); player.hand.push(card); cards.push(card); }
+  return cards;
 }
 function expireUno(state,now) {
   if (!state.unoVulnerableId) return;
@@ -78,6 +110,8 @@ function beginTurn(state,now) {
   state.drawnCardId=null;
   state.players.forEach((player,index)=>{if(index!==state.currentIndex) player.unoCalled=false;});
   state.deadline=now+ACTION_SECONDS*1000;
+  const player=currentPlayer(state);
+  publicEvent(state,{kind:"turn-start",actorId:player?.id||null,pendingDraw:state.pendingDraw,challengeAllowed:Boolean(state.pendingWild),text:`轮到 ${player?.name||"玩家"} 行动`},now);
 }
 function clearPenalty(state) {
   state.pendingDraw=0; state.pendingWild=null; state.pendingWinnerId=null;
@@ -85,6 +119,7 @@ function clearPenalty(state) {
 function finish(state,playerId,now) {
   state.phase="ended"; state.winnerId=playerId; state.pendingWinnerId=null; state.deadline=0;
   state.drawnCardId=null; state.unoVulnerableId=null;
+  publicEvent(state,{kind:"game-won",actorId:playerId,text:`${playerById(state,playerId)?.name||"玩家"} 打完手牌，获得胜利`},now);
   addLog(state,`${playerById(state,playerId)?.name||"玩家"} 打完所有手牌，获得胜利！`,now);
 }
 function advance(state,now) {
@@ -95,7 +130,9 @@ function acceptPenalty(state,player,{now,random,reason="接受罚牌"}) {
   if (state.pendingDraw<=0) throw new GameRuleError("no_pending_penalty","当前没有需要接受的罚牌。",409);
   expireUno(state,now);
   const count=state.pendingDraw;
-  drawMany(state,player,count,random,now);
+  const cards=drawMany(state,player,count,random,now);
+  publicEvent(state,{kind:"penalty-accepted",actorId:player.id,targetId:player.id,count,reason,text:`${player.name} 接受并摸取 ${count} 张罚牌`},now);
+  privateDrawEvent(state,player,cards,"penalty",now);
   addLog(state,reason==="超时"?`${player.name} 超时，摸取 ${count} 张罚牌`:`${player.name} 接受罚牌，摸了 ${count} 张`,now);
   const pendingWinnerId=state.pendingWinnerId;
   clearPenalty(state);
@@ -109,32 +146,52 @@ function playCard(state,player,cardId,chosenColor,{now,random}) {
   if ((card.type==="wild"||card.type==="wild4")&&!COLORS.includes(chosenColor)) throw new GameRuleError("color_required","万能牌必须选择一种颜色。");
   expireUno(state,now);
   const oldColor=state.currentColor;
+  const originIndex=state.currentIndex;
+  const affectedIndex=nextIndex(state,originIndex);
+  const affectedPlayer=state.players[affectedIndex]||null;
   const wasLegal=card.type!=="wild4"||!player.hand.some((other,otherIndex)=>otherIndex!==index&&other.color===oldColor);
   player.hand.splice(index,1);
   state.discard.push(card);
   state.currentColor=card.color||chosenColor;
   state.drawnCardId=null;
+  publicEvent(state,{
+    kind:"card-play",actorId:player.id,targetId:["draw2","wild4","skip"].includes(card.type)?affectedPlayer?.id||null:null,
+    card:publicCard(card),chosenColor:card.color?null:chosenColor,text:`${player.name} 打出 ${describeCard(card)}`
+  },now);
   addLog(state,`${player.name} 打出${describeCard(card)}${card.color?"":`，选择${{red:"红色",yellow:"黄色",green:"绿色",blue:"蓝色"}[chosenColor]}`}`,now);
   if (player.hand.length===1) {
     if (player.unoCalled) addLog(state,`${player.name} 已正确喊 UNO`,now);
-    else { state.unoVulnerableId=player.id; addLog(state,`${player.name} 只剩1张牌，但还没有喊 UNO`,now); }
+    else {
+      state.unoVulnerableId=player.id;
+      publicEvent(state,{kind:"uno-vulnerable",actorId:player.id,targetId:player.id,text:`${player.name} 只剩一张牌，但还没有喊 UNO`},now);
+      addLog(state,`${player.name} 只剩1张牌，但还没有喊 UNO`,now);
+    }
   }
   player.unoCalled=false;
   if (card.type==="wild4") {
     state.pendingDraw+=4;
     state.pendingWild={offenderId:player.id,wasLegal,amount:4};
     state.currentIndex=nextIndex(state,state.currentIndex);
+    publicEvent(state,{kind:"penalty-window",actorId:player.id,targetId:currentPlayer(state)?.id||null,count:state.pendingDraw,challengeAllowed:true,text:`${currentPlayer(state)?.name||"下一位玩家"} 面临累计 +${state.pendingDraw}`},now);
     if (!player.hand.length) state.pendingWinnerId=player.id;
     beginTurn(state,now);
     return;
   }
   if (!player.hand.length) { finish(state,player.id,now); return; }
   if (card.type==="draw2") {
-    state.pendingDraw+=2; state.pendingWild=null; state.currentIndex=nextIndex(state,state.currentIndex); beginTurn(state,now); return;
+    state.pendingDraw+=2; state.pendingWild=null; state.currentIndex=nextIndex(state,state.currentIndex);
+    publicEvent(state,{kind:"penalty-window",actorId:player.id,targetId:currentPlayer(state)?.id||null,count:state.pendingDraw,challengeAllowed:false,text:`${currentPlayer(state)?.name||"下一位玩家"} 面临累计 +${state.pendingDraw}`},now);
+    beginTurn(state,now); return;
   }
   state.pendingWild=null;
-  if (card.type==="skip") state.currentIndex=nextIndex(state,state.currentIndex,2);
-  else if (card.type==="reverse") { state.direction*=-1; state.currentIndex=nextIndex(state,state.currentIndex,state.players.length===2?2:1); }
+  if (card.type==="skip") {
+    state.currentIndex=nextIndex(state,state.currentIndex,2);
+    publicEvent(state,{kind:"player-skipped",actorId:player.id,targetId:affectedPlayer?.id||null,nextPlayerId:currentPlayer(state)?.id||null,text:`${affectedPlayer?.name||"下一位玩家"} 被跳过`},now);
+  }
+  else if (card.type==="reverse") {
+    state.direction*=-1; state.currentIndex=nextIndex(state,state.currentIndex,state.players.length===2?2:1);
+    publicEvent(state,{kind:"direction-reversed",actorId:player.id,targetId:currentPlayer(state)?.id||null,direction:state.direction,text:`${player.name} 反转了出牌方向`},now);
+  }
   else state.currentIndex=nextIndex(state,state.currentIndex);
   beginTurn(state,now);
 }
@@ -144,16 +201,21 @@ function challengeWild(state,player,{now,random}) {
   const info=state.pendingWild;
   const offender=playerById(state,info.offenderId);
   if (!offender) throw new GameRuleError("challenge_unavailable","上一位出牌者已经离开房间。",409);
+  publicEvent(state,{kind:"challenge-start",actorId:player.id,targetId:offender.id,text:`${player.name} 质疑 ${offender.name} 的 +4`},now);
   if (!info.wasLegal) {
-    drawMany(state,offender,4,random,now);
+    const cards=drawMany(state,offender,4,random,now);
     state.pendingDraw=Math.max(0,state.pendingDraw-info.amount);
     state.pendingWild=null; state.pendingWinnerId=null;
+    publicEvent(state,{kind:"challenge-result",actorId:player.id,targetId:offender.id,successful:true,count:4,text:`质疑成功，${offender.name} 摸 4 张`},now);
+    privateDrawEvent(state,offender,cards,"challenge-penalty",now);
     addLog(state,`${player.name} 质疑成功，${offender.name} 非法使用 +4 并摸4张`,now);
     beginTurn(state,now);
     return;
   }
   const count=state.pendingDraw+2;
-  drawMany(state,player,count,random,now);
+  const cards=drawMany(state,player,count,random,now);
+  publicEvent(state,{kind:"challenge-result",actorId:player.id,targetId:player.id,offenderId:offender.id,successful:false,count,text:`质疑失败，${player.name} 摸 ${count} 张并跳过`},now);
+  privateDrawEvent(state,player,cards,"failed-challenge",now);
   addLog(state,`${player.name} 质疑失败，摸取 ${count} 张并跳过`,now);
   const pendingWinnerId=state.pendingWinnerId;
   clearPenalty(state);
@@ -165,7 +227,9 @@ function timeoutCurrent(state,{now,random}) {
   expireUno(state,now);
   if (state.pendingDraw>0) acceptPenalty(state,player,{now,random,reason:"超时"});
   else {
-    drawMany(state,player,1,random,now);
+    const cards=drawMany(state,player,1,random,now);
+    publicEvent(state,{kind:"draw-action",actorId:player.id,targetId:player.id,count:1,reason:"timeout",text:`${player.name} 超时，自动摸 1 张`},now);
+    privateDrawEvent(state,player,cards,"timeout",now);
     addLog(state,`${player.name} 超时，自动摸1张并结束回合`,now);
     advance(state,now);
   }
@@ -173,7 +237,7 @@ function timeoutCurrent(state,{now,random}) {
 }
 
 export function createLobby({capacity,host}) {
-  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentColor:null,currentIndex:0,direction:1,pendingDraw:0,pendingWild:null,pendingWinnerId:null,drawnCardId:null,unoVulnerableId:null,winnerId:null,deadline:0,logs:[],logSequence:0};
+  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentColor:null,currentIndex:0,direction:1,pendingDraw:0,pendingWild:null,pendingWinnerId:null,drawnCardId:null,unoVulnerableId:null,winnerId:null,deadline:0,logs:[],logSequence:0,presentationEvents:[],privatePresentationEvents:{},presentationSequence:0};
 }
 export function addPlayer(state,player) {
   if (state.phase!=="lobby") throw new GameRuleError("game_started","游戏已经开始，不能中途加入。",409);
@@ -231,6 +295,8 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
     for(let count=0;count<INITIAL_HAND_SIZE;count+=1) for(const player of state.players) player.hand.push(drawRaw(state,random,now));
     const numberIndex=state.deck.findIndex((card)=>card.type==="number");
     const [first]=state.deck.splice(numberIndex,1); state.discard.push(first); state.currentColor=first.color;
+    publicEvent(state,{kind:"game-start",actorId:currentPlayer(state)?.id||null,card:publicCard(first),text:`游戏开始，首张牌是 ${describeCard(first)}`},now);
+    for (const player of state.players) privateEvent(state,player.id,{kind:"initial-hand",actorId:player.id,cards:player.hand.map(publicCard),count:player.hand.length,text:`你的起手牌：${player.hand.map(describeCard).join("、")}`},now);
     addLog(state,`游戏开始，首张牌是${describeCard(first)}`,now); beginTurn(state,now); return;
   }
   if (type==="end") {
@@ -241,27 +307,36 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
   if (type==="catchUno") {
     const offender=playerById(state,state.unoVulnerableId);
     if(!offender||offender.id===actor.id) throw new GameRuleError("catch_unavailable","当前没有可抓的 UNO。",409);
-    drawMany(state,offender,2,random,now); state.unoVulnerableId=null;
+    const cards=drawMany(state,offender,2,random,now); state.unoVulnerableId=null;
+    publicEvent(state,{kind:"uno-caught",actorId:actor.id,targetId:offender.id,count:2,text:`${actor.name} 抓到 ${offender.name} 未喊 UNO`},now);
+    privateDrawEvent(state,offender,cards,"uno-penalty",now);
     addLog(state,`${actor.name} 抓到 ${offender.name} 未喊 UNO，后者摸2张`,now); return;
   }
   const current=currentPlayer(state);
   if (!current||current.id!==actor.id) throw new GameRuleError("not_your_turn","现在还没有轮到你。",409);
   if (type==="callUno") {
     if(actor.hand.length!==2||!actor.hand.some((card)=>playable(state,card))) throw new GameRuleError("uno_unavailable","当前不能喊 UNO。",409);
-    actor.unoCalled=true; addLog(state,`${actor.name} 喊了 UNO！`,now); return;
+    actor.unoCalled=true;
+    publicEvent(state,{kind:"uno-call",actorId:actor.id,targetId:actor.id,text:`${actor.name} 喊出 UNO！`},now);
+    addLog(state,`${actor.name} 喊了 UNO！`,now); return;
   }
   if (type==="challenge") { challengeWild(state,actor,{now,random}); return; }
   if (type==="acceptPenalty") { acceptPenalty(state,actor,{now,random}); return; }
   if (type==="draw") {
     if(state.pendingDraw>0) { acceptPenalty(state,actor,{now,random}); return; }
     if(state.drawnCardId) throw new GameRuleError("already_drawn","本回合已经摸过牌。",409);
-    expireUno(state,now); const card=drawRaw(state,random,now); actor.hand.push(card); addLog(state,`${actor.name} 摸了1张牌`,now);
+    expireUno(state,now); const card=drawRaw(state,random,now); actor.hand.push(card);
+    publicEvent(state,{kind:"draw-action",actorId:actor.id,targetId:actor.id,count:1,reason:"voluntary",text:`${actor.name} 摸了 1 张牌`},now);
+    privateDrawEvent(state,actor,[card],"voluntary",now);
+    addLog(state,`${actor.name} 摸了1张牌`,now);
     if(playable(state,card)) { state.drawnCardId=card.id; state.deadline=now+ACTION_SECONDS*1000; }
     else advance(state,now); return;
   }
   if (type==="pass") {
     if(!state.drawnCardId) throw new GameRuleError("pass_unavailable","只有摸到可出的牌后才能保留并结束回合。",409);
-    expireUno(state,now); addLog(state,`${actor.name} 保留摸到的牌`,now); advance(state,now); return;
+    expireUno(state,now);
+    publicEvent(state,{kind:"draw-pass",actorId:actor.id,targetId:actor.id,text:`${actor.name} 保留摸到的牌并结束回合`},now);
+    addLog(state,`${actor.name} 保留摸到的牌`,now); advance(state,now); return;
   }
   if (type==="play") { playCard(state,actor,String(action.cardId||""),action.color,{now,random}); return; }
   throw new GameRuleError("unknown_action","无法识别该游戏操作。");
@@ -271,9 +346,13 @@ export function handleTimeout(state,{now=Date.now(),random=Math.random}={}) {
   return timeoutCurrent(state,{now,random});
 }
 export function getDeadline(state) { return state.phase==="playing"?Number(state.deadline)||0:0; }
+function presentationFor(state,viewer) {
+  const privateEvents=viewer?state.privatePresentationEvents?.[viewer.id]||[]:[];
+  return [...state.presentationEvents,...privateEvents].sort((left,right)=>left.sequence-right.sequence).map((event)=>structuredClone(event));
+}
 function buildPublicView(state,{viewer=null,playableCardIds=[],permissions}) {
   const current=currentPlayer(state); const ownTurn=state.phase==="playing"&&current?.id===viewer?.id;
-  return {selfId:viewer?.id||null,phase:state.phase,capacity:state.capacity,currentIndex:state.currentIndex,direction:state.direction,deckCount:state.deck.length,discard:topCard(state)?[{...topCard(state)}]:[],currentColor:state.currentColor,pendingDraw:state.pendingDraw,drawnCardId:ownTurn?state.drawnCardId:null,unoVulnerableId:state.unoVulnerableId,winnerId:state.winnerId,deadline:state.deadline,logs:state.logs.map((entry)=>({...entry})),playableCardIds,players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,unoCalled:player.unoCalled,hand:player.id===viewer?.id?player.hand.map((card)=>({...card})):player.hand.map(()=>null)})),permissions};
+  return {selfId:viewer?.id||null,phase:state.phase,capacity:state.capacity,currentIndex:state.currentIndex,direction:state.direction,deckCount:state.deck.length,discard:topCard(state)?[{...topCard(state)}]:[],currentColor:state.currentColor,pendingDraw:state.pendingDraw,drawnCardId:ownTurn?state.drawnCardId:null,unoVulnerableId:state.unoVulnerableId,winnerId:state.winnerId,deadline:state.deadline,logs:state.logs.map((entry)=>({...entry})),presentationEvents:presentationFor(state,viewer),playableCardIds,players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,unoCalled:player.unoCalled,hand:player.id===viewer?.id?player.hand.map((card)=>({...card})):player.hand.map(()=>null)})),permissions};
 }
 export function buildView(state,viewerId) {
   const viewer=requireActor(state,viewerId); const current=currentPlayer(state); const ownTurn=state.phase==="playing"&&current?.id===viewer.id;
@@ -283,8 +362,30 @@ export function buildView(state,viewerId) {
 export function buildSpectatorView(state) {
   return buildPublicView(state,{viewer:null,playableCardIds:[],permissions:{canManage:false,canKick:false,canSetCapacity:false,canStart:false,canEnd:false,canDraw:false,canPass:false,canAcceptPenalty:false,canChallenge:false,canCatchUno:false,canCallUno:false}});
 }
-export function serializeState(state) { return structuredClone(state); }
+export function validateState(state) {
+  if (!state||!Array.isArray(state.players)||!Array.isArray(state.deck)||!Array.isArray(state.discard)) throw new Error("Invalid game5 state");
+  try { validatePresentationState(state); }
+  catch { throw new Error("Invalid game5 public presentation events"); }
+  if (!state.privatePresentationEvents||typeof state.privatePresentationEvents!=="object"||Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game5 private presentation events");
+  const sequences=new Set(state.presentationEvents.map((event)=>event.sequence));
+  for (const events of Object.values(state.privatePresentationEvents)) {
+    try { validatePresentationState({presentationEvents:events,presentationSequence:state.presentationSequence}); }
+    catch { throw new Error("Invalid game5 private presentation events"); }
+    for (const event of events) {
+      if (!event.private||sequences.has(event.sequence)) throw new Error("Invalid game5 private presentation event sequence");
+      sequences.add(event.sequence);
+    }
+  }
+  return true;
+}
+export function serializeState(state) { validateState(state); return structuredClone(state); }
 export function restoreState(serializedState) {
   if(serializedState?.stateVersion!==STATE_VERSION) throw new Error(`Unsupported game5 state version: ${serializedState?.stateVersion}`);
-  return structuredClone(serializedState);
+  const state=structuredClone(serializedState);
+  state.privatePresentationEvents=state.privatePresentationEvents&&typeof state.privatePresentationEvents==="object"&&!Array.isArray(state.privatePresentationEvents)?state.privatePresentationEvents:{};
+  normalizePresentationState(state);
+  const latestPrivate=Object.values(state.privatePresentationEvents).flat().reduce((maximum,event)=>Math.max(maximum,Number(event?.sequence)||0),0);
+  state.presentationSequence=Math.max(state.presentationSequence,latestPrivate);
+  validateState(state);
+  return state;
 }

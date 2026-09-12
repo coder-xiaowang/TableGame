@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput,cleanPlayerName,createAuthoritativeRoomClient,createCountdown,
-  createSessionStore,createSpectatorUi,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
+  createPresentationTimeline,createSessionStore,createSpectatorUi,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
 } from "/shared/client/index.js";
 import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
 
@@ -13,20 +13,22 @@ const E=Object.fromEntries([
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField",
   "roomCodeDisplay","rulesShortcutButton","rulesCard","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
   "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
-  "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton"
+  "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton",
+  "unoStage","tableStage","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText"
 ].map((id)=>[id,$(id)]));
 
 let mode="host";
 let view=null;
 let pendingCardId=null;
 let spectatorUi=null;
+let presentation=null;
 const sessions=createSessionStore({gameId:"uno"});
 const countdown=createCountdown({onTick(value){renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);}});
 const room=createAuthoritativeRoomClient({
   protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
   onStatus(status){renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode);},
   handlers:{
-    onView(nextView){view=nextView;enterRoom();render();},
+    onView(nextView){view=nextView;enterRoom();render();presentation?.sync(nextView.presentationEvents);},
     onKicked(){spectatorUi?.handleSessionEnded("kicked");},
     onRoomExpired(){spectatorUi?.handleSessionEnded("room_expired");}
   }
@@ -72,6 +74,7 @@ function renderPlayers(){
     <div class="mini-cards">${player.hand.slice(0,18).map(()=>'<i class="mini-card"></i>').join("")}</div>
     ${view.permissions?.canKick&&!player.isHost?`<button class="kick-player" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>`:""}
   </div>`).join("");
+  E.players.querySelectorAll(".player").forEach((player,index)=>{player.dataset.playerId=view.players[index]?.id||"";});
   E.players.querySelectorAll("[data-player-id]").forEach((button)=>button.addEventListener("click",()=>kickPlayer(button.dataset.playerId)));
 }
 function renderActions(memberRole){
@@ -137,6 +140,49 @@ function render(){
   if(memberRole==="spectator"||(pendingCardId&&!me?.hand.some((card)=>card.id===pendingCardId))){pendingCardId=null;setHidden(E.colorModal,true);}
   if(view.deadline)countdown.start(view.deadline,ACTION_SECONDS*1000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}
 }
+function playerFor(playerId){
+  if(!playerId)return null;
+  return [...E.players.querySelectorAll(".player")].find((player)=>player.dataset.playerId===String(playerId))||null;
+}
+function presentationSource(event){
+  if(["private-draw","initial-hand","game-start"].includes(event.kind))return E.drawPile;
+  if(event.kind==="deck-recycled")return E.discardPile;
+  if(["turn-start","game-won"].includes(event.kind))return E.tableStage;
+  return playerFor(event.actorId)||E.tableStage;
+}
+function presentationTarget(event){
+  if(["private-draw","initial-hand"].includes(event.kind))return E.handPanel;
+  if(["game-start","card-play"].includes(event.kind))return E.discardPile;
+  if(event.kind==="deck-recycled")return E.drawPile;
+  return playerFor(event.targetId||event.actorId)||E.tableStage;
+}
+function presentationLabel(kind){
+  return ({
+    "game-start":"UNO 开局","turn-start":"轮到行动","card-play":"打出卡牌","penalty-window":"罚牌来袭",
+    "penalty-accepted":"接受罚牌","challenge-start":"质疑 +4","challenge-result":"质疑结算","player-skipped":"跳过回合",
+    "direction-reversed":"方向反转","draw-action":"摸牌","draw-pass":"保留摸牌","private-draw":"你的摸牌",
+    "initial-hand":"领取手牌","uno-call":"UNO！","uno-vulnerable":"等待抢喊","uno-caught":"抓到 UNO",
+    "deck-recycled":"重新洗牌","game-won":"本局胜利"
+  })[kind]||"牌桌事件";
+}
+function playPresentationObject(event){
+  const source=presentationSource(event);const target=presentationTarget(event);
+  source?.classList.add("presentation-source");target?.classList.add("presentation-target");
+  E.unoStage?.classList.toggle("presentation-reverse",event.kind==="direction-reversed");
+  const token=document.createElement("span");
+  token.className=`presentation-token ${event.private?"private":""}`;
+  if(event.card)token.textContent=cardText(event.card);
+  else if(Array.isArray(event.cards)&&event.cards.length)token.textContent=event.cards.map(cardText).join(" · ");
+  else token.textContent=event.count?`+${event.count}`:({"turn-start":"▶","direction-reversed":"↻","uno-call":"UNO!","uno-caught":"UNO!","game-won":"★"})[event.kind]||"UNO";
+  E.presentationEffects?.append(token);
+  return()=>{source?.classList.remove("presentation-source");target?.classList.remove("presentation-target");E.unoStage?.classList.remove("presentation-reverse");token.remove();};
+}
+presentation=createPresentationTimeline({
+  container:E.unoStage,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,
+  labelElement:E.presentationLabel,textElement:E.presentationText,effectsElement:E.presentationEffects,
+  resolveSource:presentationSource,resolveTarget:presentationTarget,labelFor:(event)=>presentationLabel(event.kind),
+  beforePlay:playPresentationObject,durationMs:1500,reducedDurationMs:650,maxQueue:28
+});
 function endGame(){if(confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。"))submit({type:"end"});}
 async function init(){
   bindRoomCodeInput(E.roomCodeInput);

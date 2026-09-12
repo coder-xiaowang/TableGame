@@ -25,12 +25,13 @@ test("game5 restores a private hand, turn deadline and action deduplication from
   const guest=(await post(running.baseUrl,"/api/join",{roomCode:host.roomCode,clientId:"p2",name:"乙"})).payload;await openEvents(running.baseUrl,guest);
   assert.equal((await action(running.baseUrl,host,"persist-start",{type:"start"})).response.status,200);
   const before=(await resume(running.baseUrl,host)).payload.view;
-  const expectedHand=before.players[0].hand.map((card)=>card.id);const expectedTop=before.discard[0].id;const expectedDeadline=before.deadline;
+  const expectedHand=before.players[0].hand.map((card)=>card.id);const expectedTop=before.discard[0].id;const expectedDeadline=before.deadline;const expectedPresentation=before.presentationEvents;
   await closeServer(running.server);
   running=await startServer(engine,filename);
   const config=await fetch(`${running.baseUrl}/api/config`).then((response)=>response.json());assert.equal(config.persistence,"sqlite");assert.equal(config.durable,true);
   const hostView=(await resume(running.baseUrl,host)).payload.view;const guestView=(await resume(running.baseUrl,guest)).payload.view;
   assert.deepEqual(hostView.players[0].hand.map((card)=>card.id),expectedHand);assert.equal(hostView.discard[0].id,expectedTop);assert.equal(hostView.deadline,expectedDeadline);
+  assert.deepEqual(hostView.presentationEvents,expectedPresentation);
   assert.ok(guestView.players[0].hand.every((item)=>item===null));assert.ok(hostView.players.every((player)=>!player.connected));
   const duplicate=await action(running.baseUrl,host,"persist-start",{type:"end"});assert.equal(duplicate.response.status,200);assert.equal(duplicate.payload.duplicate,true);
 });

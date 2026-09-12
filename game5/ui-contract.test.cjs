@@ -44,11 +44,22 @@ test("game5 places history before spectators in the auxiliary column",()=>{
 });
 
 test("game5 prioritizes the main table on phones and preserves core controls",()=>{
-  assert.ok(html.indexOf("<aside>")<html.indexOf('<section class="main">'));
+  assert.ok(html.indexOf("<aside>")<html.indexOf('<section class="main"'));
   assert.match(styles,/@media\(max-width:720px\)[\s\S]*?\.layout \{ display: flex; flex-direction: column; \}/);
   assert.match(styles,/\.layout > \.main \{ order: 1; \}/);
   assert.match(styles,/\.layout > aside \{ order: 2;/);
   for(const id of["players","drawPile","discardPile","actionArea","timerText","handPanel","unoButton","colorModal"])assert.match(html,new RegExp(`id="${id}"`));
+});
+
+test("game5 consumes the shared server-authored presentation timeline",()=>{
+  for(const id of["unoStage","tableStage","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText"])assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(script,/createPresentationTimeline/);
+  assert.match(script,/presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script,/player\.dataset\.playerId/);
+  assert.match(script,/function presentationSource/);
+  assert.match(script,/function presentationTarget/);
+  assert.match(styles,/\.presentation-effects/);
+  assert.match(styles,/@media\(prefers-reduced-motion:reduce\)/);
 });
 
 test("game5 integrates action, countdown and hand into one large UNO table",()=>{

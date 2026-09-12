@@ -91,7 +91,16 @@
                     <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
                 </details>
             </aside>
-            <section class="main">
+            <section class="main" id="unoStage">
+                <div id="presentationEffects" class="presentation-effects" aria-live="polite">
+                    <svg class="presentation-trail-layer" aria-hidden="true">
+                        <defs><marker id="unoTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+                        <path id="presentationTrail" class="presentation-trail" marker-end="url(#unoTrailArrow)"></path>
+                    </svg>
+                    <div id="presentationAnnouncement" class="presentation-announcement">
+                        <span id="presentationLabel"></span><b id="presentationText"></b>
+                    </div>
+                </div>
                 <div class="notice" id="notice">等待玩家加入。</div>
                 <div class="panel players-panel">
                     <div class="players" id="players"></div>
@@ -99,7 +108,7 @@
                 <div class="table panel">
                     <div class="table-head"><span id="directionText">顺时针 ↻</span><span>摸牌堆 <b
                                 id="deckCount">0</b></span></div>
-                    <div class="table-stage">
+                    <div class="table-stage" id="tableStage">
                         <div class="center"><button class="draw-pile" id="drawPile"
                                 disabled><span>UNO</span><small>摸牌</small></button>
                             <div class="discard" id="discardPile"></div>

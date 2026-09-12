@@ -166,3 +166,46 @@ test("only non-host players can vacate game5 lobby seats",()=>{
   engine.applyAction(state,"p1",{type:"start"},{random:()=>.2});
   assert.throws(()=>engine.vacateSeat(state,"p2"),(error)=>error.code==="seat_change_unavailable");
 });
+
+test("server sequences public UNO events while private hands only reach their owner",()=>{
+  const state=readyState();
+  engine.validateState(state);
+  const publicKinds=state.presentationEvents.map((event)=>event.kind);
+  assert.deepEqual(publicKinds.slice(-2),["game-start","turn-start"]);
+  const hostView=engine.buildView(state,"p1");
+  const guestView=engine.buildView(state,"p2");
+  const spectatorView=engine.buildSpectatorView(state);
+  assert.ok(hostView.presentationEvents.some((event)=>event.kind==="initial-hand"&&event.private&&event.cards.length===7));
+  assert.ok(guestView.presentationEvents.some((event)=>event.kind==="initial-hand"&&event.private&&event.cards.length===7));
+  assert.ok(hostView.presentationEvents.every((event)=>event.kind!=="initial-hand"||event.actorId==="p1"));
+  assert.ok(guestView.presentationEvents.every((event)=>event.kind!=="initial-hand"||event.actorId==="p2"));
+  assert.ok(spectatorView.presentationEvents.every((event)=>!event.private&&!event.cards));
+  assert.deepEqual([...hostView.presentationEvents].sort((a,b)=>a.sequence-b.sequence),hostView.presentationEvents);
+});
+
+test("UNO penalty, challenge and private draws form a directed presentation chain without leaking legality",()=>{
+  const state=readyState();
+  rig(state,{hands:[[card("w4",null,"wild4"),card("red7","red","number",7)],[card("p2x","green","number",2)]],deck:Array.from({length:8},(_,i)=>card(`deck${i}`,"yellow","number",i%10))});
+  state.presentationEvents=[];state.privatePresentationEvents={};
+  engine.applyAction(state,"p1",{type:"play",cardId:"w4",color:"blue"},{now:3000});
+  assert.deepEqual(state.presentationEvents.slice(0,4).map((event)=>event.kind),["card-play","uno-vulnerable","penalty-window","turn-start"]);
+  assert.equal(state.presentationEvents[2].targetId,"p2");
+  assert.equal(JSON.stringify(engine.buildSpectatorView(state)).includes("wasLegal"),false);
+  engine.applyAction(state,"p2",{type:"challenge"},{now:3100,random:()=>0});
+  const publicEvents=engine.buildSpectatorView(state).presentationEvents;
+  assert.ok(publicEvents.some((event)=>event.kind==="challenge-start"&&event.actorId==="p2"&&event.targetId==="p1"));
+  assert.ok(publicEvents.some((event)=>event.kind==="challenge-result"&&event.successful===true));
+  assert.ok(engine.buildView(state,"p1").presentationEvents.some((event)=>event.kind==="private-draw"&&event.reason==="challenge-penalty"&&event.cards.length===4));
+  assert.ok(engine.buildView(state,"p2").presentationEvents.every((event)=>event.kind!=="private-draw"));
+  engine.validateState(state);
+});
+
+test("legacy game5 snapshots restore with an empty compatible presentation stream",()=>{
+  const legacy=engine.serializeState(readyState());
+  delete legacy.presentationEvents;delete legacy.privatePresentationEvents;delete legacy.presentationSequence;
+  const restored=engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents,[]);
+  assert.deepEqual(restored.privatePresentationEvents,{});
+  assert.equal(restored.presentationSequence,0);
+  assert.doesNotThrow(()=>engine.validateState(restored));
+});
