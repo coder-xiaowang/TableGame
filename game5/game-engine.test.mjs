@@ -181,6 +181,8 @@ test("server sequences public UNO events while private hands only reach their ow
   assert.ok(guestView.presentationEvents.every((event)=>event.kind!=="initial-hand"||event.actorId==="p2"));
   assert.ok(spectatorView.presentationEvents.every((event)=>!event.private&&!event.cards));
   assert.deepEqual([...hostView.presentationEvents].sort((a,b)=>a.sequence-b.sequence),hostView.presentationEvents);
+  assert.equal(new Set(hostView.presentationEvents.map((event)=>event.sceneId)).size,1);
+  assert.ok(hostView.presentationEvents.every((event)=>Number.isInteger(event.priority)));
 });
 
 test("UNO penalty, challenge and private draws form a directed presentation chain without leaking legality",()=>{
@@ -189,6 +191,8 @@ test("UNO penalty, challenge and private draws form a directed presentation chai
   state.presentationEvents=[];state.privatePresentationEvents={};
   engine.applyAction(state,"p1",{type:"play",cardId:"w4",color:"blue"},{now:3000});
   assert.deepEqual(state.presentationEvents.slice(0,4).map((event)=>event.kind),["card-play","uno-vulnerable","penalty-window","turn-start"]);
+  assert.equal(new Set(state.presentationEvents.slice(0,4).map((event)=>event.sceneId)).size,1);
+  assert.equal(state.presentationEvents[2].priority,4);
   assert.equal(state.presentationEvents[2].targetId,"p2");
   assert.equal(JSON.stringify(engine.buildSpectatorView(state)).includes("wasLegal"),false);
   engine.applyAction(state,"p2",{type:"challenge"},{now:3100,random:()=>0});
@@ -202,10 +206,20 @@ test("UNO penalty, challenge and private draws form a directed presentation chai
 
 test("legacy game5 snapshots restore with an empty compatible presentation stream",()=>{
   const legacy=engine.serializeState(readyState());
-  delete legacy.presentationEvents;delete legacy.privatePresentationEvents;delete legacy.presentationSequence;
+  delete legacy.presentationEvents;delete legacy.privatePresentationEvents;delete legacy.presentationSequence;delete legacy.presentationSceneSequence;
   const restored=engine.restoreState(legacy);
   assert.deepEqual(restored.presentationEvents,[]);
   assert.deepEqual(restored.privatePresentationEvents,{});
   assert.equal(restored.presentationSequence,0);
+  assert.equal(restored.presentationSceneSequence,0);
   assert.doesNotThrow(()=>engine.validateState(restored));
+});
+
+test("rejected actions do not consume or persist a presentation scene",()=>{
+  const state=readyState();
+  const before=state.presentationSceneSequence;
+  assert.throws(()=>engine.applyAction(state,"p1",{type:"not-real"},{now:3000}),(error)=>error.code==="unknown_action");
+  assert.equal(state.presentationSceneSequence,before);
+  assert.equal("activePresentationScene" in state,false);
+  assert.equal("activePresentationSceneNumber" in state,false);
 });

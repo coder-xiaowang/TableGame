@@ -45,8 +45,36 @@ function addLog(state,text,now) {
   state.logs.unshift({id:`log_${state.logSequence+=1}`,text,at:now});
   if (state.logs.length>80) state.logs.length=80;
 }
+const PRESENTATION_PRIORITY={
+  "turn-start":0,"draw-action":1,"draw-pass":1,"private-draw":1,"initial-hand":1,"deck-recycled":1,
+  "game-start":2,"card-play":2,"player-skipped":2,"direction-reversed":2,
+  "uno-call":3,"uno-vulnerable":3,"uno-caught":3,"penalty-accepted":3,"challenge-start":3,
+  "penalty-window":4,"challenge-result":4,"game-won":4
+};
+function decorateEvent(state,event) {
+  let sceneId=event.sceneId||state.activePresentationScene;
+  if (!sceneId) {
+    state.presentationSceneSequence=Number.isInteger(state.presentationSceneSequence)?state.presentationSceneSequence+1:1;
+    sceneId=`uno_scene_${state.presentationSceneSequence}`;
+  } else if (sceneId===state.activePresentationScene&&Number.isInteger(state.activePresentationSceneNumber)) {
+    state.presentationSceneSequence=Math.max(Number(state.presentationSceneSequence)||0,state.activePresentationSceneNumber);
+  }
+  return {...event,sceneId,priority:Number.isFinite(Number(event.priority))?Number(event.priority):PRESENTATION_PRIORITY[event.kind]??2};
+}
+function runPresentationScene(state,callback) {
+  const previous=state.activePresentationScene;
+  const previousNumber=state.activePresentationSceneNumber;
+  const sceneNumber=(Number.isInteger(state.presentationSceneSequence)?state.presentationSceneSequence:0)+1;
+  state.activePresentationScene=`uno_scene_${sceneNumber}`;
+  state.activePresentationSceneNumber=sceneNumber;
+  try { return callback(); }
+  finally {
+    if (previous) { state.activePresentationScene=previous;state.activePresentationSceneNumber=previousNumber; }
+    else { delete state.activePresentationScene;delete state.activePresentationSceneNumber; }
+  }
+}
 function publicEvent(state,event,now) {
-  return appendPresentationEvent(state,event,{
+  return appendPresentationEvent(state,decorateEvent(state,event),{
     now,eventsKey:"presentationEvents",sequenceKey:"presentationSequence",idPrefix:"uno_event",limit:60
   });
 }
@@ -55,7 +83,7 @@ function privateEvent(state,playerId,event,now) {
   if (!id) return null;
   if (!state.privatePresentationEvents||typeof state.privatePresentationEvents!=="object") state.privatePresentationEvents={};
   const envelope={events:Array.isArray(state.privatePresentationEvents[id])?state.privatePresentationEvents[id]:[],sequence:Number(state.presentationSequence)||0};
-  const stored=appendPresentationEvent(envelope,{...event,private:true},{
+  const stored=appendPresentationEvent(envelope,decorateEvent(state,{...event,private:true}),{
     now,eventsKey:"events",sequenceKey:"sequence",idPrefix:"uno_private",limit:30
   });
   state.privatePresentationEvents[id]=envelope.events;
@@ -237,7 +265,7 @@ function timeoutCurrent(state,{now,random}) {
 }
 
 export function createLobby({capacity,host}) {
-  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentColor:null,currentIndex:0,direction:1,pendingDraw:0,pendingWild:null,pendingWinnerId:null,drawnCardId:null,unoVulnerableId:null,winnerId:null,deadline:0,logs:[],logSequence:0,presentationEvents:[],privatePresentationEvents:{},presentationSequence:0};
+  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentColor:null,currentIndex:0,direction:1,pendingDraw:0,pendingWild:null,pendingWinnerId:null,drawnCardId:null,unoVulnerableId:null,winnerId:null,deadline:0,logs:[],logSequence:0,presentationEvents:[],privatePresentationEvents:{},presentationSequence:0,presentationSceneSequence:0};
 }
 export function addPlayer(state,player) {
   if (state.phase!=="lobby") throw new GameRuleError("game_started","游戏已经开始，不能中途加入。",409);
@@ -277,10 +305,10 @@ export function setPresence(state,playerId,connected,{now=Date.now(),random=Math
   const player=playerById(state,playerId);
   if (!player||player.connected===Boolean(connected)) return false;
   player.connected=Boolean(connected);
-  if (!connected&&state.phase==="playing"&&currentPlayer(state)?.id===player.id) timeoutCurrent(state,{now,random});
+  if (!connected&&state.phase==="playing"&&currentPlayer(state)?.id===player.id) runPresentationScene(state,()=>timeoutCurrent(state,{now,random}));
   return true;
 }
-export function applyAction(state,actorId,action,{now=Date.now(),random=Math.random}={}) {
+function applyActionInternal(state,actorId,action,{now=Date.now(),random=Math.random}={}) {
   const actor=requireActor(state,actorId); const type=action?.type;
   if (type==="setCapacity") {
     requireHost(state,actorId); if(state.phase!=="lobby") throw new GameRuleError("game_started","游戏开始后不能修改人数。",409);
@@ -341,9 +369,12 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
   if (type==="play") { playCard(state,actor,String(action.cardId||""),action.color,{now,random}); return; }
   throw new GameRuleError("unknown_action","无法识别该游戏操作。");
 }
+export function applyAction(state,actorId,action,{now=Date.now(),random=Math.random}={}) {
+  return runPresentationScene(state,()=>applyActionInternal(state,actorId,action,{now,random}));
+}
 export function handleTimeout(state,{now=Date.now(),random=Math.random}={}) {
   if(state.phase!=="playing"||!state.deadline||now<state.deadline) return false;
-  return timeoutCurrent(state,{now,random});
+  return runPresentationScene(state,()=>timeoutCurrent(state,{now,random}));
 }
 export function getDeadline(state) { return state.phase==="playing"?Number(state.deadline)||0:0; }
 function presentationFor(state,viewer) {
@@ -364,6 +395,7 @@ export function buildSpectatorView(state) {
 }
 export function validateState(state) {
   if (!state||!Array.isArray(state.players)||!Array.isArray(state.deck)||!Array.isArray(state.discard)) throw new Error("Invalid game5 state");
+  if (!Number.isInteger(state.presentationSceneSequence)||state.presentationSceneSequence<0) throw new Error("Invalid game5 presentation scene sequence");
   try { validatePresentationState(state); }
   catch { throw new Error("Invalid game5 public presentation events"); }
   if (!state.privatePresentationEvents||typeof state.privatePresentationEvents!=="object"||Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game5 private presentation events");
@@ -383,6 +415,7 @@ export function restoreState(serializedState) {
   if(serializedState?.stateVersion!==STATE_VERSION) throw new Error(`Unsupported game5 state version: ${serializedState?.stateVersion}`);
   const state=structuredClone(serializedState);
   state.privatePresentationEvents=state.privatePresentationEvents&&typeof state.privatePresentationEvents==="object"&&!Array.isArray(state.privatePresentationEvents)?state.privatePresentationEvents:{};
+  state.presentationSceneSequence=Number.isInteger(state.presentationSceneSequence)&&state.presentationSceneSequence>=0?state.presentationSceneSequence:0;
   normalizePresentationState(state);
   const latestPrivate=Object.values(state.privatePresentationEvents).flat().reduce((maximum,event)=>Math.max(maximum,Number(event?.sequence)||0),0);
   state.presentationSequence=Math.max(state.presentationSequence,latestPrivate);

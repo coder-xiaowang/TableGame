@@ -58,6 +58,9 @@ test("game5 consumes the shared server-authored presentation timeline",()=>{
   assert.match(script,/player\.dataset\.playerId/);
   assert.match(script,/function presentationSource/);
   assert.match(script,/function presentationTarget/);
+  assert.match(script,/sceneKey:\(event\)=>event\.sceneId\|\|event\.id/);
+  assert.match(script,/catchUpThreshold:2,severeBacklogThreshold:5/);
+  assert.match(script,/urgentPriority:4,retainPriority:3/);
   assert.match(styles,/\.presentation-effects/);
   assert.match(styles,/@media\(prefers-reduced-motion:reduce\)/);
 });

@@ -81,3 +81,85 @@ test("重置正在播放的旧队列不会覆盖新队列的播放状态", async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(timeline.snapshot().playing, false);
 });
+
+test("同一服务端操作的事件会合并为一个场景并选择最高优先级事件", async () => {
+  const played = [];
+  const timeline = createPresentationTimeline({
+    sceneKey: (event) => event.sceneId,
+    priorityFor: (event) => event.priority,
+    beforePlay: (event) => played.push(event),
+    wait: () => Promise.resolve()
+  });
+  timeline.sync([]);
+  timeline.sync([
+    { sequence: 1, sceneId: "scene_1", kind: "card-play", priority: 2 },
+    { sequence: 2, sceneId: "scene_1", kind: "turn-start", priority: 0 },
+    { sequence: 3, sceneId: "scene_2", kind: "challenge-start", priority: 3 },
+    { sequence: 4, sceneId: "scene_2", kind: "challenge-result", priority: 4 }
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(played.map((event) => event.kind), ["card-play", "challenge-result"]);
+  assert.deepEqual(played.map((event) => event.sequence), [2, 4]);
+  assert.deepEqual(played.map((event) => event.sceneEvents.length), [2, 2]);
+});
+
+test("严重积压时保留关键场景和最新状态并使用追赶时长", async () => {
+  const played = [], durations = [];
+  const timeline = createPresentationTimeline({
+    sceneKey: (event) => event.sceneId,
+    priorityFor: (event) => event.priority,
+    catchUpThreshold: 3,
+    severeBacklogThreshold: 5,
+    durationMs: 1000,
+    catchUpDurationMs: 400,
+    severeDurationMs: 150,
+    urgentPriority: 4,
+    retainPriority: 3,
+    beforePlay: (event) => played.push(event.sceneKey),
+    wait: (milliseconds) => { durations.push(milliseconds); return Promise.resolve(); }
+  });
+  timeline.sync([
+    { sequence: 1, sceneId: "s1", priority: 1 },
+    { sequence: 2, sceneId: "s2", priority: 1 },
+    { sequence: 3, sceneId: "s3", priority: 3 },
+    { sequence: 4, sceneId: "s4", priority: 1 },
+    { sequence: 5, sceneId: "s5", priority: 1 },
+    { sequence: 6, sceneId: "s6", priority: 4 }
+  ], { replayInitial: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(played, ["s3", "s5", "s6"]);
+  assert.equal(durations[0], 150);
+  assert.ok(durations.slice(1).every((duration) => duration <= 1000));
+  assert.equal(timeline.snapshot().playbackMode, "idle");
+});
+
+test("紧急响应场景会丢弃尚未播放的普通旧场景但不打断当前演出", async () => {
+  const releases = [], played = [];
+  const timeline = createPresentationTimeline({
+    sceneKey: (event) => event.sceneId,
+    priorityFor: (event) => event.priority,
+    urgentPriority: 4,
+    retainPriority: 3,
+    beforePlay: (event) => played.push(event.sceneKey),
+    wait: () => new Promise((resolve) => releases.push(resolve))
+  });
+  timeline.sync([]);
+  timeline.sync([
+    { sequence: 1, sceneId: "current", priority: 2 },
+    { sequence: 2, sceneId: "stale_1", priority: 2 },
+    { sequence: 3, sceneId: "stale_2", priority: 1 }
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  timeline.sync([
+    { sequence: 1, sceneId: "current", priority: 2 },
+    { sequence: 2, sceneId: "stale_1", priority: 2 },
+    { sequence: 3, sceneId: "stale_2", priority: 1 },
+    { sequence: 4, sceneId: "urgent", priority: 4 }
+  ]);
+  releases.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(played, ["current", "urgent"]);
+  releases.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(timeline.snapshot().playing, false);
+});

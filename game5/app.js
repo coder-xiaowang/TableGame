@@ -165,13 +165,25 @@ function presentationLabel(kind){
     "deck-recycled":"重新洗牌","game-won":"本局胜利"
   })[kind]||"牌桌事件";
 }
+function presentationText(event){
+  const events=event.sceneEvents||[event];
+  const played=events.find((item)=>item.kind==="card-play");
+  if(played&&played!==event&&event.text)return `${played.text}；${event.text}`;
+  return event.text||played?.text||"牌桌状态已经更新";
+}
 function playPresentationObject(event){
   const source=presentationSource(event);const target=presentationTarget(event);
   source?.classList.add("presentation-source");target?.classList.add("presentation-target");
   E.unoStage?.classList.toggle("presentation-reverse",event.kind==="direction-reversed");
   const token=document.createElement("span");
   token.className=`presentation-token ${event.private?"private":""}`;
-  if(event.card)token.textContent=cardText(event.card);
+  const events=event.sceneEvents||[event];
+  const played=events.find((item)=>item.card);
+  const privateCards=events.find((item)=>item.private&&Array.isArray(item.cards)&&item.cards.length);
+  token.classList.toggle("private",Boolean(privateCards));
+  if(played?.card)token.textContent=cardText(played.card);
+  else if(privateCards)token.textContent=privateCards.cards.map(cardText).join(" · ");
+  else if(event.card)token.textContent=cardText(event.card);
   else if(Array.isArray(event.cards)&&event.cards.length)token.textContent=event.cards.map(cardText).join(" · ");
   else token.textContent=event.count?`+${event.count}`:({"turn-start":"▶","direction-reversed":"↻","uno-call":"UNO!","uno-caught":"UNO!","game-won":"★"})[event.kind]||"UNO";
   E.presentationEffects?.append(token);
@@ -181,7 +193,10 @@ presentation=createPresentationTimeline({
   container:E.unoStage,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,
   labelElement:E.presentationLabel,textElement:E.presentationText,effectsElement:E.presentationEffects,
   resolveSource:presentationSource,resolveTarget:presentationTarget,labelFor:(event)=>presentationLabel(event.kind),
-  beforePlay:playPresentationObject,durationMs:1500,reducedDurationMs:650,maxQueue:28
+  textFor:presentationText,beforePlay:playPresentationObject,durationMs:1000,reducedDurationMs:450,maxQueue:18,
+  sceneKey:(event)=>event.sceneId||event.id,priorityFor:(event)=>Number(event.priority)||0,
+  catchUpThreshold:2,severeBacklogThreshold:5,catchUpDurationMs:520,severeDurationMs:280,
+  urgentPriority:4,retainPriority:3
 });
 function endGame(){if(confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。"))submit({type:"end"});}
 async function init(){

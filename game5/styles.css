@@ -906,7 +906,7 @@ select {
 }
 .presentation-announcement span { color: #ffe76f; font-size: 10px; font-weight: 900; letter-spacing: .15em }
 .presentation-announcement b { margin-top: 3px; font-size: clamp(.84rem,1.5vw,1.08rem) }
-.presentation-announcement.active { animation: uno-announcement 1.5s ease both }
+.presentation-announcement.active { animation: uno-announcement 1s ease both }
 .presentation-token {
     position: absolute;
     top: 57%;
@@ -919,7 +919,7 @@ select {
     color: #fff;
     box-shadow: 0 10px 25px #0008;
     font-weight: 900;
-    animation: uno-token 1.5s ease both
+    animation: uno-token 1s ease both
 }
 .presentation-token.private { border-style: dashed; background: linear-gradient(135deg,#266cb7,#643298) }
 .player.presentation-source,.draw-pile.presentation-source,.discard.presentation-source { box-shadow: 0 0 0 4px #ffe86c99,0 0 26px #a64de4cc }

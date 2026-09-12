@@ -40,6 +40,14 @@ export function createPresentationTimeline({
   durationMs = 2200,
   reducedDurationMs = 900,
   maxQueue = 16,
+  sceneKey = null,
+  priorityFor = (event) => Number(event?.priority) || 1,
+  catchUpThreshold = Number.POSITIVE_INFINITY,
+  severeBacklogThreshold = Number.POSITIVE_INFINITY,
+  catchUpDurationMs = durationMs,
+  severeDurationMs = catchUpDurationMs,
+  urgentPriority = Number.POSITIVE_INFINITY,
+  retainPriority = urgentPriority,
   prefersReducedMotion = () => Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches),
   wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 } = {}) {
@@ -48,6 +56,50 @@ export function createPresentationTimeline({
   let playing = false;
   let generation = 0;
   let destroyed = false;
+  let playbackMode = "idle";
+  let severePending = false;
+
+  function eventPriority(event) {
+    const value = Number(priorityFor?.(event));
+    return Number.isFinite(value) ? value : 1;
+  }
+
+  function makeQueueItems(events) {
+    if (typeof sceneKey !== "function") return events;
+    const groups = [];
+    for (const event of events) {
+      const key = String(sceneKey(event) ?? event.id ?? event.sequence);
+      const previous = groups.at(-1);
+      if (previous?.key === key) previous.events.push(event);
+      else groups.push({ key, events: [event] });
+    }
+    return groups.map((group) => {
+      let focus = group.events[0];
+      let priority = eventPriority(focus);
+      for (const event of group.events.slice(1)) {
+        const candidate = eventPriority(event);
+        if (candidate > priority) { focus = event; priority = candidate; }
+      }
+      return {
+        ...focus,
+        sequence: group.events.at(-1).sequence,
+        sceneKey: group.key,
+        scenePriority: priority,
+        sceneEvents: group.events.map((event) => ({ ...event }))
+      };
+    });
+  }
+
+  function itemPriority(item) {
+    return Number.isFinite(Number(item?.scenePriority)) ? Number(item.scenePriority) : eventPriority(item);
+  }
+
+  function compactBacklog() {
+    if (queue.length < severeBacklogThreshold) return;
+    severePending = true;
+    const keepLatest = Math.max(0, queue.length - 2);
+    queue = queue.filter((item, index) => index >= keepLatest || itemPriority(item) >= retainPriority);
+  }
 
   function clearVisuals() {
     asElement(announcement)?.classList?.remove(activeClass);
@@ -73,7 +125,7 @@ export function createPresentationTimeline({
     return true;
   }
 
-  async function play(event, runGeneration) {
+  async function play(event, runGeneration, playbackDuration) {
     const banner = asElement(announcement);
     const label = asElement(labelElement);
     const text = asElement(textElement);
@@ -86,7 +138,7 @@ export function createPresentationTimeline({
     banner?.classList?.add(activeClass);
     const hasTrail = drawTrail(event);
     const cleanup = await beforePlay(event);
-    await wait(prefersReducedMotion() ? reducedDurationMs : durationMs);
+    await wait(prefersReducedMotion() ? Math.min(reducedDurationMs, playbackDuration) : playbackDuration);
     if (destroyed || runGeneration !== generation) {
       if (typeof cleanup === "function") cleanup();
       return;
@@ -101,8 +153,16 @@ export function createPresentationTimeline({
     if (playing || destroyed) return;
     playing = true;
     const runGeneration = generation;
-    while (queue.length && !destroyed && runGeneration === generation) await play(queue.shift(), runGeneration);
-    if (runGeneration === generation) playing = false;
+    while (queue.length && !destroyed && runGeneration === generation) {
+      compactBacklog();
+      const backlog = queue.length;
+      const severe = severePending;
+      severePending = false;
+      playbackMode = severe || backlog >= severeBacklogThreshold ? "severe" : backlog >= catchUpThreshold ? "catch-up" : "normal";
+      const playbackDuration = playbackMode === "severe" ? severeDurationMs : playbackMode === "catch-up" ? catchUpDurationMs : durationMs;
+      await play(queue.shift(), runGeneration, playbackDuration);
+    }
+    if (runGeneration === generation) { playing = false; playbackMode = "idle"; }
   }
 
   function sync(events, { replayInitial = false } = {}) {
@@ -118,7 +178,12 @@ export function createPresentationTimeline({
     const fresh = ordered.filter((event) => sequenceOf(event) > cursor);
     cursor = Math.max(cursor, latest);
     if (!fresh.length) return [];
-    queue.push(...fresh);
+    const incoming = makeQueueItems(fresh);
+    if (incoming.some((item) => itemPriority(item) >= urgentPriority)) {
+      queue = queue.filter((item) => itemPriority(item) >= retainPriority);
+    }
+    queue.push(...incoming);
+    compactBacklog();
     if (queue.length > maxQueue) queue = queue.slice(-maxQueue);
     void drain();
     return fresh;
@@ -129,6 +194,8 @@ export function createPresentationTimeline({
     cursor = nextCursor;
     queue = [];
     playing = false;
+    playbackMode = "idle";
+    severePending = false;
     clearVisuals();
   }
 
@@ -141,6 +208,6 @@ export function createPresentationTimeline({
     sync,
     reset,
     destroy,
-    snapshot: () => ({ cursor, queued: queue.length, playing, destroyed })
+    snapshot: () => ({ cursor, queued: queue.length, playing, destroyed, playbackMode })
   };
 }
