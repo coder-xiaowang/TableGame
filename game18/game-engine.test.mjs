@@ -236,3 +236,92 @@ test("犯人作为最后一张牌逃脱时为犯人与已公开共犯各加2分"
   assert.ok(state.players.filter((player) => ![actor.id, accomplice.id].includes(player.id)).every((player) => state.roundResult.changes[player.id] === 0));
   validateState(state);
 });
+
+test("presentation events keep witness values private while public direction stays shared", () => {
+  const state = startedState(8);
+  const actor = state.players[state.currentIndex];
+  const target = state.players.find((player) => player.id !== actor.id);
+  const outsider = state.players.find((player) => ![actor.id, target.id].includes(player.id));
+  const witness = giveType(state, actor, CARDS.WITNESS);
+  applyAction(state, actor.id, { type: "playCard", cardId: witness.id }, { now: 5_000 });
+  applyAction(state, actor.id, { type: "chooseTarget", targetId: target.id }, { now: 5_100 });
+
+  const actorEvents = buildView(state, actor.id).presentationEvents;
+  const targetEvents = buildView(state, target.id).presentationEvents;
+  const outsiderEvents = buildView(state, outsider.id).presentationEvents;
+  const spectatorEvents = buildSpectatorView(state).presentationEvents;
+  assert.ok(actorEvents.some((event) => event.kind === "witness-insight" && event.private && Array.isArray(event.cardTypes)));
+  assert.ok(targetEvents.some((event) => event.kind === "witness-look" && event.targetId === target.id));
+  assert.ok(targetEvents.every((event) => event.kind !== "witness-insight"));
+  assert.ok(outsiderEvents.every((event) => !event.private));
+  assert.ok(spectatorEvents.every((event) => !event.private));
+  assert.deepEqual(outsiderEvents, spectatorEvents);
+});
+
+test("child identity is only presented to the child and culprit", () => {
+  const state = startedState(8);
+  const actor = state.players[state.currentIndex];
+  const child = giveType(state, actor, CARDS.CHILD);
+  const culprit = state.players.find((player) => player.id !== actor.id);
+  giveType(state, culprit, CARDS.CRIMINAL);
+  applyAction(state, actor.id, { type: "playCard", cardId: child.id }, { now: 6_000 });
+
+  const publicEvents = buildSpectatorView(state).presentationEvents;
+  assert.ok(publicEvents.some((event) => event.kind === "child-search"));
+  assert.ok(publicEvents.every((event) => event.kind !== "child-search" || event.targetId == null));
+  assert.ok(buildView(state, actor.id).presentationEvents.some((event) => event.kind === "child-insight" && event.targetId === culprit.id));
+  assert.ok(buildView(state, culprit.id).presentationEvents.some((event) => event.kind === "child-detected" && event.private));
+  const outsider = state.players.find((player) => ![actor.id, culprit.id].includes(player.id));
+  assert.ok(buildView(state, outsider.id).presentationEvents.every((event) => !event.private));
+});
+
+test("legacy snapshots without presentation fields restore safely", () => {
+  const legacy = structuredClone(startedState());
+  delete legacy.presentationEvents;
+  delete legacy.privatePresentationEvents;
+  delete legacy.presentationSequence;
+  const restored = restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents, []);
+  assert.deepEqual(restored.privatePresentationEvents, {});
+  assert.equal(restored.presentationSequence, 0);
+  assert.doesNotThrow(() => validateState(restored));
+});
+
+test("trade presentation reveals exchanged card values only to both participants", () => {
+  const state = startedState(8);
+  const actor = state.players[state.currentIndex];
+  const target = state.players.find((player) => player.id !== actor.id && player.hand.length);
+  const outsider = state.players.find((player) => ![actor.id, target.id].includes(player.id));
+  const trade = giveType(state, actor, CARDS.TRADE);
+  actor.turnsTaken = 1;
+  applyAction(state, actor.id, { type: "playCard", cardId: trade.id }, { now: 7_000 });
+  applyAction(state, actor.id, { type: "chooseTarget", targetId: target.id }, { now: 7_100 });
+  const actorChoice = actor.hand[0];
+  const targetChoice = target.hand[0];
+  applyAction(state, actor.id, { type: "submitTradeCard", cardId: actorChoice.id }, { now: 7_200 });
+  applyAction(state, target.id, { type: "submitTradeCard", cardId: targetChoice.id }, { now: 7_300 });
+
+  assert.ok(buildView(state, actor.id).presentationEvents.some((event) => event.kind === "trade-private" && event.cardType === targetChoice.type));
+  assert.ok(buildView(state, target.id).presentationEvents.some((event) => event.kind === "trade-private" && event.cardType === actorChoice.type));
+  assert.ok(buildView(state, outsider.id).presentationEvents.every((event) => !event.private));
+  assert.ok(buildSpectatorView(state).presentationEvents.filter((event) => event.kind === "trade-complete").every((event) => event.cardType == null));
+});
+
+test("pass-left presentation exposes direction publicly but keeps card values between endpoints", () => {
+  const state = startedState(4);
+  const actor = state.players[state.currentIndex];
+  const pass = giveType(state, actor, CARDS.PASS_LEFT);
+  applyAction(state, actor.id, { type: "playCard", cardId: pass.id }, { now: 8_000 });
+  const pending = state.pending;
+  for (const id of pending.participantIds) {
+    const card = playerBy(state, id).hand[0];
+    applyAction(state, id, { type: "submitPassCard", cardId: card.id }, { now: 8_100 });
+  }
+
+  const publicMoves = buildSpectatorView(state).presentationEvents.filter((event) => event.kind === "pass-transfer");
+  assert.equal(publicMoves.length, pending.participantIds.length);
+  assert.ok(publicMoves.every((event) => event.actorId && event.targetId && event.cardType == null));
+  for (const player of state.players) {
+    assert.ok(buildView(state, player.id).presentationEvents.some((event) => event.kind === "pass-transfer-private" && event.private && event.cardType));
+  }
+});

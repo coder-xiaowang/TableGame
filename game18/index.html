@@ -93,10 +93,20 @@
 
     <section class="game-area">
       <div id="notice" class="notice">等待玩家加入。</div>
-      <section class="case-board">
-        <div class="case-heading">
+      <section class="case-board" id="caseBoard">
+        <div class="case-heading" id="caseHeading">
           <div><p class="eyebrow">CURRENT CASE</p><h2 id="caseText">尚未发生案件</h2></div>
           <div class="round-badge">第 <b id="roundNumber">0</b> 轮 · 目标 <b id="targetScoreLabel">5</b> 分</div>
+        </div>
+
+        <div id="presentationEffects" class="presentation-effects" aria-live="polite">
+          <svg class="presentation-trail-layer" aria-hidden="true">
+            <defs><marker id="caseTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+            <path id="presentationTrail" class="presentation-trail" marker-end="url(#caseTrailArrow)"></path>
+          </svg>
+          <div id="presentationAnnouncement" class="presentation-announcement">
+            <span id="presentationLabel"></span><b id="presentationText"></b>
+          </div>
         </div>
 
         <div id="players" class="players"></div>
@@ -110,7 +120,7 @@
           <div id="actionButtons" class="action-buttons"></div>
         </section>
 
-        <div class="discard-area">
+        <div id="discardArea" class="discard-area">
           <div class="section-head"><div><p class="eyebrow">EVIDENCE TRAIL</p><h2>公开牌迹</h2></div><span id="discardCount">0张</span></div>
           <div id="discardPile" class="discard-pile"><p class="muted">开局后显示公开打出的牌</p></div>
         </div>

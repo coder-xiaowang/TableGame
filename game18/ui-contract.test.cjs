@@ -9,7 +9,7 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
-  const boardStart = html.indexOf('<section class="case-board">');
+  const boardStart = html.indexOf('class="case-board"');
   const boardEnd = html.indexOf("</section>", html.indexOf('id="controlDock"'));
   const dockAt = html.indexOf('id="controlDock"');
   const heroEnd = html.indexOf("</header>");
@@ -48,5 +48,11 @@ test("页面满足圆桌中央行动区、旁观与移动端紧凑列表契约",
   assert.match(styles, /\.player-seat\[data-seat-side="left"\][\s\S]*?left: 18px/);
   assert.match(styles, /\.player-seat\[data-seat-side="right"\][\s\S]*?right: 18px/);
   assert.match(styles, /\.discard-zone, \.discard-area\s*\{[\s\S]*?top: 43%/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(styles, /\.presentation-token/);
+  assert.match(script, /seat\.dataset\.playerId/);
   assert.equal(fs.existsSync(path.join(__dirname, "assets", "detective-case-board-v2.png")), true);
 });

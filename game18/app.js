@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
+  createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 
@@ -29,7 +29,8 @@ const E = Object.fromEntries([
   "roomPlayerCountSelect", "roomTargetScoreSelect", "spectatorSettingButton", "seatActionButton",
   "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton", "notice", "caseText", "roundNumber",
   "targetScoreLabel", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "discardCount", "discardPile",
-  "privateZone", "myHand", "toggleLogButton", "logList"
+  "privateZone", "myHand", "toggleLogButton", "logList", "caseBoard", "caseHeading", "discardArea",
+  "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
 
 let mode = "host";
@@ -37,6 +38,7 @@ let view = null;
 let selectedCardId = null;
 let spectatorUi = null;
 let pendingInitialTargetScore = null;
+let presentation = null;
 
 const sessions = createSessionStore({ gameId: "dancing-criminal" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -51,6 +53,7 @@ const room = createAuthoritativeRoomClient({
       if (!ownIds.has(selectedCardId)) selectedCardId = null;
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
       applyPendingInitialSettings();
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
@@ -164,6 +167,7 @@ function renderPlayers() {
       <div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>
     </article>`;
   }).join("");
+  E.players.querySelectorAll(".player-seat").forEach((seat, index) => { seat.dataset.playerId = orderedPlayers[index]?.id || ""; });
   E.players.querySelectorAll("[data-kick]").forEach((button) => { button.onclick = () => kickPlayer(button.dataset.kick); });
   E.players.querySelectorAll("[data-target-player-id]").forEach((seat) => {
     const chooseTarget = () => submit({ type: "chooseTarget", targetId: seat.dataset.targetPlayerId });
@@ -370,6 +374,65 @@ function render() {
   if (view.deadline) countdown.start(view.deadline, PHASE_TIMER_MS[view.phase] || 45000);
   else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
 }
+
+function seatFor(playerId) {
+  if (!playerId) return null;
+  return [...E.players.querySelectorAll(".player-seat")].find((seat) => seat.dataset.playerId === String(playerId)) || null;
+}
+
+function eventSource(event) {
+  return seatFor(event.actorId) || E.caseHeading || E.caseBoard;
+}
+
+function eventTarget(event) {
+  if (event.targetId) return seatFor(event.targetId);
+  if (["card-play", "dog-reveal"].includes(event.kind)) return E.discardArea;
+  return E.caseHeading || E.caseBoard;
+}
+
+function presentationLabel(kind) {
+  return ({
+    "round-start": "新案件", "case-opened": "案情公开", "turn-start": "轮到行动", "card-play": "公开出牌",
+    accusation: "公开指认", "witness-look": "目击追踪", "witness-insight": "秘密线索", "dog-search": "神犬搜查",
+    "dog-reveal": "证物公开", "child-search": "少年追踪", "child-insight": "秘密发现", "child-detected": "身份暴露",
+    "trade-window": "发起交易", "trade-complete": "交易完成", "trade-private": "收到密牌", "pass-window": "情报交换",
+    "pass-transfer": "传递情报", "pass-transfer-private": "秘密情报", "gossip-transfer": "谣言流转",
+    "gossip-transfer-private": "秘密谣言", "selection-ready": "已确认", "round-result": "案件结算", "match-result": "调查终局"
+  })[kind] || "案情变化";
+}
+
+function playPresentationObject(event) {
+  const source = seatFor(event.actorId);
+  const target = seatFor(event.targetId);
+  source?.classList.add("presentation-source");
+  target?.classList.add("presentation-target");
+  if (event.kind === "selection-ready") source?.classList.add("presentation-ready");
+  const token = document.createElement("span");
+  token.className = `presentation-token ${event.private ? "private" : ""}`;
+  token.textContent = event.cardType ? meta(event.cardType).label : ({ accusation: "!", "witness-look": "◉", "dog-search": "♠", "trade-window": "⇄", "trade-complete": "⇄", "pass-transfer": "→", "gossip-transfer": "↝" })[event.kind] || "•";
+  E.presentationEffects?.append(token);
+  return () => {
+    source?.classList.remove("presentation-source", "presentation-ready");
+    target?.classList.remove("presentation-target");
+    token.remove();
+  };
+}
+
+presentation = createPresentationTimeline({
+  container: E.caseBoard,
+  trailPath: E.presentationTrail,
+  announcement: E.presentationAnnouncement,
+  labelElement: E.presentationLabel,
+  textElement: E.presentationText,
+  effectsElement: E.presentationEffects,
+  resolveSource: eventSource,
+  resolveTarget: eventTarget,
+  labelFor: (event) => presentationLabel(event.kind),
+  beforePlay: playPresentationObject,
+  durationMs: 1900,
+  reducedDurationMs: 750,
+  maxQueue: 28
+});
 
 function selectMode(nextMode) {
   mode = nextMode;

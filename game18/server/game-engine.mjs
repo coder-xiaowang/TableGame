@@ -2,6 +2,7 @@ import {
   CARDS, DEFAULT_TARGET_SCORE, MAX_PLAYERS, MIN_PLAYERS, TARGET_SCORE_OPTIONS,
   cardLabel, createRoundDeck, leftIndex, rightIndex, shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
@@ -83,6 +84,35 @@ function addLog(state, text, now) {
   if (state.logs.length > 140) state.logs.length = 140;
 }
 
+function publicEvent(state, event, now) {
+  return appendPresentationEvent(state, event, {
+    now, eventsKey: "presentationEvents", sequenceKey: "presentationSequence", idPrefix: "dancing_event", limit: 60
+  });
+}
+
+function privateEvent(state, playerId, event, now) {
+  const id = String(playerId || "");
+  if (!id) return null;
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object") state.privatePresentationEvents = {};
+  const envelope = {
+    events: Array.isArray(state.privatePresentationEvents[id]) ? state.privatePresentationEvents[id] : [],
+    sequence: Number(state.presentationSequence) || 0
+  };
+  const stored = appendPresentationEvent(envelope, { ...event, private: true }, {
+    now, eventsKey: "events", sequenceKey: "sequence", idPrefix: "dancing_private", limit: 30
+  });
+  state.privatePresentationEvents[id] = envelope.events;
+  state.presentationSequence = envelope.sequence;
+  return stored;
+}
+
+function transferEvents(state, { kind, actorId, targetId, cardType, publicText, privateText }, now) {
+  publicEvent(state, { kind, actorId, targetId, text: publicText }, now);
+  for (const playerId of new Set([actorId, targetId])) {
+    privateEvent(state, playerId, { kind: `${kind}-private`, actorId, targetId, cardType, text: privateText }, now);
+  }
+}
+
 function setPhase(state, phase, now, seconds = 0) {
   state.phase = phase;
   state.deadline = seconds ? now + seconds * 1000 : 0;
@@ -121,6 +151,7 @@ function dealRound(state, now, random) {
   state.currentIndex = discovererIndex;
   state.pending = { type: "caseStory", actorId: state.players[discovererIndex].id };
   setPhase(state, "caseStory", now, CASE_SECONDS);
+  publicEvent(state, { kind: "round-start", actorId: state.players[discovererIndex].id, text: `第 ${state.round} 轮开始，等待第一发现者描述案件` }, now);
   addLog(state, `第 ${state.round} 轮开始，等待第一发现者描述案件。`, now);
 }
 
@@ -156,6 +187,7 @@ function nextTurn(state, now) {
     if (state.players[index].hand.length) {
       state.currentIndex = index;
       setPhase(state, "turn", now, TURN_SECONDS);
+      publicEvent(state, { kind: "turn-start", actorId: state.players[index].id, text: `${state.players[index].name} 开始行动` }, now);
       return;
     }
   }
@@ -186,6 +218,7 @@ function scoreRound(state, outcome, winnerId, now) {
   for (const player of state.players) player.score += changes[player.id];
   state.roundResult = { outcome, title, winnerId, culpritId, accompliceIds, changes };
   state.pending = null;
+  publicEvent(state, { kind: "round-result", actorId: winnerId, targetId: culpritId, outcome, text: title }, now);
   addLog(state, `${title} 本轮计分完成。`, now);
 
   const reached = state.players.filter((player) => player.score >= state.targetScore);
@@ -193,6 +226,7 @@ function scoreRound(state, outcome, winnerId, now) {
     const best = Math.max(...state.players.map((player) => player.score));
     state.winnerIds = state.players.filter((player) => player.score === best).map((player) => player.id);
     setPhase(state, "ended", now);
+    publicEvent(state, { kind: "match-result", actorId: state.winnerIds[0] || null, text: "整场调查结束" }, now);
     addLog(state, `${state.winnerIds.map((id) => playerById(state, id).name).join("、")} 赢得整场比赛。`, now);
   } else {
     setPhase(state, "roundReview", now, REVIEW_SECONDS);
@@ -208,6 +242,7 @@ function submitCase(state, actor, text, now) {
   discardCard(state, actor, card);
   actor.turnsTaken += 1;
   state.caseText = story;
+  publicEvent(state, { kind: "case-opened", actorId: actor.id, cardType: CARDS.DISCOVERER, text: `${actor.name} 公开案情：${story}` }, now);
   addLog(state, `${actor.name} 是第一发现者：“${story}”`, now);
   nextTurn(state, now);
 }
@@ -239,10 +274,20 @@ function resolveGossip(state, actor, now, random) {
     if (!options.length) continue;
     moves.push({ donorId: state.players[donorIndex].id, receiverId: state.players[receiverIndex].id, cardId: randomItem(options, random).id });
   }
+  const moved = [];
   for (const move of moves) {
     const donor = playerById(state, move.donorId);
     const receiver = playerById(state, move.receiverId);
-    receiver.hand.push(removeCard(donor, move.cardId));
+    const card = removeCard(donor, move.cardId);
+    receiver.hand.push(card);
+    moved.push({ ...move, card });
+  }
+  for (const move of moved) {
+    transferEvents(state, {
+      kind: "gossip-transfer", actorId: move.donorId, targetId: move.receiverId, cardType: move.card.type,
+      publicText: `${playerById(state, move.donorId).name} 向 ${playerById(state, move.receiverId).name} 秘密传递了一张牌`,
+      privateText: `秘密传递的是“${cardLabel(move.card.type)}”`
+    }, now);
   }
   addLog(state, `${actor.name} 散播谣言，大家从右侧玩家处秘密取得了一张牌。`, now);
   nextTurn(state, now);
@@ -253,6 +298,7 @@ function openPassLeft(state, actor, now) {
   if (!participantIds.length) return nextTurn(state, now);
   state.pending = { type: "passLeft", actorId: actor.id, participantIds, selections: {} };
   setPhase(state, "passLeft", now, CHOICE_SECONDS);
+  publicEvent(state, { kind: "pass-window", actorId: actor.id, text: `${actor.name} 发起情报交换，等待所有人秘密选牌` }, now);
   addLog(state, `${actor.name} 发起情报交换，等待所有有手牌的玩家秘密选择。`, now);
 }
 
@@ -266,6 +312,7 @@ function playCard(state, actor, cardId, now, random) {
   removeCard(actor, card.id);
   discardCard(state, actor, card);
   actor.turnsTaken += 1;
+  publicEvent(state, { kind: "card-play", actorId: actor.id, cardType: card.type, text: `${actor.name} 打出“${cardLabel(card.type)}”` }, now);
   addLog(state, `${actor.name} 打出了“${cardLabel(card.type)}”。`, now);
 
   if (card.type === CARDS.CRIMINAL) return scoreRound(state, "escape", actor.id, now);
@@ -283,6 +330,9 @@ function playCard(state, actor, cardId, now, random) {
   if (card.type === CARDS.CHILD) {
     const culprit = culpritHolder(state);
     if (!culprit) throw new Error("Round has no criminal holder");
+    publicEvent(state, { kind: "child-search", actorId: actor.id, text: `${actor.name} 发动少年，秘密追踪犯人` }, now);
+    privateEvent(state, actor.id, { kind: "child-insight", actorId: actor.id, targetId: culprit.id, text: `你确认了当前犯人是 ${culprit.name}` }, now);
+    privateEvent(state, culprit.id, { kind: "child-detected", actorId: actor.id, targetId: culprit.id, text: `${actor.name} 已经认出了你` }, now);
     addLog(state, `${actor.name} 发动少年，秘密确认了当前犯人的身份。`, now);
     return openPrivateReveal(state, actor, CARDS.CHILD, culprit, now);
   }
@@ -299,11 +349,14 @@ function chooseTarget(state, actor, targetId, now, random) {
 
   if (pending.kind === CARDS.DETECTIVE) {
     const caught = hasCard(target, CARDS.CRIMINAL) && !hasCard(target, CARDS.ALIBI);
+    publicEvent(state, { kind: "accusation", actorId: actor.id, targetId: target.id, outcome: caught ? "caught" : "denied", text: caught ? `${actor.name} 指认 ${target.name}，抓捕成功！` : `${actor.name} 指认 ${target.name}，对方否认` }, now);
     addLog(state, caught ? `${actor.name} 指认 ${target.name}，抓捕成功！` : `${actor.name} 指认 ${target.name}，但对方回答“我不是犯人”。`, now);
     if (caught) return scoreRound(state, "detective", actor.id, now);
     return nextTurn(state, now);
   }
   if (pending.kind === CARDS.WITNESS) {
+    publicEvent(state, { kind: "witness-look", actorId: actor.id, targetId: target.id, text: `${actor.name} 秘密查看了 ${target.name} 的手牌` }, now);
+    privateEvent(state, actor.id, { kind: "witness-insight", actorId: actor.id, targetId: target.id, cardTypes: target.hand.map((card) => card.type), text: `${target.name} 的手牌：${target.hand.map((card) => cardLabel(card.type)).join("、")}` }, now);
     addLog(state, `${actor.name} 以目击者身份秘密查看了 ${target.name} 的手牌。`, now);
     return openPrivateReveal(state, actor, CARDS.WITNESS, target, now);
   }
@@ -311,6 +364,7 @@ function chooseTarget(state, actor, targetId, now, random) {
     const order = shuffle(target.hand.map((card) => card.id), random);
     state.pending = { type: "dogPick", actorId: actor.id, targetId: target.id, slots: order.map((cardId, index) => ({ key: `slot_${index + 1}`, cardId })) };
     setPhase(state, "dogPick", now, CHOICE_SECONDS);
+    publicEvent(state, { kind: "dog-search", actorId: actor.id, targetId: target.id, text: `${actor.name} 派神犬搜查 ${target.name}` }, now);
     addLog(state, `${actor.name} 让神犬搜查 ${target.name} 的手牌。`, now);
     return;
   }
@@ -321,6 +375,7 @@ function chooseTarget(state, actor, targetId, now, random) {
     }
     state.pending = { type: "trade", actorId: actor.id, targetId: target.id, participantIds: [actor.id, target.id], selections: {} };
     setPhase(state, "trade", now, CHOICE_SECONDS);
+    publicEvent(state, { kind: "trade-window", actorId: actor.id, targetId: target.id, text: `${actor.name} 邀请 ${target.name} 秘密交易` }, now);
     addLog(state, `${actor.name} 邀请 ${target.name} 各自秘密选择一张牌进行交易。`, now);
   }
 }
@@ -333,6 +388,9 @@ function resolveTrade(state, now) {
   const targetCard = removeCard(target, pending.selections[target.id]);
   actor.hand.push(targetCard);
   target.hand.push(actorCard);
+  publicEvent(state, { kind: "trade-complete", actorId: actor.id, targetId: target.id, text: `${actor.name} 与 ${target.name} 完成秘密交易` }, now);
+  privateEvent(state, actor.id, { kind: "trade-private", actorId: target.id, targetId: actor.id, cardType: targetCard.type, text: `你收到“${cardLabel(targetCard.type)}”` }, now);
+  privateEvent(state, target.id, { kind: "trade-private", actorId: actor.id, targetId: target.id, cardType: actorCard.type, text: `你收到“${cardLabel(actorCard.type)}”` }, now);
   addLog(state, `${actor.name} 与 ${target.name} 完成了一张牌的秘密交易。`, now);
   nextTurn(state, now);
 }
@@ -343,6 +401,7 @@ function submitTradeCard(state, actor, cardId, now) {
   if (pending.selections[actor.id]) throw new GameRuleError("already_selected", "你已经确认了交易牌。", 409);
   if (!actor.hand.some((card) => card.id === String(cardId))) throw new GameRuleError("card_not_owned", "这张牌不在你的手中。", 409);
   pending.selections[actor.id] = String(cardId);
+  publicEvent(state, { kind: "selection-ready", actorId: actor.id, targetId: pending.targetId, text: `${actor.name} 已确认秘密交易牌` }, now);
   if (pending.participantIds.every((id) => pending.selections[id])) resolveTrade(state, now);
 }
 
@@ -354,6 +413,13 @@ function resolvePassLeft(state, now) {
   });
   const cards = moves.map((move) => ({ ...move, card: removeCard(playerById(state, move.ownerId), move.cardId) }));
   for (const move of cards) playerById(state, move.receiverId).hand.push(move.card);
+  for (const move of cards) {
+    transferEvents(state, {
+      kind: "pass-transfer", actorId: move.ownerId, targetId: move.receiverId, cardType: move.card.type,
+      publicText: `${playerById(state, move.ownerId).name} 向 ${playerById(state, move.receiverId).name} 传递了一张情报牌`,
+      privateText: `传递的牌是“${cardLabel(move.card.type)}”`
+    }, now);
+  }
   addLog(state, "所有人完成情报交换，选择的牌已同时交给左侧玩家。", now);
   nextTurn(state, now);
 }
@@ -364,6 +430,7 @@ function submitPassCard(state, actor, cardId, now) {
   if (pending.selections[actor.id]) throw new GameRuleError("already_selected", "你已经确认了传递牌。", 409);
   if (!actor.hand.some((card) => card.id === String(cardId))) throw new GameRuleError("card_not_owned", "这张牌不在你的手中。", 409);
   pending.selections[actor.id] = String(cardId);
+  publicEvent(state, { kind: "selection-ready", actorId: actor.id, text: `${actor.name} 已确认要传递的牌` }, now);
   if (pending.participantIds.every((id) => pending.selections[id])) resolvePassLeft(state, now);
 }
 
@@ -373,6 +440,7 @@ function chooseDogSlot(state, actor, slotKey, now) {
   const slot = pending.slots.find((item) => item.key === String(slotKey));
   const target = playerById(state, pending.targetId);
   const card = target?.hand.find((item) => item.id === slot?.cardId);
+  if (slot && card) publicEvent(state, { kind: "dog-reveal", actorId: actor.id, targetId: target.id, cardType: card.type, text: `神犬公开了 ${target.name} 的“${cardLabel(card.type)}”` }, now);
   if (!slot || !card) throw new GameRuleError("invalid_dog_slot", "请选择一张有效的牌背。", 409);
   addLog(state, `神犬公开了 ${target.name} 的“${cardLabel(card.type)}”。`, now);
   if (card.type === CARDS.CRIMINAL) return scoreRound(state, "dog", actor.id, now);
@@ -402,7 +470,10 @@ export function createLobby({ capacity, host }) {
     winnerIds: [],
     deadline: 0,
     logs: [],
-    logSequence: 0
+    logSequence: 0,
+    presentationEvents: [],
+    privatePresentationEvents: {},
+    presentationSequence: 0
   };
 }
 
@@ -616,6 +687,13 @@ function privateInsight(state, viewer) {
   return null;
 }
 
+function presentationFor(state, viewer) {
+  const privateEvents = viewer ? state.privatePresentationEvents?.[viewer.id] || [] : [];
+  return [...state.presentationEvents, ...privateEvents]
+    .sort((left, right) => left.sequence - right.sequence)
+    .map((event) => ({ ...event }));
+}
+
 function publicView(state, viewer = null) {
   const revealAll = ["roundReview", "ended"].includes(state.phase);
   return {
@@ -634,6 +712,7 @@ function publicView(state, viewer = null) {
     roundResult: state.roundResult ? clone(state.roundResult) : null,
     winnerIds: [...state.winnerIds],
     logs: state.logs.map((entry) => ({ ...entry })),
+    presentationEvents: presentationFor(state, viewer),
     permissions: permissionsFor(state, viewer)
   };
 }
@@ -649,15 +728,28 @@ export function buildSpectatorView(state) {
 export function validateState(state) {
   if (!state || !Array.isArray(state.players)) throw new Error("Invalid game18 state");
   if (state.players.some((player) => !Number.isInteger(player.score) || player.score < 0 || !Array.isArray(player.hand))) throw new Error("Invalid player state");
-  if (state.phase === "lobby") return true;
-  if (state.players.length < MIN_PLAYERS || state.players.length > MAX_PLAYERS) throw new Error("Invalid active player count");
-  const cards = [...state.players.flatMap((player) => player.hand), ...state.discard];
-  const ids = cards.map((card) => card.id);
-  if (cards.length !== state.roundCardIds.length || new Set(ids).size !== ids.length || ids.some((id) => !state.roundCardIds.includes(id))) {
-    throw new Error(`Round card conservation failed: ${cards.length}/${new Set(ids).size}/${state.roundCardIds.length}`);
+  if (state.phase !== "lobby") {
+    if (state.players.length < MIN_PLAYERS || state.players.length > MAX_PLAYERS) throw new Error("Invalid active player count");
+    const cards = [...state.players.flatMap((player) => player.hand), ...state.discard];
+    const ids = cards.map((card) => card.id);
+    if (cards.length !== state.roundCardIds.length || new Set(ids).size !== ids.length || ids.some((id) => !state.roundCardIds.includes(id))) {
+      throw new Error(`Round card conservation failed: ${cards.length}/${new Set(ids).size}/${state.roundCardIds.length}`);
+    }
+    if (cards.filter((card) => card.type === CARDS.CRIMINAL).length !== 1) throw new Error("Round must contain exactly one criminal");
+    if (cards.filter((card) => card.type === CARDS.DISCOVERER).length !== 1) throw new Error("Round must contain exactly one discoverer");
   }
-  if (cards.filter((card) => card.type === CARDS.CRIMINAL).length !== 1) throw new Error("Round must contain exactly one criminal");
-  if (cards.filter((card) => card.type === CARDS.DISCOVERER).length !== 1) throw new Error("Round must contain exactly one discoverer");
+  try { validatePresentationState(state); }
+  catch { throw new Error("Invalid game18 public presentation events"); }
+  if (!state.privatePresentationEvents || typeof state.privatePresentationEvents !== "object" || Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game18 private presentation events");
+  const sequences = new Set(state.presentationEvents.map((event) => event.sequence));
+  for (const events of Object.values(state.privatePresentationEvents)) {
+    try { validatePresentationState({ presentationEvents: events, presentationSequence: state.presentationSequence }); }
+    catch { throw new Error("Invalid game18 private presentation events"); }
+    for (const event of events) {
+      if (!event.private || sequences.has(event.sequence)) throw new Error("Invalid game18 private presentation event sequence");
+      sequences.add(event.sequence);
+    }
+  }
   return true;
 }
 
@@ -669,6 +761,10 @@ export function serializeState(state) {
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) throw new Error(`Unsupported game18 state version: ${serializedState?.stateVersion}`);
   const state = clone(serializedState);
+  state.privatePresentationEvents = state.privatePresentationEvents && typeof state.privatePresentationEvents === "object" && !Array.isArray(state.privatePresentationEvents) ? state.privatePresentationEvents : {};
+  normalizePresentationState(state);
+  const latestPrivate = Object.values(state.privatePresentationEvents).flat().reduce((maximum, event) => Math.max(maximum, Number(event?.sequence) || 0), 0);
+  state.presentationSequence = Math.max(state.presentationSequence, latestPrivate);
   validateState(state);
   return state;
 }
