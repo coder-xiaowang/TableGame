@@ -6,6 +6,7 @@ import {
   shuffle,
   uniqueTopicWords
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export const ACTION_SECONDS = 0;
 export const MIN_PLAYERS = 2;
@@ -57,6 +58,21 @@ function requireHost(state, actorId) {
 function addLog(state, entry) {
   state.log.unshift({ id:`log_${state.logSequence += 1}`, ...entry });
   if (state.log.length > 200) state.log.length = 200;
+}
+
+function newPresentationScene(state) {
+  state.presentationSceneSequence = (Number(state.presentationSceneSequence) || 0) + 1;
+  return `decoder_scene_${state.presentationSceneSequence}`;
+}
+
+function present(state, kind, text, now, details = {}, sceneId = null) {
+  return appendPresentationEvent(state, {
+    kind,
+    text,
+    sceneId:sceneId || newPresentationScene(state),
+    priority:1,
+    ...details
+  }, { now, idPrefix:"decoder_event", limit:70 });
 }
 
 function activePlayers(state) {
@@ -133,17 +149,21 @@ function resetToLobby(state) {
   }
 }
 
-function startPlaying(state, now, description) {
+function startPlaying(state, now, description, sceneId = null) {
   state.phase = "playing";
   state.round = 1;
   state.currentPlayerId = activePlayers(state)[0]?.id || "";
   state.turnQuestionAsked = false;
   state.currentQuestion = null;
   addLog(state, { playerId:null, text:description.text, detail:description.detail, at:now });
+  present(state, "codes-issued", description.text, now, {
+    priority:3,
+    targetIds:state.players.map((player) => player.id)
+  }, sceneId);
   finishWithLastPlayer(state);
 }
 
-function assignSubmittedWords(state, random, now) {
+function assignSubmittedWords(state, random, now, sceneId = null) {
   const sourceOrder = createDerangement(state.players.length, random);
   state.players.forEach((player, targetIndex) => {
     const source = state.players[sourceOrder[targetIndex]];
@@ -158,7 +178,7 @@ function assignSubmittedWords(state, random, now) {
     detail:state.playerWordMode === "trap"
       ? "每位玩家拿到的答案和陷阱词都不是自己提交的；猜中陷阱词会立即出局。"
       : "每位玩家拿到的都不是自己提交的词。"
-  });
+  }, sceneId);
 }
 
 function cloneQuestion(question) {
@@ -209,7 +229,10 @@ export function createLobby({ capacity, host }) {
     currentQuestion:null,
     log:[],
     logSequence:0,
-    winners:[]
+    winners:[],
+    presentationEvents:[],
+    presentationSequence:0,
+    presentationSceneSequence:0
   };
 }
 
@@ -318,8 +341,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     state.log = [];
     state.logSequence = 0;
     state.winners = [];
+    const sceneId = newPresentationScene(state);
     if (state.gameMode === "playerWords") {
       state.phase = "collectingWords";
+      present(state, "collection-open", "密文提交线路已经开放", now, { priority:2, actorId:id }, sceneId);
       return;
     }
     const words = shuffle(uniqueTopicWords(state.topic), random);
@@ -333,7 +358,7 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     startPlaying(state, now, {
       text:`游戏开始，主题是「${state.topic}」。`,
       detail:"每个人都能看到别人额头上的词，但看不到自己的词。"
-    });
+    }, sceneId);
     return;
   }
 
@@ -341,6 +366,7 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     requireHost(state, id);
     if (state.phase === "lobby") throw new GameRuleError("game_not_started", "游戏尚未开始。", 409);
     resetToLobby(state);
+    present(state, "room-reset", `${actor.name} 将译码室恢复为待命状态`, now, { priority:4, actorId:id });
     return;
   }
 
@@ -353,8 +379,14 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     } catch (error) {
       throw new GameRuleError("invalid_submission", error.message, 409);
     }
+    const sceneId = newPresentationScene(state);
     state.submittedEntries[id] = entry;
-    if (state.players.every((player) => state.submittedEntries[player.id])) assignSubmittedWords(state, random, now);
+    present(state, "telegram-sealed", `${actor.name} 已封存一份密文`, now, {
+      actorId:id,
+      progress:Object.keys(state.submittedEntries).length,
+      total:state.players.length
+    }, sceneId);
+    if (state.players.every((player) => state.submittedEntries[player.id])) assignSubmittedWords(state, random, now, sceneId);
     return;
   }
 
@@ -380,6 +412,9 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
       wordExtra:actor.wordExtra,
       answers:{}, at:now
     });
+    present(state, "question-sent", `${actor.name} 发出询问：${text}`, now, {
+      priority:2, actorId:id, questionId
+    });
     return;
   }
 
@@ -393,7 +428,15 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     question.answers[id] = answer;
     const questionLog = state.log.find((entry) => entry.questionId === question.id);
     if (questionLog) questionLog.answers[id] = { playerName:actor.name, answer };
-    if (questionComplete(state)) state.currentQuestion = null;
+    const complete = questionComplete(state);
+    present(state, complete ? "answers-complete" : "answer-received",
+      complete
+        ? `${actor.name} 送达最后答复，全部线路已经回传`
+        : `${actor.name} 回传：${{ yes:"是", no:"否", maybe:"不一定" }[answer]}`,
+      now,
+      { priority:complete ? 3 : 2, actorId:id, targetId:question.askerId, answer, questionId:question.id }
+    );
+    if (complete) state.currentQuestion = null;
     return;
   }
 
@@ -404,15 +447,19 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     if (!guess) throw new GameRuleError("guess_required", "猜词不能为空。", 409);
     const correct = normalizeWord(guess) === normalizeWord(actor.word);
     const hitTrap = state.playerWordMode === "trap" && normalizeWord(guess) === normalizeWord(actor.trapWord);
+    const sceneId = newPresentationScene(state);
     if (correct) {
       actor.status = "won";
       state.winners.push(actor.id);
       addLog(state, { playerId:id, text:`${actor.name} 猜中了：${actor.word}`, detail:`名次：第 ${state.winners.length} 名`, at:now });
+      present(state, "guess-correct", `${actor.name} 成功破译「${actor.word}」`, now, { priority:5, actorId:id, guess }, sceneId);
     } else if (hitTrap) {
       actor.status = "eliminated";
       addLog(state, { playerId:id, text:`${actor.name} 猜中了陷阱词：${actor.trapWord}`, detail:"触发陷阱，立即出局。", at:now });
+      present(state, "guess-trap", `${actor.name} 触发陷阱密文「${actor.trapWord}」`, now, { priority:5, actorId:id, guess }, sceneId);
     } else {
       addLog(state, { playerId:id, text:`${actor.name} 猜错了：${guess}`, detail:"游戏继续，轮到下一位玩家。", at:now });
+      present(state, "guess-wrong", `${actor.name} 提交「${guess}」：译码不匹配`, now, { priority:3, actorId:id, guess }, sceneId);
     }
     chooseNextPlayer(state, id);
     return;
@@ -423,6 +470,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     if (state.currentQuestion) throw new GameRuleError("question_pending", "请等待其他玩家完成回答。", 409);
     addLog(state, { playerId:id, text:`${actor.name} 选择跳过`, detail:"信息不足，轮到下一位玩家。", at:now });
     chooseNextPlayer(state, id);
+    present(state, "turn-passed", `${actor.name} 暂停推断，译码权转交下一位`, now, {
+      actorId:id,
+      targetId:state.currentPlayerId || null
+    });
     return;
   }
 
@@ -461,6 +512,7 @@ function buildPublicView(state, { viewer = null, revealWords = false, permission
     log:state.log.map(cloneLog),
     winners:[...state.winners],
     notice:noticeFor(state),
+    presentationEvents:structuredClone(state.presentationEvents),
     permissions
   };
 }
@@ -494,5 +546,14 @@ export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) {
     throw new Error(`Unsupported game state version: ${serializedState?.stateVersion}`);
   }
-  return structuredClone(serializedState);
+  const state = structuredClone(serializedState);
+  normalizePresentationState(state);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence) && state.presentationSceneSequence >= 0
+    ? state.presentationSceneSequence
+    : state.presentationEvents.reduce((maximum, event) => {
+      const match = /^decoder_scene_(\d+)$/.exec(String(event?.sceneId || ""));
+      return Math.max(maximum, Number(match?.[1]) || 0);
+    }, 0);
+  validatePresentationState(state);
+  return state;
 }

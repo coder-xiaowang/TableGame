@@ -99,6 +99,8 @@ test("game restores private submissions and action deduplication from SQLite", a
     assert.deepEqual(new Set(current.submittedPlayerIds),new Set(["p1","p2"]));
     assert.equal(JSON.stringify(current).includes("答案甲"),false);
     assert.equal(JSON.stringify(current).includes("陷阱乙"),false);
+    assert.deepEqual(current.presentationEvents.map((event)=>event.sequence),[1,2,3]);
+    assert.deepEqual(current.presentationEvents.map((event)=>event.kind),["collection-open","telegram-sealed","telegram-sealed"]);
   }
 
   const duplicate = await action(running.baseUrl,sessions[1],"persist-word-2",{
@@ -119,5 +121,8 @@ test("game restores private submissions and action deduplication from SQLite", a
     assert.equal(current.words[index].trapWord,null);
     assert.ok(current.words.filter((_,wordIndex) => wordIndex !== index).every((word) => word.word && word.trapWord));
     assert.equal(JSON.stringify(current).includes("篡改答案"),false);
+    assert.deepEqual(current.presentationEvents.slice(-2).map((event)=>event.kind),["telegram-sealed","codes-issued"]);
+    assert.deepEqual(current.presentationEvents.slice(-2).map((event)=>event.sequence),[4,5]);
+    assert.equal(current.presentationEvents.at(-2).sceneId,current.presentationEvents.at(-1).sceneId);
   }
 });

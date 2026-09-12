@@ -7,11 +7,13 @@
     <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
+  <body data-theme="mechanical-cipher-room">
     <main class="app-shell">
       <header class="topbar" id="siteHeader">
         <div class="header-title">
+          <p class="brand-kicker">MECHANICAL CIPHER BUREAU · 速译局</p>
           <h1>速速破译</h1>
+          <p class="brand-subtitle">观察公开密文，推断自己头顶那枚未知代号</p>
         </div>
         <div class="header-meta">
           <div class="status-pill" id="connectionStatus">未连接</div>
@@ -93,13 +95,54 @@
         </div>
       </section>
 
-      <section class="room-panel hidden" id="roomPanel">
-        <aside class="sidebar">
-          <div class="panel player-panel">
-            <h2>玩家</h2>
-            <div class="player-list" id="playerList"></div>
-          </div>
-          <details class="panel rules-card">
+      <section class="room-panel decoder-room hidden" id="roomPanel">
+        <section class="table-area decoder-stage">
+          <div class="notice transmission-status" id="gameNotice">等待房主开始游戏。</div>
+
+          <section class="cipher-machine" aria-label="机械译码室主操作台">
+            <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+              <svg class="presentation-trail-layer" aria-hidden="true">
+                <defs><marker id="decoderTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+                <path id="presentationTrail" class="presentation-trail" marker-end="url(#decoderTrailArrow)"></path>
+              </svg>
+              <div id="presentationAnnouncement" class="presentation-announcement">
+                <span id="presentationLabel"></span>
+                <strong id="presentationText"></strong>
+              </div>
+            </div>
+            <header class="machine-header">
+              <div>
+                <p class="eyebrow">OPERATOR REGISTRY · 译码名册</p>
+                <h2>全员密文档案</h2>
+              </div>
+              <div class="machine-lamps" aria-hidden="true"><i></i><i></i><i></i></div>
+            </header>
+
+            <div class="player-list operator-registry" id="playerList"></div>
+
+            <div class="cipher-wall-heading" aria-hidden="true">
+              <span>公开可见代号</span>
+              <b>CONFIDENTIAL / EYES ONLY</b>
+              <span>本人密文封存</span>
+            </div>
+            <div class="word-board operator-wall" id="wordBoard"></div>
+
+            <div class="turn-panel decoder-console panel">
+              <div class="turn-header">
+                <div>
+                  <p class="eyebrow">CURRENT TRANSMISSION · 当前译码</p>
+                  <h2 id="turnTitle">未开始</h2>
+                </div>
+                <div class="round-badge" id="roundBadge">第 0 轮</div>
+              </div>
+
+              <div class="action-area" id="actionArea"></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="archive-strip" aria-label="译码室档案区">
+          <details class="panel rules-card archive-drawer">
             <summary><span>详细规则</span><b>展开查看</b></summary>
             <div class="rule-details">
               <h3>游戏目标</h3>
@@ -116,9 +159,9 @@
               <p>自己的答案和陷阱词始终对本人隐藏，其他玩家可见；旁观者只能查看公开问答、状态和结算，不会收到任何人的答案、陷阱词或出词内容。发词、问答、匹配、轮次和胜负均由服务器判定。</p>
             </div>
           </details>
-          <div class="panel log-panel">
+          <div class="panel log-panel archive-drawer">
             <div class="log-header">
-              <h2>问答记录</h2>
+              <div><p class="eyebrow">TRANSMISSION ARCHIVE</p><h2>问答档案</h2></div>
               <label class="log-filter-label">
                 筛选玩家
                 <select id="logPlayerFilter">
@@ -128,27 +171,10 @@
             </div>
             <div class="log-list" id="logList"></div>
           </div>
-          <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+          <details id="spectatorPanel" class="panel spectator-panel archive-drawer hidden" open>
             <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
-        </aside>
-
-        <section class="table-area">
-          <div class="notice" id="gameNotice">等待房主开始游戏。</div>
-          <div class="word-board" id="wordBoard"></div>
-
-          <div class="turn-panel panel">
-            <div class="turn-header">
-              <div>
-                <p class="eyebrow">当前行动</p>
-                <h2 id="turnTitle">未开始</h2>
-              </div>
-              <div class="round-badge" id="roundBadge">第 0 轮</div>
-            </div>
-
-            <div class="action-area" id="actionArea"></div>
-          </div>
         </section>
       </section>
     </main>

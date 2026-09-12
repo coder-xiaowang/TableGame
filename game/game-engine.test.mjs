@@ -212,3 +212,64 @@ test("game lobby seat changes keep the host and lock after word collection start
   assert.equal(engine.canChangeSeats(state),false);
   assert.throws(()=>engine.vacateSeat(state,"p2"),(error)=>error.code==="seat_change_unavailable");
 });
+
+test("game authors ordered public presentation events without leaking hidden words", () => {
+  const state = collectingWords({ playerWordMode:"trap", wordExtraMode:"forbidden" });
+  engine.applyAction(state,"p1",{type:"submitWord",word:"秘密答案甲",trapWord:"秘密陷阱甲",extra:"禁问甲"},{now:1100});
+  engine.applyAction(state,"p2",{type:"submitWord",word:"秘密答案乙",trapWord:"秘密陷阱乙",extra:"禁问乙"},{now:1200});
+  engine.applyAction(state,"p3",{type:"submitWord",word:"秘密答案丙",trapWord:"秘密陷阱丙",extra:"禁问丙"},{now:1300,random:()=>0});
+
+  assert.deepEqual(state.presentationEvents.map((event)=>event.kind), [
+    "collection-open", "telegram-sealed", "telegram-sealed", "telegram-sealed", "codes-issued"
+  ]);
+  assert.deepEqual(state.presentationEvents.map((event)=>event.sequence), [1,2,3,4,5]);
+  assert.equal(state.presentationEvents.at(-2).sceneId, state.presentationEvents.at(-1).sceneId);
+  const publicEvents = engine.buildSpectatorView(state).presentationEvents;
+  assert.deepEqual(publicEvents, engine.buildView(state,"p1").presentationEvents);
+  const serialized = JSON.stringify(publicEvents);
+  for (const secret of ["秘密答案甲","秘密答案乙","秘密答案丙","秘密陷阱甲","秘密陷阱乙","秘密陷阱丙","禁问甲"]) {
+    assert.equal(serialized.includes(secret), false);
+  }
+});
+
+test("game presentation sequence survives restore and illegal actions consume nothing", () => {
+  const state = startedLibrary();
+  assert.equal(state.presentationEvents.at(-1).kind, "codes-issued");
+  const beforeSequence = state.presentationSequence;
+  const beforeScene = state.presentationSceneSequence;
+  assert.throws(
+    () => engine.applyAction(state,"p2",{type:"question",text:"越权问题"},{now:1200}),
+    (error)=>error.code==="not_your_turn"
+  );
+  assert.equal(state.presentationSequence, beforeSequence);
+  assert.equal(state.presentationSceneSequence, beforeScene);
+
+  engine.applyAction(state,"p1",{type:"question",text:"我是动物吗？"},{now:1300});
+  engine.applyAction(state,"p2",{type:"answer",answer:"yes"},{now:1400});
+  engine.applyAction(state,"p3",{type:"answer",answer:"maybe"},{now:1500});
+  assert.deepEqual(state.presentationEvents.slice(-3).map((event)=>event.kind), ["question-sent","answer-received","answers-complete"]);
+  const restored = engine.restoreState(engine.serializeState(state));
+  assert.equal(restored.presentationSequence, state.presentationSequence);
+  assert.equal(restored.presentationSceneSequence, state.presentationSceneSequence);
+
+  const legacy = engine.serializeState(state);
+  delete legacy.presentationEvents;
+  delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
+  const restoredLegacy = engine.restoreState(legacy);
+  assert.deepEqual(restoredLegacy.presentationEvents, []);
+  assert.equal(restoredLegacy.presentationSequence, 0);
+  assert.equal(restoredLegacy.presentationSceneSequence, 0);
+});
+
+test("game emits one authoritative verdict for guesses and keeps sequence monotonic across rounds", () => {
+  const state = startedLibrary();
+  engine.applyAction(state,"p1",{type:"guess",text:"肯定不对"},{now:2000});
+  assert.equal(state.presentationEvents.at(-1).kind,"guess-wrong");
+  const afterGuess = state.presentationSequence;
+  engine.applyAction(state,"p1",{type:"end"},{now:2100});
+  assert.equal(state.presentationEvents.at(-1).kind,"room-reset");
+  engine.applyAction(state,"p1",{type:"start"},{now:2200,random:()=>0});
+  assert.equal(state.presentationEvents.at(-1).kind,"codes-issued");
+  assert.ok(state.presentationSequence > afterGuess);
+});

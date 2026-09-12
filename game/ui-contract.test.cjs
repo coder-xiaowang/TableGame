@@ -18,31 +18,58 @@ test("game1 merges room management into the compact title bar",()=>{
   assert.match(script,/elements\.siteHeader\.classList\.add\("in-room"\)/);
 });
 
-test("game1 folds detailed rules and moves filtered history before spectators",()=>{
-  const aside=html.slice(html.indexOf('<aside class="sidebar">'),html.indexOf("</aside>")+8);
-  const playersAt=aside.indexOf('class="panel player-panel"');
-  const rulesAt=aside.indexOf('class="panel rules-card"');
-  const logAt=aside.indexOf('class="panel log-panel"');
-  const spectatorsAt=aside.indexOf('id="spectatorPanel"');
-  assert.ok(playersAt>=0&&playersAt<rulesAt&&rulesAt<logAt&&logAt<spectatorsAt);
-  assert.match(html,/<details class="panel rules-card">/);
-  assert.doesNotMatch(html,/<details class="panel rules-card"[^>]*\sopen(?:\s|>)/);
-  assert.match(aside,/id="logPlayerFilter"/);
+test("game1 turns its room into a distinct mechanical cipher workstation",()=>{
+  assert.match(html,/<body data-theme="mechanical-cipher-room">/);
+  const stage=html.slice(html.indexOf('<section class="table-area decoder-stage">'),html.indexOf('<section class="archive-strip"'));
+  for(const marker of["cipher-machine","operator-registry","operator-wall","decoder-console"])assert.match(stage,new RegExp(marker));
+  assert.match(styles,/Experience shell: a warm, mechanical cipher room/);
+  assert.match(styles,/\.cipher-machine\s*\{/);
+  assert.match(styles,/\.operator-card\.active\s*\{/);
+});
+
+test("game1 keeps rules and public records in ordered archive drawers",()=>{
+  const archive=html.slice(html.indexOf('<section class="archive-strip"'),html.indexOf("</section>\n      </section>")+10);
+  const rulesAt=archive.indexOf('class="panel rules-card archive-drawer"');
+  const logAt=archive.indexOf('class="panel log-panel archive-drawer"');
+  const spectatorsAt=archive.indexOf('id="spectatorPanel"');
+  assert.ok(rulesAt>=0&&rulesAt<logAt&&logAt<spectatorsAt);
+  assert.match(html,/<details class="panel rules-card archive-drawer">/);
+  assert.doesNotMatch(html,/<details class="panel rules-card archive-drawer"[^>]*\sopen(?:\s|>)/);
+  assert.match(archive,/id="logPlayerFilter"/);
   assert.match(html,/自己的答案和陷阱词始终对本人隐藏/);
 });
 
-test("game1 prioritizes words and active actions on narrow screens",()=>{
-  assert.ok(html.indexOf('<aside class="sidebar">')<html.indexOf('<section class="table-area">'));
-  assert.match(styles,/@media \(max-width: 860px\)[\s\S]*?\.room-panel \{ display: flex; flex-direction: column; \}/);
-  assert.match(styles,/\.room-panel > \.table-area \{ order: 1; \}/);
-  assert.match(styles,/\.room-panel > \.sidebar \{[\s\S]*?order: 2;/);
+test("game1 scales operator plaques and keeps its decoder console available on phones",()=>{
+  assert.match(script,/elements\.wordBoard\.classList\.toggle\("crowded", view\.words\.length > 8\)/);
+  assert.match(script,/elements\.wordBoard\.classList\.toggle\("dense", view\.words\.length > 16\)/);
+  assert.match(styles,/\.decoder-console\s*\{[\s\S]*?position: sticky;/);
+  assert.match(styles,/@media \(max-width: 640px\)[\s\S]*?\.operator-wall,[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles,/@media \(max-width: 390px\)[\s\S]*?grid-template-columns: 1fr;/);
 });
 
 test("game1 preserves private words, question actions and log filtering",()=>{
   for(const id of["wordBoard","turnTitle","roundBadge","actionArea","logPlayerFilter","logList"])assert.match(html,new RegExp(`id="${id}"`));
   assert.match(script,/renderWords\(memberRole\)/);
+  assert.match(script,/SEALED PERSONAL CODE/);
+  assert.match(script,/ASSIGNED CODE/);
   assert.match(script,/questionInput/);
   assert.match(script,/guessInput/);
   assert.match(script,/renderLog\(\)/);
   assert.match(script,/logPlayerFilter/);
+});
+
+test("game1 consumes server-authored cipher presentations with backlog control",()=>{
+  for(const id of["presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText"]) {
+    assert.match(html,new RegExp(`id="${id}"`));
+  }
+  assert.match(script,/createPresentationTimeline/);
+  assert.match(script,/presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script,/data-player-anchor=/);
+  assert.match(script,/sceneKey:\(event\) => event\.sceneId/);
+  assert.match(script,/catchUpThreshold:4/);
+  assert.match(script,/severeBacklogThreshold:8/);
+  assert.match(script,/urgentPriority:5/);
+  assert.match(styles,/\.presentation-effects\s*\{[\s\S]*?pointer-events: none;/);
+  assert.match(styles,/\.presentation-token\s*\{/);
+  assert.match(styles,/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.presentation-token/);
 });

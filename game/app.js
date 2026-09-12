@@ -4,6 +4,7 @@ import {
   bindRoomCodeInput,
   cleanPlayerName,
   createAuthoritativeRoomClient,
+  createPresentationTimeline,
   createSessionStore,
   createSpectatorUi,
   escapeHtml,
@@ -23,7 +24,8 @@ const elements = Object.fromEntries([
   "playerWordModeLabel", "playerWordModeSelect", "createRoomButton", "roomCodeInput", "joinIntentField",
   "joinRoomButton", "hostTools", "roomCodeDisplay", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton",
   "playerList", "gameNotice", "wordBoard", "turnTitle", "roundBadge", "actionArea",
-  "logPlayerFilter", "logList"
+  "logPlayerFilter", "logList", "presentationEffects", "presentationTrail", "presentationAnnouncement",
+  "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
 
 let mode = "host";
@@ -31,6 +33,7 @@ let view = null;
 let logPlayerFilter = "all";
 let configuringRoom = false;
 let spectatorUi = null;
+let presentation = null;
 const versionWaiters = new Set();
 const sessions = createSessionStore({ gameId: "guess-word" });
 const room = createAuthoritativeRoomClient({
@@ -45,6 +48,7 @@ const room = createAuthoritativeRoomClient({
       for (const waiter of versionWaiters) waiter(version);
       enterRoom();
       render();
+      presentation?.sync(nextView.presentationEvents);
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
@@ -183,6 +187,7 @@ function endCurrentGame() {
 
 function render() {
   if (!view) return;
+  document.body.dataset.phase = view.phase;
   const spectatorModel = spectatorUi.render(view);
   const memberRole = spectatorModel.memberRole;
   setHidden(elements.hostTools, !view.permissions?.canManage);
@@ -204,7 +209,9 @@ function render() {
 }
 
 function renderPlayers() {
-  elements.playerList.innerHTML = view.players.map((player) => {
+  elements.playerList.dataset.count = String(view.players.length);
+  elements.playerList.classList.toggle("crowded", view.players.length > 8);
+  elements.playerList.innerHTML = view.players.map((player, index) => {
     const submitted = view.submittedPlayerIds?.includes(player.id);
     const statusText = player.status === "won" ? "已猜中"
       : player.status === "eliminated" ? "已出局"
@@ -215,12 +222,12 @@ function renderPlayers() {
       : player.status === "eliminated" ? "eliminated"
         : player.status === "left" ? "out" : player.isCurrent ? "active" : "";
     const tag = player.isCurrent ? "行动" : statusText;
+    const stateClass = player.connected ? "online" : "offline";
     return `
-      <div class="player-item ${player.id === view.selfId ? "player-self" : ""}">
-        <div>
-          <div class="player-name">${escapeHtml(player.name)}${player.isHost ? " · 房主" : ""}</div>
-          <div class="player-meta">${player.connected ? "在线" : "离线"} · ${statusText}</div>
-        </div>
+      <div class="player-item operator-chip ${stateClass} ${player.id === view.selfId ? "player-self" : ""}" title="${escapeHtml(player.connected ? "在线" : "离线")} · ${escapeHtml(statusText)}">
+        <span class="operator-light" aria-hidden="true"></span>
+        <span class="operator-number">${String(index + 1).padStart(2, "0")}</span>
+        <div class="player-name">${escapeHtml(player.name)}${player.isHost ? " · 房主" : ""}</div>
         <div class="player-actions">
           <span class="tag ${tagClass}">${tag}</span>
           ${view.permissions?.canKick && !player.isHost ? `<button class="kick-player-button" data-player-id="${escapeHtml(player.id)}" type="button">移出</button>` : ""}
@@ -233,8 +240,22 @@ function renderPlayers() {
 }
 
 function renderWords(memberRole) {
-  elements.wordBoard.innerHTML = view.words.map((item) => {
+  elements.wordBoard.dataset.count = String(view.words.length);
+  elements.wordBoard.classList.toggle("crowded", view.words.length > 8);
+  elements.wordBoard.classList.toggle("dense", view.words.length > 16);
+  elements.wordBoard.innerHTML = view.words.map((item, index) => {
     const mine = item.id === view.selfId;
+    const player = view.players.find((entry) => entry.id === item.id);
+    const stateClass = !player?.connected ? "offline"
+      : player?.status === "won" ? "won"
+        : player?.status === "eliminated" ? "eliminated"
+          : player?.status === "left" ? "out"
+            : player?.isCurrent ? "active" : "";
+    const statusLabel = player?.status === "won" ? "译码完成"
+      : player?.status === "eliminated" ? "触发陷阱"
+        : player?.status === "left" ? "最后留场"
+          : player?.isCurrent ? "正在译码"
+            : player?.connected ? "线路待命" : "信号中断";
     const value = item.status === "waiting" ? "待发牌"
       : memberRole === "spectator" ? "答案对旁观者隐藏"
       : mine ? "你的词被服务器遮住" : item.word || "未分配";
@@ -245,11 +266,19 @@ function renderWords(memberRole) {
       ? `<div class="trap-word ${mine ? "mine" : ""}"><strong>陷阱：</strong>${memberRole === "spectator" ? "对旁观者隐藏" : mine ? "你的陷阱词被服务器遮住" : escapeHtml(item.trapWord || "未分配")}</div>`
       : "";
     return `
-      <div class="word-card">
-        <div class="word-owner">${escapeHtml(item.name)}</div>
-        <div class="word-value ${mine ? "mine" : ""}">${escapeHtml(value)}</div>
+      <article class="word-card operator-card ${stateClass} ${mine ? "self-card" : ""}" data-player-anchor="${escapeHtml(item.id)}">
+        <header class="operator-card-head">
+          <span class="operator-code">OP-${String(index + 1).padStart(2, "0")}</span>
+          <div class="word-owner">${escapeHtml(item.name)}${mine ? " · 你" : ""}</div>
+          <span class="operator-state">${statusLabel}</span>
+        </header>
+        <div class="cipher-label ${mine ? "sealed" : ""}">
+          <small>${mine ? "SEALED PERSONAL CODE" : "ASSIGNED CODE"}</small>
+          <div class="word-value ${mine ? "mine" : ""}">${escapeHtml(value)}</div>
+        </div>
         ${trap}${extra}
-      </div>`;
+        <footer class="operator-card-foot"><span>${player?.connected ? "LINK STABLE" : "LINK LOST"}</span><i aria-hidden="true"></i></footer>
+      </article>`;
   }).join("");
 }
 
@@ -415,6 +444,72 @@ function syncPlayerWordSettings() {
   if (trapMode && elements.wordExtraModeSelect.value === "hint") elements.wordExtraModeSelect.value = "none";
 }
 
+function presentationLabelFor(kind) {
+  return ({
+    "collection-open":"密文征集",
+    "telegram-sealed":"电报封存",
+    "codes-issued":"代号分发",
+    "question-sent":"询问发出",
+    "answer-received":"线路回传",
+    "answers-complete":"答复齐全",
+    "guess-correct":"破译成功",
+    "guess-wrong":"校验失败",
+    "guess-trap":"陷阱警报",
+    "turn-passed":"译码权转交",
+    "room-reset":"设备复位"
+  })[kind] || "译码室动态";
+}
+
+function playerAnchor(playerId) {
+  if (!playerId) return null;
+  return elements.wordBoard.querySelector(`[data-player-anchor="${CSS.escape(String(playerId))}"]`);
+}
+
+function presentationSource(event) {
+  if (["collection-open", "codes-issued", "room-reset"].includes(event.kind)) return document.querySelector(".decoder-console");
+  return playerAnchor(event.actorId) || document.querySelector(".decoder-console");
+}
+
+function presentationTarget(event) {
+  if (event.targetId) return playerAnchor(event.targetId) || document.querySelector(".decoder-console");
+  return document.querySelector(".decoder-console");
+}
+
+function playPresentationObject(event) {
+  const source = presentationSource(event);
+  const target = presentationTarget(event);
+  const targets = (event.targetIds || []).map(playerAnchor).filter(Boolean);
+  const highlighted = [...new Set([source, target, ...targets].filter(Boolean))];
+  highlighted.forEach((element) => element.classList.add("presentation-focus"));
+
+  const centralKinds = new Set(["codes-issued", "answers-complete", "guess-correct", "guess-wrong", "guess-trap", "room-reset"]);
+  if (centralKinds.has(event.kind)) document.querySelector(".decoder-console")?.classList.add("presentation-verdict");
+
+  let token = null;
+  if (source && target) {
+    const stage = document.querySelector(".cipher-machine").getBoundingClientRect();
+    const from = source.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    token = document.createElement("span");
+    token.className = `presentation-token token-${event.kind}`;
+    token.textContent = ({
+      "telegram-sealed":"封", "question-sent":"?", "answer-received":{ yes:"是", no:"否", maybe:"疑" }[event.answer],
+      "answers-complete":"齐", "guess-correct":"准", "guess-wrong":"误", "guess-trap":"警", "turn-passed":"→"
+    })[event.kind] || "译";
+    token.style.setProperty("--from-x", `${from.left + from.width / 2 - stage.left}px`);
+    token.style.setProperty("--from-y", `${from.top + from.height / 2 - stage.top}px`);
+    token.style.setProperty("--to-x", `${to.left + to.width / 2 - stage.left}px`);
+    token.style.setProperty("--to-y", `${to.top + to.height / 2 - stage.top}px`);
+    elements.presentationEffects.append(token);
+  }
+
+  return () => {
+    highlighted.forEach((element) => element.classList.remove("presentation-focus"));
+    document.querySelector(".decoder-console")?.classList.remove("presentation-verdict");
+    token?.remove();
+  };
+}
+
 async function init() {
   bindRoomCodeInput(elements.roomCodeInput);
   spectatorUi.bind();
@@ -445,5 +540,29 @@ async function init() {
     // The setup remains usable and create/join will show a detailed error.
   }
 }
+
+presentation = createPresentationTimeline({
+  container:document.querySelector(".cipher-machine"),
+  trailPath:elements.presentationTrail,
+  announcement:elements.presentationAnnouncement,
+  labelElement:elements.presentationLabel,
+  textElement:elements.presentationText,
+  effectsElement:elements.presentationEffects,
+  resolveSource:presentationSource,
+  resolveTarget:presentationTarget,
+  labelFor:(event) => presentationLabelFor(event.kind),
+  beforePlay:playPresentationObject,
+  sceneKey:(event) => event.sceneId,
+  priorityFor:(event) => Number(event.priority) || 1,
+  durationMs:1500,
+  reducedDurationMs:480,
+  catchUpThreshold:4,
+  severeBacklogThreshold:8,
+  catchUpDurationMs:780,
+  severeDurationMs:380,
+  urgentPriority:5,
+  retainPriority:4,
+  maxQueue:14
+});
 
 init();
