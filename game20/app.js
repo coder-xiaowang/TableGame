@@ -15,7 +15,7 @@ const E = Object.fromEntries([
   "hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay",
   "hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","startGameButton","nextRoundButton","endGameButton",
-  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","controlDock","actionTitle","actionHint","actionButtons",
+  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","answerEchoes","controlDock","actionTitle","actionHint","actionButtons",
   "timerText","timerBar","secretPanel","roleLabel","secretRole","secretWord","commonWins","insiderWins","failedRounds","toggleLogButton","logList",
   "spectatorPanel","spectatorCountBadge","spectatorList"
 ].map((id) => [id, $(id)]));
@@ -124,16 +124,14 @@ function choosePlayer(kind, playerId) {
 function renderPlayers() {
   const selfIndex = view.players.findIndex((item) => item.id === view.selfId);
   const ordered = selfIndex < 0 ? view.players : [...view.players.slice(selfIndex), ...view.players.slice(0, selfIndex)];
-  const leftCount = Math.floor(ordered.length / 2);
-  const rightCount = ordered.length - leftCount;
   const kind = targetMode();
   const targets = eligibleTargetIds(kind);
   E.players.dataset.count = String(ordered.length);
   E.players.innerHTML = ordered.map((item, index) => {
-    const side = index < leftCount ? "left" : "right";
-    const sideIndex = side === "left" ? index : index - leftCount;
-    const sideCount = side === "left" ? leftCount : rightCount;
-    const y = sideCount === 1 ? 50 : 8 + 84 * (sideIndex + .5) / sideCount;
+    const angle = -90 + (180 / ordered.length) + index * (360 / ordered.length);
+    const radians = angle * Math.PI / 180;
+    const x = 50 + Math.cos(radians) * 41;
+    const y = 51 + Math.sin(radians) * 38;
     const targetable = targets.has(item.id);
     const badges = [
       item.isMaster ? '<span class="badge master">主持人</span>' : "",
@@ -143,7 +141,7 @@ function renderPlayers() {
       view.phase === "firstVote" && view.submittedFirstVoteIds.includes(item.id) ? '<span class="badge">已投票</span>' : "",
       view.phase === "secondVote" && view.submittedSecondVoteIds.includes(item.id) ? '<span class="badge">已投票</span>' : ""
     ].join("");
-    return `<article data-side="${side}" style="--seat-y:${y}%" class="player-seat ${item.id === view.selfId ? "self" : ""} ${item.isMaster ? "master" : ""} ${!item.connected ? "offline" : ""} ${targetable ? "targetable" : ""}" ${targetable ? `data-target-id="${escapeHtml(item.id)}" role="button" tabindex="0" aria-label="选择 ${escapeHtml(item.name)}"` : ""}>
+    return `<article data-player-anchor="${escapeHtml(item.id)}" style="--seat-x:${x.toFixed(2)}%;--seat-y:${y.toFixed(2)}%" class="player-seat ${item.id === view.selfId ? "self" : ""} ${item.isMaster ? "master" : ""} ${!item.connected ? "offline" : ""} ${targetable ? "targetable" : ""}" ${targetable ? `data-target-id="${escapeHtml(item.id)}" role="button" tabindex="0" aria-label="选择 ${escapeHtml(item.name)}"` : ""}>
       <div class="seat-head"><div><b>${escapeHtml(item.name)}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"}</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div>
       <div class="seat-badges">${badges || '<span class="badge">身份隐藏</span>'}</div>
     </article>`;
@@ -246,6 +244,9 @@ function renderActions(memberRole) {
 }
 
 function renderPublicFocus() {
+  const echoes = (view.answerHistory || []).slice(0, 6);
+  E.answerEchoes.innerHTML = echoes.map((entry, index) => `<span class="answer-echo answer-${entry.answer}" style="--echo-delay:${index * 45}ms">${ANSWER_LABEL[entry.answer] || "?"}</span>`).join("");
+  E.answerEchoes.classList.toggle("empty", echoes.length === 0);
   E.focusLabel.textContent = "CURRENT SIGNAL";
   if (view.phase === "lobby") { E.focusText.textContent = "答案尚未藏入房间"; E.focusHint.textContent = "等待正式玩家到齐"; return; }
   if (view.phase === "secretReveal") { E.focusText.textContent = "秘密正在传递"; E.focusHint.textContent = `主持人与局内人正在确认答案 · ${view.secretConfirmedCount}/2`; return; }

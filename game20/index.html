@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-theme="insider-question-salon">
 <main class="shell">
   <header id="hero" class="hero">
     <div class="hero-title"><p class="eyebrow">WHO GUIDES THE TRUTH? · SERVER AUTHORITY</p><h1>局内人 <span>INSIDER</span></h1><p>答案藏在问题之后，引路的人也藏在人群之中。</p></div>
@@ -49,9 +49,40 @@
     </section>
   </section>
 
-  <section id="roomPanel" class="room-layout hidden">
-    <aside class="sidebar">
-      <details class="panel rule-card">
+  <section id="roomPanel" class="room-layout salon-layout hidden">
+    <section class="game-area salon-stage">
+      <div id="notice" class="notice salon-ribbon">等待玩家加入。</div>
+      <section class="discussion-table question-salon" data-ui-role="core-table">
+        <div class="salon-mark salon-mark-left" aria-hidden="true">?</div>
+        <div class="salon-mark salon-mark-right" aria-hidden="true">!</div>
+        <div class="table-title"><p class="eyebrow">THE QUESTION CIRCLE</p><h2 id="phaseTitle">等待讨论开始</h2><span>第 <b id="roundNumber">0</b> 轮</span></div>
+        <div id="players" class="players" aria-label="问答沙龙参与者"></div>
+
+        <section class="public-focus truth-dial" aria-live="polite">
+          <span id="focusLabel">CURRENT SIGNAL</span>
+          <strong id="focusText">答案尚未藏入房间</strong>
+          <small id="focusHint">主持人的回答会留在提问钟盘上</small>
+          <div id="answerEchoes" class="answer-echoes" aria-label="主持人的最近回答"></div>
+        </section>
+      </section>
+
+      <section id="controlDock" class="panel control-dock salon-console" data-role="player">
+        <div class="action-zone">
+          <div class="action-head"><div><p class="eyebrow">YOUR TURN TO SPEAK</p><h2 id="actionTitle">等待开始</h2></div><div class="timer" aria-label="当前阶段剩余时间"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <section id="secretPanel" class="secret-panel private-zone hidden"><span id="roleLabel">你的密封身份</span><strong id="secretRole">—</strong><p id="secretWord"></p></section>
+      </section>
+    </section>
+
+    <aside class="sidebar salon-archive" aria-label="沙龙档案带">
+      <section class="panel stats-card salon-score">
+        <p class="eyebrow">SALON TALLY</p><h2>本房间的推理战绩</h2>
+        <div class="stats"><span>众人识破<b id="commonWins">0</b></span><span>局内人潜藏<b id="insiderWins">0</b></span><span>谜底未明<b id="failedRounds">0</b></span></div>
+      </section>
+
+      <details class="panel rule-card" data-ui-role="rules-entry">
         <summary><span><span class="eyebrow">RULE BOOK</span><b>详细规则</b></span><span>展开</span></summary>
         <div class="rule-details">
           <h3>身份和目标</h3>
@@ -68,44 +99,16 @@
         </div>
       </details>
 
-      <section class="panel stats-card">
-        <p class="eyebrow">ROOM RECORD</p><h2>房间战绩</h2>
-        <div class="stats"><span>普通阵营<b id="commonWins">0</b></span><span>局内人<b id="insiderWins">0</b></span><span>全员失败<b id="failedRounds">0</b></span></div>
-      </section>
-
-      <section class="panel log-card">
+      <section class="panel log-card" data-ui-role="game-log">
         <div class="section-head"><div><p class="eyebrow">PUBLIC RECORD</p><h2>公开记录</h2></div><button id="toggleLogButton" class="small" type="button">收起</button></div>
         <div id="logList" class="log"></div>
       </section>
 
-      <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+      <details id="spectatorPanel" class="panel spectator-panel hidden" data-ui-role="spectators" open>
         <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
     </aside>
-
-    <section class="game-area">
-      <div id="notice" class="notice">等待玩家加入。</div>
-      <section class="discussion-table">
-        <div class="table-title"><p class="eyebrow">THE QUESTIONING ROOM</p><h2 id="phaseTitle">等待讨论开始</h2><span>第 <b id="roundNumber">0</b> 轮</span></div>
-        <div id="players" class="players"></div>
-
-        <section class="public-focus" aria-live="polite">
-          <span id="focusLabel">CURRENT SIGNAL</span>
-          <strong id="focusText">答案尚未藏入房间</strong>
-          <small id="focusHint">主持人的回答和公开结果会显示在这里</small>
-        </section>
-
-      </section>
-      <section id="controlDock" class="panel control-dock" data-role="player">
-        <div class="action-zone">
-          <div class="action-head"><div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
-          <p id="actionHint" class="action-hint"></p>
-          <div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <section id="secretPanel" class="secret-panel private-zone hidden"><span id="roleLabel">你的身份</span><strong id="secretRole">—</strong><p id="secretWord"></p></section>
-      </section>
-    </section>
   </section>
 </main>
 <script type="module" src="app.js"></script>
