@@ -18,6 +18,10 @@ node game13/signal-server.js
 - 完整房间状态写入 SQLite，进程重启后可恢复牌库、阶段、截止时间和私密待处理动作。
 - 协议版本为 v3，使用 `shared/server/start-authoritative-game-server.js` 和共享客户端。
 
+## 演出层
+
+牌库抽牌、弃牌、换牌、匹配、能力、CABO 宣告和结算均由服务端生成演出事件。公共事件不携带隐藏牌值；初始记忆、PEEK/SPY 精确牌位通过逐玩家私有事件发送。快速操作会按场景合并并压缩队列，刷新或重连不会重播历史。详细事件和验收边界见 [PRESENTATION_MIGRATION.md](PRESENTATION_MIGRATION.md)。
+
 ## 测试
 
 ```bash

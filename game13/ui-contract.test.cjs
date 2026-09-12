@@ -37,6 +37,13 @@ test("进入房间时启用紧凑标题工具且旁观接口不依赖身份横�
   assert.doesNotMatch(script, /E\.roomRole(?:Banner|Title|Hint)/);
   assert.match(script, /createSpectatorUi\(\{/);
   assert.match(script, /seatActionButton:E\.seatActionButton/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(next\.presentationEvents\)/);
+  assert.match(script, /data-player-id=/);
+  assert.match(script, /data-slot-anchor=/);
+  assert.match(script, /sceneKey:\(event\)=>event\.sceneId\|\|event\.id/);
+  assert.match(script, /catchUpThreshold:2/);
+  assert.match(script, /severeBacklogThreshold:5/);
 });
 
 test("手机端牌桌优先且四张固定牌位继续完整展示", () => {
@@ -48,4 +55,7 @@ test("手机端牌桌优先且四张固定牌位继续完整展示", () => {
   assert.match(css, /@media\(max-width:850px\)[\s\S]*?\.room-layout aside\{order:2;/);
   assert.match(css, /@media\(max-width:1050px\)\{\.slots[^}]*grid-template-columns:repeat\(4,minmax\(0,54px\)\)/);
   assert.match(css, /\.rule-details\{max-height:58vh;overflow:auto/);
+  assert.match(css, /\.presentation-effects/);
+  assert.match(css, /\.presentation-trail\.active/);
+  assert.match(css, /\.presentation-token/);
 });

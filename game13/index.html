@@ -97,6 +97,13 @@
             <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div>
             <p id="selectionHint" class="selection-hint"></p><div id="actionArea" class="actions"></div>
           </div>
+          <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+            <svg class="presentation-trail-layer" aria-hidden="true">
+              <defs><marker id="caboTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+              <path id="presentationTrail" class="presentation-trail" marker-end="url(#caboTrailArrow)"></path>
+            </svg>
+            <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
+          </div>
         </div>
       </div>
 

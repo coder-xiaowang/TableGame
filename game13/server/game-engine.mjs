@@ -3,6 +3,7 @@ import {
   MAX_PLAYERS, MIN_PLAYERS, REVEAL_SECONDS, TARGET_SECONDS,
   createDeck, powerForValue, scoreRound, shuffle
 } from "../rules.mjs";
+import { appendPresentationEvent, normalizePresentationState, validatePresentationState } from "../../shared/server/presentation-events.mjs";
 
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
@@ -46,6 +47,20 @@ function makePlayer({id,name,isHost=false,connected=false}) {
 function addLog(state,message,now) {
   state.logs.unshift({id:`log_${state.logSequence += 1}`,text:message,at:now});
   if (state.logs.length > 100) state.logs.length = 100;
+}
+function newScene(state) {
+  state.presentationSceneSequence=(Number(state.presentationSceneSequence)||0)+1;
+  return `cabo_scene_${state.presentationSceneSequence}`;
+}
+function publicEvent(state,event,now,sceneId=null) {
+  return appendPresentationEvent(state,{priority:1,...event,sceneId:sceneId||newScene(state)},{now,idPrefix:"cabo_event",limit:70});
+}
+function privateEvent(state,playerId,event,now,sceneId=null) {
+  const id=String(playerId||""); if(!id)return null;
+  state.privatePresentationEvents??={};
+  const envelope={events:Array.isArray(state.privatePresentationEvents[id])?state.privatePresentationEvents[id]:[],sequence:Number(state.presentationSequence)||0};
+  const stored=appendPresentationEvent(envelope,{priority:2,...event,private:true,sceneId:sceneId||newScene(state)},{now,eventsKey:"events",sequenceKey:"sequence",idPrefix:"cabo_private",limit:25});
+  state.privatePresentationEvents[id]=envelope.events;state.presentationSequence=envelope.sequence;return stored;
 }
 function drawCard(state) {
   const card = state.deck.pop();
@@ -106,19 +121,23 @@ function beginRound(state,random,now,{first=false}={}) {
   state.phase="initialPeek";
   setDeadline(state,now,INITIAL_PEEK_SECONDS);
   addLog(state,`第 ${state.round} 轮开始，等待所有玩家查看两张初始牌。`,now);
+  publicEvent(state,{kind:"round-start",priority:4,text:`第 ${state.round} 轮开始，记忆两张初始牌`,round:state.round},now);
 }
 
-function startInitialReveal(state,now) {
+function startInitialReveal(state,now,sceneId=null) {
   state.phase="initialReveal";
   setDeadline(state,now,REVEAL_SECONDS);
+  publicEvent(state,{kind:"initial-reveal",priority:3,text:"所有玩家已选择，开始秘密记忆"},now,sceneId);
 }
 
-function beginTurn(state,now) {
+function beginTurn(state,now,sceneId=null) {
   state.phase="turn"; state.pending=null; state.privateReveal=null;
   setDeadline(state,now,ACTION_SECONDS);
+  const actor=currentPlayer(state);
+  publicEvent(state,{kind:"turn-start",priority:2,text:`轮到 ${actor?.name||"玩家"} 行动`,actorId:actor?.id||null},now,sceneId);
 }
 
-function finishRound(state,now,reason) {
+function finishRound(state,now,reason,sceneId=null) {
   const result=scoreRound(state.players,state.cabo?.callerId || null);
   state.roundResult=result;
   for (const item of result) {
@@ -143,24 +162,26 @@ function finishRound(state,now,reason) {
     state.winnerIds=winners.map((player)=>player.id); state.phase="ended";
   } else state.phase="roundEnd";
   addLog(state,`${reason}，第 ${state.round} 轮结束。`,now);
+  publicEvent(state,{kind:"round-result",priority:5,text:`${reason}，第 ${state.round} 轮结算`,reason,winnerIds:[...state.winnerIds]},now,sceneId);
 }
 
-function finishTurn(state,now) {
-  if (!state.deck.length) return finishRound(state,now,"牌库耗尽");
+function finishTurn(state,now,sceneId=null) {
+  if (!state.deck.length) return finishRound(state,now,"牌库耗尽",sceneId);
   if (state.cabo) {
     const completed=currentPlayer(state)?.id;
     state.cabo.remainingIds=state.cabo.remainingIds.filter((id)=>id!==completed);
-    if (!state.cabo.remainingIds.length) return finishRound(state,now,"所有最终回合完成");
+    if (!state.cabo.remainingIds.length) return finishRound(state,now,"所有最终回合完成",sceneId);
     const nextId=state.cabo.remainingIds[0];
     state.currentIndex=state.players.findIndex((player)=>player.id===nextId);
   } else state.currentIndex=nextIndex(state);
-  beginTurn(state,now);
+  beginTurn(state,now,sceneId);
 }
 
 function addDiscard(state,card) { state.discard.push(card); }
 
 function exchangeCards(state,actor,action,now) {
   const pending=state.pending;
+  const sceneId=newScene(state);
   const ids=[...new Set((action.slotIds||[]).map(String))];
   if (!ids.length) throw new GameRuleError("slots_required","请至少选择一张自己的牌。",409);
   const selected=ids.map((id)=>slotById(actor,id));
@@ -173,16 +194,18 @@ function exchangeCards(state,actor,action,now) {
     actor.slots=actor.slots.filter((slot)=>!ids.includes(slot.slotId));
     actor.slots.splice(indexes[0],0,incoming);
     addLog(state,`${actor.name} 用抽到的牌替换了 ${ids.length} 张牌${ids.length>1?"，匹配成功":""}。`,now);
+    publicEvent(state,{kind:ids.length>1?"match-success":"exchange",priority:ids.length>1?4:3,text:ids.length>1?`${actor.name} 匹配成功，一次替换 ${ids.length} 张牌`:`${actor.name} 完成了一次换牌`,actorId:actor.id,targetPlayerId:actor.id,incomingSlotId:incoming.slotId,source:pending.source,selectedCount:ids.length},now,sceneId);
   } else {
     for (const slot of selected) slot.faceUp=true;
     state.pending.failedExchange={selectedCount:ids.length};
     state.phase="failedExchange";
     setDeadline(state,now,DECISION_SECONDS);
     addLog(state,`${actor.name} 的多牌匹配失败，所选牌已经公开，等待放置新增牌。`,now);
+    publicEvent(state,{kind:"match-failed",priority:4,text:`${actor.name} 的 ${ids.length} 张匹配失败，所选牌公开`,actorId:actor.id,slotIds:ids,selectedCount:ids.length},now,sceneId);
     return;
   }
   state.pending=null;
-  finishTurn(state,now);
+  finishTurn(state,now,sceneId);
 }
 
 function placeFailedExchange(state,actor,action,now) {
@@ -191,19 +214,22 @@ function placeFailedExchange(state,actor,action,now) {
   if (action.end!=="left" && action.end!=="right") throw new GameRuleError("invalid_placement","请选择放在手牌最左侧或最右侧。",409);
   const incoming=makeSlot(state,pending.card,pending.source==="discard");
   if (action.end==="left") actor.slots.unshift(incoming); else actor.slots.push(incoming);
-  let penaltyAdded=false;
+  let penaltyAdded=false,penaltySlotId=null;
   if (pending.failedExchange.selectedCount>=3 && state.deck.length) {
     const penalty=makeSlot(state,drawCard(state),false);
     if (action.end==="left") actor.slots.unshift(penalty); else actor.slots.push(penalty);
-    penaltyAdded=true;
+    penaltyAdded=true;penaltySlotId=penalty.slotId;
   }
   addLog(state,`${actor.name} 将匹配失败后的新增牌放在了${action.end==="left"?"左":"右"}侧${penaltyAdded?"，并获得一张惩罚牌":""}。`,now);
+  const sceneId=newScene(state);
+  publicEvent(state,{kind:"failed-placement",priority:3,text:`${actor.name} 将新增牌放在${action.end==="left"?"左":"右"}侧${penaltyAdded?"，并获得惩罚牌":""}`,actorId:actor.id,targetPlayerId:actor.id,incomingSlotId:incoming.slotId,penaltySlotId,source:pending.source,end:action.end,penaltyAdded},now,sceneId);
   state.pending=null;
-  finishTurn(state,now);
+  finishTurn(state,now,sceneId);
 }
 
 function usePower(state,actor,action,now) {
   const pending=state.pending;
+  const sceneId=newScene(state);
   if (pending?.source!=="deck") throw new GameRuleError("power_unavailable","只有牌库抽到并弃掉的能力牌可以发动。",409);
   const power=powerForValue(pending.card.value);
   if (!power) throw new GameRuleError("power_unavailable","这张牌没有特殊能力。",409);
@@ -212,12 +238,17 @@ function usePower(state,actor,action,now) {
     if (!slot || slot.faceUp) throw new GameRuleError("invalid_peek_target","请选择自己的一张背面牌。",409);
     addDiscard(state,pending.card); state.pending=null;
     state.privateReveal={viewerId:actor.id,targetPlayerId:actor.id,slotId:slot.slotId,power,until:now+REVEAL_SECONDS*1000};
+    publicEvent(state,{kind:"power-use",priority:3,text:`${actor.name} 发动 PEEK`,actorId:actor.id,power},now,sceneId);
+    privateEvent(state,actor.id,{kind:"private-reveal",priority:4,text:"你查看了自己的一张牌",actorId:actor.id,targetPlayerId:actor.id,slotId:slot.slotId,power},now,sceneId);
   } else if (power==="spy") {
     const target=playerById(state,action.targetPlayerId); const slot=slotById(target,action.slotId);
     if (!target || target.id===actor.id || !slot || slot.faceUp) throw new GameRuleError("invalid_spy_target","请选择另一名玩家的一张背面牌。",409);
     addDiscard(state,pending.card); state.pending=null;
     state.privateReveal={viewerId:actor.id,targetPlayerId:target.id,slotId:slot.slotId,power,until:now+REVEAL_SECONDS*1000};
     setTargetNotice(state,{type:"spy",actorId:actor.id,targetPlayerId:target.id,targetSlotId:slot.slotId},now);
+    publicEvent(state,{kind:"power-use",priority:3,text:`${actor.name} 发动 SPY`,actorId:actor.id,power},now,sceneId);
+    privateEvent(state,actor.id,{kind:"private-reveal",priority:4,text:`你查看了 ${target.name} 的一张牌`,actorId:actor.id,targetPlayerId:target.id,slotId:slot.slotId,power},now,sceneId);
+    privateEvent(state,target.id,{kind:"target-notice",priority:4,text:`${actor.name} 查看了你的一个牌位`,actorId:actor.id,targetPlayerId:target.id,slotId:slot.slotId,power},now,sceneId);
   } else {
     const own=slotById(actor,action.ownSlotId); const target=playerById(state,action.targetPlayerId); const other=slotById(target,action.targetSlotId);
     if (!own || !target || target.id===actor.id || !other) throw new GameRuleError("invalid_swap_target","请选择自己和一名对手各一张牌。",409);
@@ -226,7 +257,9 @@ function usePower(state,actor,action,now) {
     [own.faceUp,other.faceUp]=[other.faceUp,own.faceUp];
     setTargetNotice(state,{type:"swap",actorId:actor.id,targetPlayerId:target.id,targetSlotId:other.slotId},now);
     addLog(state,`${actor.name} 交换了自己和 ${target.name} 的一张牌。`,now);
-    return finishTurn(state,now);
+    publicEvent(state,{kind:"swap",priority:4,text:`${actor.name} 与 ${target.name} 交换了一张牌`,actorId:actor.id,targetId:target.id,power},now,sceneId);
+    privateEvent(state,target.id,{kind:"target-notice",priority:4,text:`${actor.name} 交换了你的一个牌位`,actorId:actor.id,targetPlayerId:target.id,slotId:other.slotId,power},now,sceneId);
+    return finishTurn(state,now,sceneId);
   }
   state.phase="reveal"; state.deadline=state.privateReveal.until;
   addLog(state,`${actor.name} 发动了${power==="peek"?"查看":"侦察"}能力。`,now);
@@ -237,7 +270,7 @@ function autoInitialPeek(state) {
 }
 
 export function createLobby({capacity,host}) {
-  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),round:0,players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentIndex:0,startingPlayerId:null,pending:null,privateReveal:null,targetNotice:null,cabo:null,deadline:0,roundResult:[],winnerIds:[],logs:[],logSequence:0,slotSequence:0};
+  return {stateVersion:STATE_VERSION,phase:"lobby",capacity:assertCapacity(capacity),round:0,players:[makePlayer({...host,isHost:true})],deck:[],discard:[],currentIndex:0,startingPlayerId:null,pending:null,privateReveal:null,targetNotice:null,cabo:null,deadline:0,roundResult:[],winnerIds:[],logs:[],logSequence:0,slotSequence:0,presentationEvents:[],privatePresentationEvents:{},presentationSequence:0,presentationSceneSequence:0};
 }
 
 export function addPlayer(state,player) {
@@ -308,12 +341,15 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
     const ids=[...new Set((action.slotIds||[]).map(String))];
     if (ids.length!==2 || ids.some((id)=>!slotById(actor,id))) throw new GameRuleError("invalid_initial_peek","请选择自己的两张初始牌。",409);
     actor.initialPeekIds=ids;
-    if (state.players.every((player)=>player.initialPeekIds.length===2)) startInitialReveal(state,now);
+    const sceneId=newScene(state);
+    publicEvent(state,{kind:"memory-sealed",priority:1,text:`${actor.name} 已封存初始记忆`,actorId:actor.id},now,sceneId);
+    privateEvent(state,actor.id,{kind:"initial-memory",priority:3,text:"记住这两个固定牌位",actorId:actor.id,targetPlayerId:actor.id,slotIds:ids},now,sceneId);
+    if (state.players.every((player)=>player.initialPeekIds.length===2)) startInitialReveal(state,now,sceneId);
     return;
   }
   if (state.phase==="reveal" && type==="closeReveal") {
     if (state.privateReveal?.viewerId!==actor.id) throw new GameRuleError("reveal_unavailable","当前没有属于你的查看窗口。",409);
-    state.privateReveal=null; return finishTurn(state,now);
+    state.privateReveal=null; return finishTurn(state,now,newScene(state));
   }
   if (state.phase==="failedExchange") {
     requireCurrent(state,actor);
@@ -328,22 +364,30 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
       const remaining=[]; let index=state.currentIndex;
       for (let count=1;count<state.players.length;count+=1) {index=nextIndex(state,index);remaining.push(state.players[index].id);}
       state.cabo={callerId:actor.id,remainingIds:remaining}; state.currentIndex=state.players.findIndex((player)=>player.id===remaining[0]);
-      addLog(state,`${actor.name} 宣布了 CABO，其他玩家各有最后一个回合。`,now); return beginTurn(state,now);
+      const sceneId=newScene(state);
+      addLog(state,`${actor.name} 宣布了 CABO，其他玩家各有最后一个回合。`,now);
+      publicEvent(state,{kind:"cabo-call",priority:5,text:`${actor.name} 宣布 CABO！其他玩家进入最终回合`,actorId:actor.id},now,sceneId);
+      return beginTurn(state,now,sceneId);
     }
     if (type==="drawDeck") {
-      if (!state.deck.length) return finishRound(state,now,"牌库耗尽");
-      state.pending={card:drawCard(state),source:"deck"}; state.phase="drawn"; setDeadline(state,now,DECISION_SECONDS); return;
+      if (!state.deck.length) return finishRound(state,now,"牌库耗尽",newScene(state));
+      state.pending={card:drawCard(state),source:"deck"}; state.phase="drawn"; setDeadline(state,now,DECISION_SECONDS);
+      publicEvent(state,{kind:"draw-deck",priority:2,text:`${actor.name} 从牌库抽了一张牌`,actorId:actor.id},now); return;
     }
     if (type==="drawDiscard") {
       if (!state.discard.length) throw new GameRuleError("discard_empty","弃牌堆还是空的。",409);
-      state.pending={card:state.discard.pop(),source:"discard"}; state.phase="drawn"; setDeadline(state,now,DECISION_SECONDS); return;
+      state.pending={card:state.discard.pop(),source:"discard"}; state.phase="drawn"; setDeadline(state,now,DECISION_SECONDS);
+      publicEvent(state,{kind:"draw-discard",priority:3,text:`${actor.name} 拿取弃牌 ${state.pending.card.value}`,actorId:actor.id,cardValue:state.pending.card.value},now); return;
     }
     throw new GameRuleError("unknown_action","无法识别这个回合操作。");
   }
   if (type==="exchange") return exchangeCards(state,actor,action,now);
   if (type==="discardDrawn") {
     if (state.pending?.source!=="deck") throw new GameRuleError("must_exchange","从弃牌堆拿取的牌必须用于交换。",409);
-    addDiscard(state,state.pending.card); state.pending=null; addLog(state,`${actor.name} 弃掉了牌库抽到的牌。`,now); return finishTurn(state,now);
+    const discarded=state.pending.card,sceneId=newScene(state);
+    addDiscard(state,discarded); state.pending=null; addLog(state,`${actor.name} 弃掉了牌库抽到的牌。`,now);
+    publicEvent(state,{kind:"discard-drawn",priority:3,text:`${actor.name} 弃掉了 ${discarded.value}`,actorId:actor.id,cardValue:discarded.value,power:discarded.power},now,sceneId);
+    return finishTurn(state,now,sceneId);
   }
   if (type==="usePower") return usePower(state,actor,action,now);
   throw new GameRuleError("unknown_action","无法识别这个抽牌操作。");
@@ -351,17 +395,18 @@ export function applyAction(state,actorId,action,{now=Date.now(),random=Math.ran
 
 export function handleTimeout(state,{now=Date.now(),random=Math.random}={}) {
   if (!state.deadline || now<state.deadline) return false;
-  if (state.phase==="initialPeek") {autoInitialPeek(state);startInitialReveal(state,now);return true;}
-  if (state.phase==="initialReveal") {for(const player of state.players)player.initialPeekIds=[];beginTurn(state,now);return true;}
-  if (state.phase==="reveal") {state.privateReveal=null;finishTurn(state,now);return true;}
+  const sceneId=newScene(state);
+  if (state.phase==="initialPeek") {autoInitialPeek(state);publicEvent(state,{kind:"memory-timeout",priority:2,text:"初始选择超时，服务器已封存默认牌位"},now,sceneId);startInitialReveal(state,now,sceneId);return true;}
+  if (state.phase==="initialReveal") {for(const player of state.players)player.initialPeekIds=[];beginTurn(state,now,sceneId);return true;}
+  if (state.phase==="reveal") {state.privateReveal=null;finishTurn(state,now,sceneId);return true;}
   if (state.phase==="turn") {
-    if (!state.deck.length) finishRound(state,now,"牌库耗尽");
-    else {const actor=currentPlayer(state);addDiscard(state,drawCard(state));addLog(state,`${actor.name} 回合超时，系统抽牌并弃掉。`,now);finishTurn(state,now);}
+    if (!state.deck.length) finishRound(state,now,"牌库耗尽",sceneId);
+    else {const actor=currentPlayer(state),discarded=drawCard(state);addDiscard(state,discarded);addLog(state,`${actor.name} 回合超时，系统抽牌并弃掉。`,now);publicEvent(state,{kind:"turn-timeout",priority:3,text:`${actor.name} 超时，服务器抽牌并弃置`,actorId:actor.id,cardValue:discarded.value},now,sceneId);finishTurn(state,now,sceneId);}
     return true;
   }
   if (state.phase==="drawn") {
     const actor=currentPlayer(state);
-    if (state.pending.source==="deck") {addDiscard(state,state.pending.card);state.pending=null;addLog(state,`${actor.name} 决策超时，抽到的牌被弃掉。`,now);finishTurn(state,now);}
+    if (state.pending.source==="deck") {const discarded=state.pending.card;addDiscard(state,discarded);state.pending=null;addLog(state,`${actor.name} 决策超时，抽到的牌被弃掉。`,now);publicEvent(state,{kind:"decision-timeout",priority:3,text:`${actor.name} 决策超时，抽牌被弃置`,actorId:actor.id,cardValue:discarded.value},now,sceneId);finishTurn(state,now,sceneId);}
     else exchangeCards(state,actor,{slotIds:[actor.slots[0].slotId],end:"right"},now);
     return true;
   }
@@ -392,6 +437,7 @@ function buildPublicView(state,{viewer=null,permissions}={}) {
     privateReveal:state.privateReveal?.viewerId===viewerId?{power:state.privateReveal.power,targetPlayerId:state.privateReveal.targetPlayerId,slotId:state.privateReveal.slotId,until:state.privateReveal.until}:null,
     targetNotice:state.targetNotice?.targetPlayerId===viewerId?{id:state.targetNotice.id,type:state.targetNotice.type,actorId:state.targetNotice.actorId,targetSlotId:state.targetNotice.targetSlotId,until:state.targetNotice.until}:null,
     roundResult:state.roundResult.map((item)=>({...item})),winnerIds:[...state.winnerIds],logs:state.logs.map((entry)=>({...entry})),
+    presentationEvents:[...state.presentationEvents,...(viewer?state.privatePresentationEvents?.[viewer.id]||[]:[])].sort((left,right)=>left.sequence-right.sequence).map((event)=>({...event})),
     players:state.players.map((player)=>({id:player.id,name:player.name,isHost:player.isHost,connected:player.connected,score:player.score,lastRoundScore:player.lastRoundScore,resetUsed:player.resetUsed,hasInitialPeek:player.initialPeekIds.length===2,slots:player.slots.map((slot)=>visibleSlot(slot,viewerId,player.id,state))})),
     permissions
   };
@@ -423,11 +469,21 @@ export function validateState(state) {
   const cards=[...state.deck,...state.discard,...state.players.flatMap((player)=>player.slots.map((slot)=>slot.card)),...(state.pending?[state.pending.card]:[])];
   const ids=cards.map((card)=>card.id);
   if (state.phase!=="lobby" && (cards.length!==52 || new Set(ids).size!==52)) throw new Error(`Card conservation failed: ${cards.length}/${new Set(ids).size}`);
+  if (!Number.isInteger(state.presentationSceneSequence)||state.presentationSceneSequence<0) throw new Error("Invalid game13 presentation scene sequence");
+  validatePresentationState(state);
+  if (!state.privatePresentationEvents||typeof state.privatePresentationEvents!=="object"||Array.isArray(state.privatePresentationEvents)) throw new Error("Invalid game13 private presentation events");
+  const sequences=new Set(state.presentationEvents.map((event)=>event.sequence));
+  for (const events of Object.values(state.privatePresentationEvents)) {
+    validatePresentationState({presentationEvents:events,presentationSequence:state.presentationSequence});
+    for (const event of events) {if(!event.private||sequences.has(event.sequence))throw new Error("Invalid game13 private presentation event sequence");sequences.add(event.sequence);}
+  }
   return true;
 }
 
-export function serializeState(state) { return structuredClone(state); }
+export function serializeState(state) { validateState(state); return structuredClone(state); }
 export function restoreState(serializedState) {
   if (serializedState?.stateVersion!==STATE_VERSION) throw new Error(`Unsupported game13 state version: ${serializedState?.stateVersion}`);
-  const state=structuredClone(serializedState); state.targetNotice??=null; validateState(state); return state;
+  const state=structuredClone(serializedState);state.targetNotice??=null;state.privatePresentationEvents=state.privatePresentationEvents&&typeof state.privatePresentationEvents==="object"?state.privatePresentationEvents:{};normalizePresentationState(state);
+  const latestPrivate=Object.values(state.privatePresentationEvents).flat().reduce((maximum,event)=>Math.max(maximum,Number(event?.sequence)||0),0);state.presentationSequence=Math.max(state.presentationSequence,latestPrivate);
+  const latestScene=[...state.presentationEvents,...Object.values(state.privatePresentationEvents).flat()].reduce((maximum,event)=>{const match=/^cabo_scene_(\d+)$/.exec(String(event?.sceneId||""));return Math.max(maximum,Number(match?.[1])||0);},0);state.presentationSceneSequence=Math.max(Number(state.presentationSceneSequence)||0,latestScene);validateState(state);return state;
 }

@@ -129,3 +129,52 @@ test("spectator view never receives CABO private knowledge and seat changes are 
   state.phase="roundEnd";
   assert.ok(engine.buildSpectatorView(state).players.flatMap((player)=>player.slots).every((slot)=>slot.value!==null));
 });
+
+test("deck draw presentation is public without leaking the drawn card",()=>{
+  const state=started();finishInitial(state);
+  engine.applyAction(state,"p1",{type:"drawDeck"},{now:8000});
+  const event=state.presentationEvents.at(-1);
+  assert.equal(event.kind,"draw-deck");
+  assert.equal(event.actorId,"p1");
+  assert.equal("cardValue" in event,false);
+  assert.equal("cardId" in event,false);
+  assert.equal(JSON.stringify(engine.buildSpectatorView(state).presentationEvents).includes(state.pending.card.id),false);
+});
+
+test("SPY position presentation reaches only actor and target without exposing value",()=>{
+  const state=started(3),target=state.players[1];rigDrawn(state,{drawn:card("spy-private",9)});
+  engine.applyAction(state,"p1",{type:"usePower",targetPlayerId:"p2",slotId:target.slots[0].slotId},{now:3000});
+  const actorEvents=engine.buildView(state,"p1").presentationEvents;
+  const targetEvents=engine.buildView(state,"p2").presentationEvents;
+  const otherEvents=engine.buildView(state,"p3").presentationEvents;
+  const watched=engine.buildSpectatorView(state).presentationEvents;
+  assert.ok(actorEvents.some((event)=>event.kind==="private-reveal"&&event.slotId===target.slots[0].slotId));
+  assert.ok(targetEvents.some((event)=>event.kind==="target-notice"&&event.slotId===target.slots[0].slotId));
+  assert.ok(!otherEvents.some((event)=>event.private));
+  assert.ok(!watched.some((event)=>event.private));
+  const publicPower=watched.at(-1);
+  assert.equal(publicPower.kind,"power-use");
+  assert.equal("targetPlayerId" in publicPower,false);
+  assert.equal("slotId" in publicPower,false);
+  assert.equal("cardValue" in publicPower,false);
+  assert.ok(actorEvents.filter((event)=>event.private).every((event)=>!("cardValue" in event)));
+});
+
+test("exchange and following turn share one presentation scene",()=>{
+  const state=started();const actor=state.players[0];
+  rigDrawn(state,{drawn:card("new-scene",1)});
+  engine.applyAction(state,"p1",{type:"exchange",slotIds:[actor.slots[0].slotId]},{now:3000});
+  const exchange=state.presentationEvents.findLast((event)=>event.kind==="exchange");
+  const turn=state.presentationEvents.findLast((event)=>event.kind==="turn-start");
+  assert.equal(exchange.sceneId,turn.sceneId);
+});
+
+test("legacy room snapshot restores with empty presentation streams",()=>{
+  const state=started();const legacy=engine.serializeState(state);
+  delete legacy.presentationEvents;delete legacy.privatePresentationEvents;delete legacy.presentationSequence;delete legacy.presentationSceneSequence;
+  const restored=engine.restoreState(legacy);
+  assert.deepEqual(restored.presentationEvents,[]);
+  assert.deepEqual(restored.privatePresentationEvents,{});
+  assert.equal(restored.presentationSequence,0);
+  assert.equal(restored.presentationSceneSequence,0);
+});
