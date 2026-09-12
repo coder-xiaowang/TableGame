@@ -52,3 +52,18 @@ test("game8 preserves trainer inspection, compact collections and sticky desktop
   assert.match(script, /secretReserveHtml/);
   assert.match(styles, /\.trainer-column\{grid-area:trainer;position:sticky/);
 });
+
+test("game8 mounts the shared authoritative presentation layer with adaptive playback", () => {
+  assert.match(html, /id="presentationEffects"/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(html, /id="presentationAnnouncement"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /data-player-anchor/);
+  assert.match(script, /sceneKey:\(event\)=>event\.sceneId\|\|event\.id/);
+  assert.match(script, /catchUpThreshold:2/);
+  assert.match(script, /severeBacklogThreshold:5/);
+  assert.match(styles, /\.presentation-effects/);
+  assert.match(styles, /pointer-events:none/);
+  assert.match(styles, /@media\(prefers-reduced-motion:reduce\)/);
+});

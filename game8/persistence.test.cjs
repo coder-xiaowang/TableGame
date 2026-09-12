@@ -115,6 +115,7 @@ test("game8 restores a playable room and deduplication after restart", async (co
   assert.equal(resumed.payload.view.game.seed, beforeRestart.payload.view.game.seed);
   assert.equal(resumed.payload.view.game.turn, beforeRestart.payload.view.game.turn);
   assert.deepEqual(resumed.payload.view.game.field, beforeRestart.payload.view.game.field);
+  assert.deepEqual(resumed.payload.view.presentationEvents, beforeRestart.payload.view.presentationEvents);
   assert.ok(resumed.payload.view.players.every((player) => !player.connected));
 
   const actorId = resumed.payload.view.players[resumed.payload.view.game.turn].id;
