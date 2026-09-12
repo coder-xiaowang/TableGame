@@ -2,7 +2,7 @@
 
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown,
-  createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
+  createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { COLUMN_LENGTHS } from "./rules.js";
@@ -11,7 +11,7 @@ import { createDicePhysics, simulateDiceRoll } from "./dice-physics.js";
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 30;
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton", "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let view = null;
@@ -19,6 +19,7 @@ let dicePhysics = null;
 let dicePhysicsPromise = null;
 let activePhysicsRollId = 0;
 let spectatorUi = null;
+let presentation = null;
 const simulationCache = new Map();
 const sessions = createSessionStore({ gameId: "cant-stop" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -27,7 +28,7 @@ const room = createAuthoritativeRoomClient({
   sessionStore: sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
-    onView(nextView) { view = nextView; enterRoom(); render(); },
+    onView(nextView) { view = nextView; enterRoom(); render(); presentation?.sync(nextView.presentationEvents); },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
@@ -122,7 +123,7 @@ function renderBoard(view) {
     const summit = owner
       ? `<span class="claim-flag" style="--flag:${owner.color}" title="${escapeHtml(owner.name)}占领"><i></i></span>`
       : '<span class="summit-peak">◆</span>';
-    return `<div class="route ${owner ? "claimed" : ""}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
+    return `<div class="route ${owner ? "claimed" : ""}" data-column="${column}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
   }).join("");
 }
 function getSimulation(seed) {
@@ -161,7 +162,7 @@ function render() {
   E.playerCountBadge.textContent = `${view.players.length} / ${view.capacity}`; E.startGameButton.disabled = !view.permissions?.canStart || view.players.length !== view.capacity || view.players.some((p) => !p.connected);
   setHidden(E.startGameButton, !view.permissions?.canStart); setHidden(E.endGameButton, !view.permissions?.canEnd && !view.permissions?.canRestart); E.endGameButton.textContent = view.phase === "ended" ? "返回大厅" : "结束本局";
   E.phaseBadge.textContent = { lobby: "准备阶段", playing: "攀登中", ended: "登顶完成" }[view.phase]; E.turnLabel.textContent = view.phase === "playing" ? `${current.name} 的回合` : view.phase === "ended" ? "游戏结束" : "等待开始";
-  E.playerList.innerHTML = view.players.map((player, index) => `<article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${index === view.currentIndex && view.phase === "playing" ? "player-current" : ""} ${!player.connected ? "player-offline" : ""}" style="--player:${player.color}"><div><i class="player-color"></i><b>${escapeHtml(player.name)}</b>${player.isHost ? "<em>房主</em>" : ""}</div><span>已占领 ${player.claimed.length} / 3</span><small>${player.claimed.length ? player.claimed.join("、") + " 号路线" : "尚未占领路线"}</small>${view.permissions?.canKick && !player.isHost ? `<button data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</article>`).join("");
+  E.playerList.innerHTML = view.players.map((player, index) => `<article class="player-item ${player.id === view.selfId ? "player-self" : ""} ${index === view.currentIndex && view.phase === "playing" ? "player-current" : ""} ${!player.connected ? "player-offline" : ""}" data-player-anchor="${escapeHtml(player.id)}" style="--player:${player.color}"><div><i class="player-color"></i><b>${escapeHtml(player.name)}</b>${player.isHost ? "<em>房主</em>" : ""}</div><span>已占领 ${player.claimed.length} / 3</span><small>${player.claimed.length ? player.claimed.join("、") + " 号路线" : "尚未占领路线"}</small>${view.permissions?.canKick && !player.isHost ? `<button data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</article>`).join("");
   E.playerList.querySelectorAll("[data-kick]").forEach((button) => { button.onclick = () => kickPlayer(button.dataset.kick); });
   if (view.phase === "lobby") E.notice.textContent = memberRole === "spectator" ? "你正在旁观准备阶段，可在有空位时进入玩家席。" : `等待 ${view.capacity} 位玩家到齐后，由房主开始游戏`;
   else if (view.phase === "ended") E.notice.textContent = "三座峰顶已经被同一位玩家占领";
@@ -184,6 +185,67 @@ function render() {
   if (view.phase === "playing" && view.deadline) countdown.start(view.deadline, ACTION_SECONDS * 1000); else { countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0"; }
   setHidden(E.resultPanel, view.phase !== "ended"); setHidden(E.resultActions, !view.permissions?.canRestart); if (view.phase === "ended") { const winner = view.players.find((player) => player.id === view.winnerId); E.winnerText.textContent = `${winner?.name || "玩家"} 征服了山峰！`; E.resultList.innerHTML = view.players.map((player) => `<p><i style="background:${player.color}"></i><b>${escapeHtml(player.name)}</b><span>${player.claimed.length} 条路线</span></p>`).join(""); }
 }
+
+function playerAnchor(playerId) {
+  return [...E.playerList.querySelectorAll("[data-player-anchor]")]
+    .find((element) => element.dataset.playerAnchor === String(playerId)) || null;
+}
+function routeAnchor(column) { return E.board.querySelector(`[data-column="${Number(column)}"]`); }
+function presentationSource(event) {
+  if (event.kind === "route-chosen") return E.diceArea;
+  if (event.kind === "turn-busted") return routeAnchor(event.columns?.[0]) || E.board;
+  return playerAnchor(event.actorId) || E.notice;
+}
+function presentationTarget(event) {
+  if (["roll-start", "dice-settled"].includes(event.kind)) return E.diceArea;
+  if (["route-chosen", "summit-claimed", "turn-stopped"].includes(event.kind)) return routeAnchor(event.columns?.[0]) || E.board;
+  return playerAnchor(event.actorId) || E.notice;
+}
+function presentationLabel(kind) {
+  return ({
+    "game-start":"开始攀登", "turn-start":"回合交接", "roll-start":"投掷骰子",
+    "dice-settled":"骰子停稳", "route-chosen":"继续攀登", "turn-stopped":"扎营保存",
+    "turn-busted":"冒险爆掉", "summit-claimed":"占领峰顶", "game-result":"登顶胜利"
+  })[kind] || "山间动态";
+}
+function presentationPoint(element) {
+  if (!element || !E.presentationEffects) return null;
+  const rect = element.getBoundingClientRect(); const stage = E.presentationEffects.getBoundingClientRect();
+  return { x:rect.left + rect.width / 2 - stage.left, y:rect.top + rect.height / 2 - stage.top };
+}
+function playPresentationEvent(event) {
+  const source = presentationSource(event); const target = presentationTarget(event);
+  source?.classList.add("presentation-source"); target?.classList.add("presentation-target");
+  const routes = (event.columns || []).map(routeAnchor).filter(Boolean);
+  routes.forEach((element) => element.classList.add(event.kind === "turn-busted" ? "presentation-lost" : "presentation-route"));
+  let token = null;
+  // 物理骰子已经负责掷骰与落定；演出层只强调状态，不再生成第二套骰子动画。
+  if (!["roll-start", "dice-settled", "turn-start"].includes(event.kind)) {
+    token = document.createElement("span");
+    token.className = `presentation-token presentation-token-${event.kind}`;
+    token.textContent = ({"route-chosen":"▲", "turn-stopped":"⛺", "turn-busted":"×", "summit-claimed":"⚑", "game-start":"◆", "game-result":"★"})[event.kind] || "→";
+    const from = presentationPoint(source); const to = presentationPoint(target);
+    if (from && to) {
+      token.style.setProperty("--from-x", `${from.x}px`); token.style.setProperty("--from-y", `${from.y}px`);
+      token.style.setProperty("--to-x", `${to.x}px`); token.style.setProperty("--to-y", `${to.y}px`);
+    }
+    E.presentationEffects.append(token);
+  }
+  return () => {
+    source?.classList.remove("presentation-source"); target?.classList.remove("presentation-target");
+    routes.forEach((element) => element.classList.remove("presentation-route", "presentation-lost")); token?.remove();
+  };
+}
+
+presentation = createPresentationTimeline({
+  container:E.presentationEffects, trailPath:E.presentationTrail, announcement:E.presentationAnnouncement,
+  labelElement:E.presentationLabel, textElement:E.presentationText, effectsElement:E.presentationEffects,
+  resolveSource:presentationSource, resolveTarget:presentationTarget, labelFor:(event) => presentationLabel(event.kind),
+  beforePlay:playPresentationEvent, durationMs:1250, reducedDurationMs:520, maxQueue:18,
+  sceneKey:(event) => event.sceneId || event.id, priorityFor:(event) => Number(event.priority) || 0,
+  catchUpThreshold:2, severeBacklogThreshold:5, catchUpDurationMs:580, severeDurationMs:300,
+  urgentPriority:4, retainPriority:3
+});
 
 async function init() {
   bindRoomCodeInput(E.roomCodeInput); E.hostModeButton.onclick = () => { mode = "host"; renderEntryMode(); }; E.guestModeButton.onclick = () => { mode = "guest"; renderEntryMode(); };

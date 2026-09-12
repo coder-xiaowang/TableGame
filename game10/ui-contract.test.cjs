@@ -57,3 +57,18 @@ test("移动端路线、吸附行动区和辅助侧栏依次展示", () => {
   assert.match(css, /@media\(max-width:720px\)[\s\S]*?\.game-layout \.side-panel \{ order:3; \}/);
   assert.match(css, /\.rule-details \{ max-height:58vh; overflow:auto/);
 });
+
+test("权威演出层复用物理骰子并支持积压追赶", () => {
+  const html = read("index.html");
+  const script = read("app.js");
+  const css = read("styles.css");
+
+  assert.match(html, /id="presentationEffects"/);
+  assert.match(html, /id="presentationTrail"/);
+  assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
+  assert.match(script, /物理骰子已经负责掷骰与落定/);
+  assert.match(script, /catchUpThreshold:2/);
+  assert.match(script, /severeBacklogThreshold:5/);
+  assert.match(css, /\.presentation-effects \{[^}]*pointer-events:none/);
+});

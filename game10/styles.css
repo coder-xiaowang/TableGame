@@ -35,7 +35,7 @@ button.danger { color:#a13931; border-color:#dca49e; }
 .host-tools { display:flex; align-items:end; gap:8px; }
 .host-tools label { display:flex; align-items:center; gap:5px; }
 .host-tools select { width:65px; padding:8px; }
-.game-layout { display:grid; grid-template-columns:240px minmax(560px,1fr) 285px; gap:14px; align-items:start; }
+.game-layout { position:relative; display:grid; grid-template-columns:240px minmax(560px,1fr) 285px; gap:14px; align-items:start; }
 .panel { background:#fffdf1e8; border:1px solid #fff; border-radius:17px; box-shadow:0 10px 30px #17332c16; }
 .side-panel,.action-panel { padding:15px; }
 .panel-title,.dice-title,.round-meta,.timer-box>div:first-child { display:flex; justify-content:space-between; align-items:center; }
@@ -104,9 +104,36 @@ button.danger { color:#a13931; border-color:#dca49e; }
 .result-actions { display:flex; justify-content:center; margin-top:16px; }
 #resultList { width:min(500px,100%); margin:auto; }#resultList p { display:grid; grid-template-columns:15px 1fr auto; gap:8px; align-items:center; padding:9px; margin:4px; border-radius:8px; background:white; text-align:left; }#resultList i { width:11px; height:11px; border-radius:50%; }
 .muted { color:var(--muted); }
+
+/* Server-authored presentation: authoritative events decorate the existing physical dice and climbers. */
+.presentation-effects { position:absolute; inset:0; z-index:45; overflow:hidden; border-radius:18px; pointer-events:none; }
+.presentation-trail-layer { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.presentation-trail { fill:none; stroke:#ffcf58; stroke-width:4; stroke-linecap:round; stroke-dasharray:12 9; opacity:0; filter:drop-shadow(0 0 7px #17332c88); }
+#cantStopTrailArrow path { fill:#ffcf58; }
+.presentation-trail.active { opacity:1; animation:cantstop-trail .5s linear infinite; }
+.presentation-announcement { position:absolute; z-index:47; top:25%; left:50%; display:grid; width:min(430px,58%); padding:10px 15px; border:2px solid #ffe08b; border-radius:15px; color:#fff9db; background:linear-gradient(135deg,#173f34f2,#2d6953f2); box-shadow:0 14px 34px #17332c66; opacity:0; transform:translate(-50%,-12px) scale(.95); text-align:center; }
+.presentation-announcement span { color:#ffd45c; font-size:.64rem; font-weight:900; letter-spacing:.17em; }
+.presentation-announcement b { margin-top:3px; font-size:clamp(.84rem,1.5vw,1.08rem); }
+.presentation-announcement.active { animation:cantstop-announcement 1.25s ease both; }
+.presentation-token { position:absolute; z-index:48; left:var(--from-x,50%); top:var(--from-y,50%); display:grid; place-items:center; min-width:34px; height:34px; padding:0 7px; border:2px solid #fff2b6; border-radius:50%; color:white; background:var(--green); box-shadow:0 8px 22px #17332c70; font-weight:900; transform:translate(-50%,-50%); animation:cantstop-token .72s cubic-bezier(.2,.75,.2,1) forwards; }
+.presentation-token-turn-busted { background:#b34435; }
+.presentation-token-summit-claimed,.presentation-token-game-result { color:#493714; background:#ffd45c; }
+.player-item.presentation-source,.player-item.presentation-target { outline:4px solid #ffd45c88; box-shadow:0 0 22px #f5b82e66; }
+.dice-area.presentation-source,.dice-area.presentation-target { animation:cantstop-dice-focus .36s ease-in-out 3 alternate; }
+.route.presentation-route { filter:drop-shadow(0 0 9px #ffe27e); }
+.route.presentation-route:before { border-color:#ffe27e; box-shadow:0 0 18px #ffd45caa; }
+.route.presentation-lost { animation:cantstop-route-lost .34s ease-in-out 3 alternate; }
+@keyframes cantstop-trail { to { stroke-dashoffset:-42; } }
+@keyframes cantstop-announcement { 0%,100% { opacity:0; transform:translate(-50%,-12px) scale(.95); } 13%,82% { opacity:1; transform:translate(-50%,0) scale(1); } }
+@keyframes cantstop-token { to { left:var(--to-x,50%); top:var(--to-y,50%); transform:translate(-50%,-50%) rotate(7deg) scale(.9); } }
+@keyframes cantstop-dice-focus { to { filter:drop-shadow(0 0 10px #ffd45c); transform:translateY(-2px); } }
+@keyframes cantstop-route-lost { to { opacity:.34; filter:grayscale(.8) drop-shadow(0 0 8px #b34435); transform:translateY(4px); } }
 @media(max-width:1050px) { .game-layout { grid-template-columns:210px 1fr; }.action-panel { grid-column:1/-1; display:grid; grid-template-columns:180px minmax(0,1fr); gap:14px; }.dice-area { grid-column:1; }.action-area { grid-column:2; grid-row:1/3; }.mountain-board { min-height:515px; } }
 @media(max-width:720px) { main { width:94vw; margin-top:14px; }.site-header { min-height:70px; }.connection-pill { font-size:11px; }.setup-shell { grid-template-columns:1fr; margin-top:2vh; }.intro-card { padding:30px; }.mountain-mark { font-size:60px; }.game-layout { display:flex; flex-direction:column; }.side-panel,.board-panel,.action-panel { width:100%; }.side-panel { order:2; }.board-panel { order:1; padding:8px; }.action-panel { order:3; display:block; }.mountain-board { min-height:440px; gap:1px; border-width:3px; }.route-cell { width:clamp(16px,5.25vw,25px); height:clamp(16px,5vw,24px); border-width:1px; transform:translateX(calc(var(--drift) * .45)); }.route:before { inset:18px 3% 25px; border-width:1px; }.route>b { width:25px; height:24px; }.room-toolbar { align-items:flex-start; }.host-tools { flex-wrap:wrap; justify-content:flex-end; }.runner { width:88%; }.camp { width:90%; } }
-@media(prefers-reduced-motion:reduce) { .cloud,.mist,.summit-peak,.claim-flag,.claim-flag i,.camp,.runner { animation:none!important; } }
+@media(prefers-reduced-motion:reduce) {
+  .cloud,.mist,.summit-peak,.claim-flag,.claim-flag i,.camp,.runner,.presentation-trail,.presentation-token,.dice-area.presentation-source,.dice-area.presentation-target,.route.presentation-lost { animation:none!important; }
+  .presentation-announcement.active { animation-duration:.52s; }
+}
  .spectator-action-note { line-height: 1.6; }
 
 /* Compact room header and a game-first information hierarchy. */

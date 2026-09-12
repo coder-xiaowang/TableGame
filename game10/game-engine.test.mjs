@@ -139,6 +139,14 @@ test("game10 persisted state is cloned and version checked", () => {
   serialized.players[0].name = "Snapshot only";
   assert.equal(state.players[0].name, "Host");
   assert.deepEqual(engine.restoreState(engine.serializeState(state)), state);
+  const legacy = engine.serializeState(state);
+  delete legacy.presentationEvents;
+  delete legacy.presentationSequence;
+  delete legacy.presentationSceneSequence;
+  const restoredLegacy = engine.restoreState(legacy);
+  assert.deepEqual(restoredLegacy.presentationEvents, []);
+  assert.equal(restoredLegacy.presentationSequence, 0);
+  assert.equal(restoredLegacy.presentationSceneSequence, 0);
   assert.throws(
     () => engine.restoreState({ ...serialized, stateVersion: 999 }),
     /Unsupported game10 state version/
@@ -160,4 +168,61 @@ test("game10 spectator view is public and lobby seat changes are safe", () => {
   engine.applyAction(state, "host", { type: "start" }, { now: 1_000, random: () => 0 });
   assert.equal(engine.canChangeSeats(state), false);
   assert.throws(() => engine.vacateSeat(state, "p2"), (error) => error.code === "seat_change_unavailable");
+});
+
+test("game10 authoritative presentation follows roll, climb, camp and summit state changes", () => {
+  const state = readyLobby();
+  startWithHost(state, 100);
+  assert.equal(state.presentationEvents.at(-1).kind, "game-start");
+
+  engine.applyAction(state, "host", { type: "roll" }, { now: 200, random: () => 0.5 });
+  assert.equal(state.presentationEvents.at(-1).kind, "roll-start");
+  engine.handleTimeout(state, { now: state.revealAt });
+  assert.equal(state.presentationEvents.at(-1).kind, "dice-settled");
+
+  state.turnStage = "choose";
+  state.options = [{ key: "6-8", pair: [6, 8], moves: [6, 8] }];
+  engine.applyAction(state, "host", { type: "choose", key: "6-8" }, { now: 500 });
+  const climb = state.presentationEvents.at(-1);
+  assert.equal(climb.kind, "route-chosen");
+  assert.deepEqual(climb.columns, [6, 8]);
+
+  engine.applyAction(state, "host", { type: "stop" }, { now: 600 });
+  assert.equal(state.presentationEvents.at(-2).kind, "turn-stopped");
+  assert.equal(state.presentationEvents.at(-1).kind, "turn-start");
+
+  const spectator = engine.buildSpectatorView(state);
+  assert.deepEqual(spectator.presentationEvents, engine.buildView(state, "host").presentationEvents);
+});
+
+test("game10 presentation prioritizes bust and groups camp with summit claims", () => {
+  const state = readyLobby();
+  startWithHost(state, 100);
+  state.turnProgress = { 7: 2 };
+  state.turnStage = "settled";
+  state.options = [];
+  state.revealAt = 300;
+  engine.handleTimeout(state, { now: 300 });
+  const busted = state.presentationEvents.find((event) => event.kind === "turn-busted");
+  assert.equal(busted.priority, 4);
+  assert.deepEqual(busted.columns, [7]);
+
+  state.currentIndex = 0;
+  state.turnStage = "decision";
+  state.turnProgress = { 2: COLUMN_LENGTHS[2] };
+  engine.applyAction(state, "host", { type: "stop" }, { now: 500 });
+  const camp = state.presentationEvents.findLast((event) => event.kind === "turn-stopped");
+  const summit = state.presentationEvents.findLast((event) => event.kind === "summit-claimed");
+  assert.equal(camp.sceneId, summit.sceneId);
+  assert.equal(summit.priority, 4);
+});
+
+test("game10 presentation sequence stays monotonic across returning to the lobby", () => {
+  const state = readyLobby();
+  startWithHost(state, 100);
+  const previousSequence = state.presentationSequence;
+  engine.applyAction(state, "host", { type: "end" }, { now: 200 });
+  engine.applyAction(state, "host", { type: "start" }, { now: 300, random: () => 0 });
+  assert.ok(state.presentationSequence > previousSequence);
+  assert.equal(state.presentationEvents.at(-1).kind, "game-start");
 });

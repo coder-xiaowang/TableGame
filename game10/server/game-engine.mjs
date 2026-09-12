@@ -1,5 +1,8 @@
 import { applyMoves, commitTurn, completedColumns, rollOptions } from "../rules.js";
 import { initializeDicePhysicsSimulation, simulateDiceRollReady } from "../dice-physics.js";
+import {
+  appendPresentationEvent, normalizePresentationState, validatePresentationState
+} from "../../shared/server/presentation-events.mjs";
 
 export const ACTION_SECONDS = 30;
 export const MIN_PLAYERS = 2;
@@ -8,6 +11,12 @@ export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
 
 const COLORS = ["#ef5b4c", "#2589bd", "#f5b82e", "#7557a8"];
+const PRESENTATION_LIMIT = 70;
+const PRESENTATION_PRIORITY = Object.freeze({
+  "turn-start": 1, "roll-start": 1, "dice-settled": 2, "route-chosen": 3,
+  "turn-stopped": 3, "turn-busted": 4, "summit-claimed": 4,
+  "game-start": 4, "game-result": 5
+});
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -54,6 +63,26 @@ function addLog(state, text, now = Date.now()) {
     at: now
   });
   if (state.logs.length > 100) state.logs.length = 100;
+}
+
+function ensurePresentationState(state) {
+  normalizePresentationState(state);
+  const latestScene = state.presentationEvents
+    .map((event) => /^cantstop_scene_(\d+)$/.exec(String(event?.sceneId || "")))
+    .reduce((maximum, match) => Math.max(maximum, Number(match?.[1]) || 0), 0);
+  state.presentationSceneSequence = Number.isInteger(state.presentationSceneSequence)
+    ? Math.max(state.presentationSceneSequence, latestScene) : latestScene;
+  validatePresentationState(state);
+  return state;
+}
+
+function publicEvent(state, event, now, sceneId = null) {
+  ensurePresentationState(state);
+  const scene = sceneId || `cantstop_scene_${state.presentationSceneSequence += 1}`;
+  return appendPresentationEvent(state, {
+    ...event, sceneId: scene,
+    priority: Number.isFinite(Number(event.priority)) ? Number(event.priority) : PRESENTATION_PRIORITY[event.kind] || 1
+  }, { now, idPrefix: "cantstop_event", limit: PRESENTATION_LIMIT });
 }
 
 function requireHost(state, actorId) {
@@ -115,6 +144,7 @@ function randomSeed(random) {
 }
 
 function startRoll(state, { now, random, fromTimeout = false }) {
+  const player = currentPlayer(state);
   const seed = randomSeed(random);
   let simulation;
   try {
@@ -134,16 +164,28 @@ function startRoll(state, { now, random, fromTimeout = false }) {
   state.options = [];
   state.deadline = 0;
   state.revealAt = now + simulation.durationMs;
+  publicEvent(state, {
+    kind: "roll-start", actorId: player?.id,
+    text: `${player?.name || "玩家"}${fromTimeout ? "超时，自动" : ""}掷出四颗骰子`
+  }, now);
 }
 
 function nextTurn(state, now) {
   clearRoll(state);
   state.currentIndex = (state.currentIndex + 1) % state.players.length;
   beginStage(state, "roll", now);
+  const player = currentPlayer(state);
+  publicEvent(state, { kind: "turn-start", actorId: player?.id, text: `轮到 ${player?.name || "玩家"} 攀登` }, now);
 }
 
 function bustTurn(state, now) {
-  addLog(state, `${currentPlayer(state).name} 无路可走，本回合攀登成果全部丢失`, now);
+  const player = currentPlayer(state);
+  const columns = Object.keys(state.turnProgress).map(Number);
+  addLog(state, `${player.name} 无路可走，本回合攀登成果全部丢失`, now);
+  publicEvent(state, {
+    kind: "turn-busted", actorId: player.id, columns,
+    text: `${player.name} 爆掉了，临时进度全部丢失`
+  }, now);
   nextTurn(state, now);
 }
 
@@ -158,6 +200,10 @@ function chooseOption(state, key, { now, fromTimeout = false }) {
   addLog(state, `${player.name}${fromTimeout ? "超时，自动" : ""}推进 ${option.moves.join("、")} 号路线`, now);
   state.options = [];
   beginStage(state, "decision", now);
+  publicEvent(state, {
+    kind: "route-chosen", actorId: player.id, columns: [...new Set(option.moves)], moves: [...option.moves],
+    text: `${player.name}${fromTimeout ? "自动" : ""}推进 ${option.moves.join("、")} 号路线`
+  }, now);
 }
 
 function stopTurn(state, { now, fromTimeout = false }) {
@@ -176,6 +222,16 @@ function stopTurn(state, { now, fromTimeout = false }) {
     `${player.name}${fromTimeout ? "超时，自动" : ""}选择扎营${newlyClaimed.length ? `，占领 ${newlyClaimed.join("、")} 号路线` : ""}`,
     now
   );
+  ensurePresentationState(state);
+  const sceneId = `cantstop_scene_${state.presentationSceneSequence += 1}`;
+  publicEvent(state, {
+    kind: "turn-stopped", actorId: player.id, columns: Object.keys(state.turnProgress).map(Number),
+    text: `${player.name}${fromTimeout ? "自动" : ""}扎营，保存本回合进度`
+  }, now, sceneId);
+  if (newlyClaimed.length) publicEvent(state, {
+    kind: "summit-claimed", actorId: player.id, columns: newlyClaimed,
+    text: `${player.name} 占领 ${newlyClaimed.join("、")} 号峰顶`
+  }, now, sceneId);
   if (player.claimed.length >= 3) {
     state.phase = "ended";
     state.turnStage = "";
@@ -183,6 +239,7 @@ function stopTurn(state, { now, fromTimeout = false }) {
     state.revealAt = 0;
     state.winnerId = player.id;
     addLog(state, `${player.name} 占领三条路线，赢得游戏`, now);
+    publicEvent(state, { kind: "game-result", actorId: player.id, text: `${player.name} 占领三座峰顶，赢得游戏！` }, now);
     return;
   }
   nextTurn(state, now);
@@ -208,7 +265,10 @@ export function createLobby({ capacity, host }) {
     rollFromTimeout: false,
     winnerId: null,
     logs: [],
-    logSequence: 0
+    logSequence: 0,
+    presentationEvents: [],
+    presentationSequence: 0,
+    presentationSceneSequence: 0
   };
 }
 
@@ -292,6 +352,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
     clearRoll(state);
     addLog(state, `游戏开始，${currentPlayer(state).name} 首先攀登`, now);
     beginStage(state, "roll", now);
+    publicEvent(state, {
+      kind: "game-start", actorId: currentPlayer(state).id,
+      text: `登山开始，${currentPlayer(state).name} 率先出发`
+    }, now);
     return;
   }
   if (type === "end") {
@@ -331,6 +395,10 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
     state.pendingDice = [];
     state.options = rollOptions(state.dice, state.turnProgress, Object.keys(state.closed).map(Number));
     addLog(state, `${currentPlayer(state).name}${state.rollFromTimeout ? "超时，自动" : ""}掷出了 ${state.dice.join("、")}`, now);
+    publicEvent(state, {
+      kind: "dice-settled", actorId: currentPlayer(state).id, dice: [...state.dice],
+      text: `${currentPlayer(state).name} 掷出 ${state.dice.join("、")}`
+    }, now);
     state.rollFromTimeout = false;
     state.turnStage = "settled";
     state.revealAt = now + 700;
@@ -364,6 +432,7 @@ export function getDeadline(state) {
 }
 
 function buildPublicView(state, { selfId, permissions }) {
+  ensurePresentationState(state);
   return {
     selfId,
     phase: state.phase,
@@ -380,6 +449,7 @@ function buildPublicView(state, { selfId, permissions }) {
     physicsSeed: state.physicsSeed,
     winnerId: state.winnerId,
     logs: state.logs.map((entry) => ({ ...entry })),
+    presentationEvents: state.presentationEvents.map((event) => structuredClone(event)),
     permissions,
     players: state.players.map((player) => ({
       ...player,
@@ -418,6 +488,7 @@ export function buildSpectatorView(state) {
 }
 
 export function serializeState(state) {
+  ensurePresentationState(state);
   return structuredClone(state);
 }
 
@@ -425,5 +496,5 @@ export function restoreState(serializedState) {
   if (serializedState?.stateVersion !== STATE_VERSION) {
     throw new Error(`Unsupported game10 state version: ${serializedState?.stateVersion}`);
   }
-  return structuredClone(serializedState);
+  return ensurePresentationState(structuredClone(serializedState));
 }
