@@ -34,6 +34,14 @@ let logPlayerFilter = "all";
 let configuringRoom = false;
 let spectatorUi = null;
 let presentation = null;
+let draftRoomCode = "";
+const actionDraft = {
+  submittedWord:"",
+  submittedTrapWord:"",
+  submittedWordExtra:"",
+  question:"",
+  guess:""
+};
 const versionWaiters = new Set();
 const sessions = createSessionStore({ gameId: "guess-word" });
 const room = createAuthoritativeRoomClient({
@@ -44,7 +52,10 @@ const room = createAuthoritativeRoomClient({
   },
   handlers: {
     onView(nextView, version) {
+      const previousView = view;
+      captureActionDraft();
       view = nextView;
+      reconcileActionDraft(previousView, nextView);
       for (const waiter of versionWaiters) waiter(version);
       enterRoom();
       render();
@@ -164,6 +175,60 @@ function submitAction(action) {
     elements.connectionStatus.textContent = `操作失败：${error.message}`;
     alert(error.message);
   });
+}
+
+function captureDraftValue(elementId, key) {
+  const input = $(elementId);
+  if (input) actionDraft[key] = input.value;
+}
+
+function captureActionDraft() {
+  captureDraftValue("submittedWordInput", "submittedWord");
+  captureDraftValue("submittedTrapWordInput", "submittedTrapWord");
+  captureDraftValue("submittedWordExtraInput", "submittedWordExtra");
+  captureDraftValue("questionInput", "question");
+  captureDraftValue("guessInput", "guess");
+}
+
+function clearDraftGroup(group) {
+  const keys = group === "submission"
+    ? ["submittedWord", "submittedTrapWord", "submittedWordExtra"]
+    : group === "turn" ? ["question", "guess"] : Object.keys(actionDraft);
+  for (const key of keys) actionDraft[key] = "";
+}
+
+function currentPlayerId(currentView) {
+  return currentView?.players?.find((player) => player.isCurrent)?.id || "";
+}
+
+function reconcileActionDraft(previousView, nextView) {
+  const nextRoomCode = room.snapshot().roomCode;
+  if (draftRoomCode && draftRoomCode !== nextRoomCode) clearDraftGroup("all");
+  draftRoomCode = nextRoomCode;
+
+  if (["lobby", "ended"].includes(nextView.phase)) {
+    clearDraftGroup("all");
+    return;
+  }
+  if (nextView.phase !== "collectingWords") clearDraftGroup("submission");
+  if (nextView.phase !== "playing") clearDraftGroup("turn");
+  if (!previousView) return;
+
+  const previousCurrentId = currentPlayerId(previousView);
+  const nextCurrentId = currentPlayerId(nextView);
+  if (previousView.phase === "playing" && previousCurrentId === previousView.selfId && nextCurrentId !== nextView.selfId) {
+    clearDraftGroup("turn");
+  }
+  const acceptedOwnQuestion = nextView.currentQuestion?.askerId === nextView.selfId
+    && nextView.currentQuestion?.id !== previousView.currentQuestion?.id;
+  if (acceptedOwnQuestion) actionDraft.question = "";
+}
+
+function restoreDraftInput(elementId, key) {
+  const input = $(elementId);
+  if (!input) return;
+  input.value = actionDraft[key];
+  input.addEventListener("input", () => { actionDraft[key] = input.value; });
 }
 
 async function kickPlayer(playerId) {
@@ -327,6 +392,8 @@ function renderActions(memberRole) {
     <label>猜词<input id="guessInput" autocomplete="off" maxlength="30" placeholder="输入你认为自己额头上的词"></label>
     <button id="submitGuessButton" type="button">提交猜词</button>
     <button id="skipTurnButton" type="button">跳过</button>`;
+  restoreDraftInput("questionInput", "question");
+  restoreDraftInput("guessInput", "guess");
   $("submitQuestionButton")?.addEventListener("click", () => {
     submitAction({ type: "question", text: $("questionInput").value });
   });
@@ -351,6 +418,9 @@ function renderWordSubmission() {
     ${trapField}${extraField}
     <button class="primary" id="submitWordButton" type="button">${hasSubmitted ? "更新词语" : "提交词语"}</button>
     ${hasSubmitted ? '<p class="muted">你已提交；其他玩家完成前仍可更新。</p>' : ""}`;
+  restoreDraftInput("submittedWordInput", "submittedWord");
+  restoreDraftInput("submittedTrapWordInput", "submittedTrapWord");
+  restoreDraftInput("submittedWordExtraInput", "submittedWordExtra");
   $("submitWordButton").addEventListener("click", () => {
     const word = $("submittedWordInput").value.trim();
     const trapWord = $("submittedTrapWordInput")?.value.trim() || "";

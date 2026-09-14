@@ -73,3 +73,17 @@ test("game1 consumes server-authored cipher presentations with backlog control",
   assert.match(styles,/\.presentation-token\s*\{/);
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.presentation-token/);
 });
+
+test("game1 preserves unsent form drafts across authoritative view broadcasts",()=>{
+  assert.match(script,/onView\(nextView, version\) \{\s*const previousView = view;\s*captureActionDraft\(\);\s*view = nextView;\s*reconcileActionDraft\(previousView, nextView\);/);
+  for(const binding of[
+    'restoreDraftInput("submittedWordInput", "submittedWord")',
+    'restoreDraftInput("submittedTrapWordInput", "submittedTrapWord")',
+    'restoreDraftInput("submittedWordExtraInput", "submittedWordExtra")',
+    'restoreDraftInput("questionInput", "question")',
+    'restoreDraftInput("guessInput", "guess")'
+  ]) assert.match(script,new RegExp(binding.replace(/[()]/g,"\\$&")));
+  assert.match(script,/if \(nextView\.phase !== "collectingWords"\) clearDraftGroup\("submission"\)/);
+  assert.match(script,/if \(nextView\.phase !== "playing"\) clearDraftGroup\("turn"\)/);
+  assert.doesNotMatch(script,/localStorage[\s\S]*actionDraft|actionDraft[\s\S]*localStorage/);
+});
