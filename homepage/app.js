@@ -7,11 +7,11 @@ const modules = [
     id: "tools",
     icon: "⌁",
     title: "实用工具",
-    description: "简单、顺手，也许能替日常省下一点时间。",
-    href: "#roadmap",
-    status: "planned",
-    statusText: "筹备中",
-    action: "看看计划",
+    description: "拼豆图纸工坊已经开放，把喜欢的图片变成可以动手制作的图纸。",
+    href: "/tools/",
+    status: "online",
+    statusText: "已开放",
+    action: "打开工具箱",
     theme: "sage"
   },
   {

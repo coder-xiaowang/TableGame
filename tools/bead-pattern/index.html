@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f7c96d">
+    <meta name="description" content="在浏览器中把图片转换成可编辑、可统计和可导出的拼豆图纸。">
+    <title>拼豆图纸工坊</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="back-link" href="../" aria-label="返回实用工具">← 工具箱</a>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div><p>PIXEL CRAFT STUDIO</p><h1>拼豆图纸工坊</h1></div>
+      </div>
+      <span class="privacy-badge">图片仅在本机处理</span>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div><p class="eyebrow">从照片到可以动手制作的图纸</p><h2>把喜欢的画面，变成一颗颗彩色拼豆。</h2></div>
+        <p>上传并裁剪图片，选择网格与颜色数量，再手工修整。完成后可导出带网格图纸和材料清单。</p>
+      </section>
+
+      <section class="setup-card" aria-labelledby="setupTitle">
+        <div class="section-heading"><span>01</span><div><p>准备原图</p><h2 id="setupTitle">裁剪与生成设置</h2></div></div>
+        <div class="setup-grid">
+          <div class="source-panel">
+            <label class="upload-zone" id="uploadZone">
+              <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp">
+              <span class="upload-icon" aria-hidden="true">＋</span>
+              <strong>选择一张图片</strong>
+              <small>支持 JPG、PNG、WebP，最大 20MB</small>
+            </label>
+            <div class="crop-stage" id="cropStage" hidden>
+              <canvas id="cropCanvas" aria-label="图片裁剪预览"></canvas>
+            </div>
+            <p class="gesture-hint" id="cropHint">上传后拖动画面调整裁剪位置。</p>
+          </div>
+
+          <div class="settings-panel">
+            <label class="field full-field">
+              <span>裁剪缩放 <output id="cropZoomOutput">100%</output></span>
+              <input id="cropZoom" type="range" min="100" max="320" value="100" step="1" disabled>
+            </label>
+            <div class="field-row">
+              <label class="field"><span>横向格数</span><input id="gridColumns" type="number" min="8" max="100" value="29" inputmode="numeric"></label>
+              <label class="field"><span>纵向格数</span><input id="gridRows" type="number" min="8" max="100" value="29" inputmode="numeric"></label>
+            </div>
+            <label class="field full-field">
+              <span>最多使用颜色 <output id="colorLimitOutput">16 种</output></span>
+              <input id="colorLimit" type="range" min="2" max="32" value="16" step="1">
+            </label>
+            <div class="setting-note"><span aria-hidden="true">✦</span><p>第一版采用35色通用色卡。实际制作前，请用材料清单对照手中的品牌色号。</p></div>
+            <div class="setup-actions">
+              <button id="resetCropButton" type="button" class="button secondary" disabled>重置裁剪</button>
+              <button id="generateButton" type="button" class="button primary" disabled>生成拼豆图纸</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace" id="workspace" hidden aria-labelledby="workspaceTitle">
+        <div class="workspace-heading">
+          <div class="section-heading"><span>02</span><div><p>手工修整</p><h2 id="workspaceTitle">图纸编辑台</h2></div></div>
+          <p id="patternSummary" class="pattern-summary"></p>
+        </div>
+
+        <div class="editor-layout">
+          <section class="canvas-card">
+            <div class="canvas-head">
+              <div><strong>图纸画布</strong><small id="toolHint">画笔：在格子上滑动即可连续绘制</small></div>
+              <div class="zoom-control" aria-label="画布缩放">
+                <button id="zoomOutButton" type="button" aria-label="缩小">−</button>
+                <output id="editorZoomOutput">100%</output>
+                <button id="zoomInButton" type="button" aria-label="放大">＋</button>
+              </div>
+            </div>
+            <div class="tool-dock" id="toolDock" aria-label="图纸编辑工具">
+              <div class="tool-group">
+                <button type="button" data-tool="pencil" class="active"><span>✎</span>画笔</button>
+                <button type="button" data-tool="eraser"><span>◇</span>橡皮</button>
+                <button type="button" data-tool="picker"><span>◉</span>取色</button>
+                <button type="button" data-tool="pan"><span>✥</span>移动</button>
+              </div>
+              <div class="tool-group history-tools">
+                <button id="undoButton" type="button" disabled><span>↶</span>撤销</button>
+                <button id="redoButton" type="button" disabled><span>↷</span>重做</button>
+              </div>
+            </div>
+            <div class="canvas-viewport" id="canvasViewport">
+              <canvas id="editorCanvas" aria-label="可编辑拼豆图纸"></canvas>
+            </div>
+            <p class="mobile-canvas-hint">画布较大时，先选择“移动”再拖动画布；使用 ＋/− 调整大小。</p>
+          </section>
+
+          <aside class="palette-card">
+            <div class="palette-heading"><div><p>COLOR TRAY</p><h3>通用色盘</h3></div><span id="selectedColorLabel"></span></div>
+            <div class="palette-grid" id="paletteGrid" role="listbox" aria-label="选择拼豆颜色"></div>
+          </aside>
+        </div>
+
+        <section class="materials-card" aria-labelledby="materialsTitle">
+          <div class="materials-heading"><div><p>MATERIAL LIST</p><h2 id="materialsTitle">材料清单</h2></div><div id="materialTotals" class="material-totals"></div></div>
+          <div class="materials-table-wrap">
+            <table><thead><tr><th>颜色</th><th>通用色号</th><th>名称</th><th>数量</th></tr></thead><tbody id="materialsBody"></tbody></table>
+          </div>
+          <div class="export-actions">
+            <label class="code-option"><input id="showCodes" type="checkbox" checked> 导出图中标注色号</label>
+            <button id="copyListButton" type="button" class="button secondary">复制清单</button>
+            <button id="exportCsvButton" type="button" class="button secondary">下载材料清单 CSV</button>
+            <button id="exportPngButton" type="button" class="button primary">导出带网格 PNG</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
