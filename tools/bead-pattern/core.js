@@ -2,6 +2,8 @@ export function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+export const ENGINE_VERSION = "2.1.0-benchmark";
+
 export function hexToRgb(hex) {
   const value = String(hex).replace("#", "");
   if (!/^[0-9a-f]{6}$/i.test(value)) throw new TypeError(`无效颜色：${hex}`);
@@ -192,20 +194,127 @@ export function patternMetrics(cells, width, height) {
       || (y + 1 < height && cells[index + width] === cells[index]);
     if (!connected) isolated += 1;
   }
-  return { colors, filled, isolated, isolatedRatio: filled ? isolated / filled : 0 };
+  const regions = analyzeRegions(cells, width, height);
+  return {
+    colors,
+    filled,
+    isolated,
+    isolatedRatio: filled ? isolated / filled : 0,
+    regionCount: regions.regionCount,
+    smallRegions: regions.smallRegions,
+    fragmentsPerHundred: filled ? regions.regionCount / filled * 100 : 0
+  };
+}
+
+export function analyzeRegions(cells, width, height, smallRegionLimit = 3) {
+  const visited = new Uint8Array(cells.length);
+  let regionCount = 0, smallRegions = 0, largestRegion = 0;
+  for (let start = 0; start < cells.length; start += 1) {
+    if (visited[start] || cells[start] < 0) continue;
+    const color = cells[start];
+    const queue = [start];
+    visited[start] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      const x = index % width, y = Math.floor(index / width);
+      if (x > 0 && !visited[index - 1] && cells[index - 1] === color) { visited[index - 1] = 1; queue.push(index - 1); }
+      if (x + 1 < width && !visited[index + 1] && cells[index + 1] === color) { visited[index + 1] = 1; queue.push(index + 1); }
+      if (y > 0 && !visited[index - width] && cells[index - width] === color) { visited[index - width] = 1; queue.push(index - width); }
+      if (y + 1 < height && !visited[index + width] && cells[index + width] === color) { visited[index + width] = 1; queue.push(index + width); }
+    }
+    regionCount += 1;
+    if (queue.length <= smallRegionLimit) smallRegions += 1;
+    largestRegion = Math.max(largestRegion, queue.length);
+  }
+  return { regionCount, smallRegions, largestRegion };
+}
+
+export function colorFidelityMetrics(sampled, cells, palette) {
+  const prepared = preparePalette(palette);
+  let compared = 0, totalDistance = 0, maximumDistance = 0, highError = 0;
+  for (let cell = 0; cell < cells.length; cell += 1) {
+    if (cells[cell] < 0 || sampled.data[cell * 4 + 3] < 32) continue;
+    const sourceLab = rgbToLab({
+      r: sampled.data[cell * 4],
+      g: sampled.data[cell * 4 + 1],
+      b: sampled.data[cell * 4 + 2]
+    });
+    const distance = Math.sqrt(labDistanceSquared(sourceLab, prepared[cells[cell]].lab));
+    compared += 1;
+    totalDistance += distance;
+    maximumDistance = Math.max(maximumDistance, distance);
+    if (distance >= 20) highError += 1;
+  }
+  return {
+    meanLabDistance: compared ? totalDistance / compared : 0,
+    maxLabDistance: maximumDistance,
+    highErrorRatio: compared ? highError / compared : 0
+  };
+}
+
+function pixelLuma(red, green, blue) {
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+}
+
+export function edgeRetentionMetrics(sampled, cells, palette, sourceThreshold = 24, outputThreshold = 12) {
+  const rgbPalette = palette.map((color) => hexToRgb(color.hex));
+  let sourceEdges = 0, preservedEdges = 0, totalDifference = 0, comparisons = 0;
+  const compare = (left, right) => {
+    if (sampled.data[left * 4 + 3] < 32 || sampled.data[right * 4 + 3] < 32 || cells[left] < 0 || cells[right] < 0) return;
+    const sourceLeft = pixelLuma(sampled.data[left * 4], sampled.data[left * 4 + 1], sampled.data[left * 4 + 2]);
+    const sourceRight = pixelLuma(sampled.data[right * 4], sampled.data[right * 4 + 1], sampled.data[right * 4 + 2]);
+    const outputLeft = rgbPalette[cells[left]], outputRight = rgbPalette[cells[right]];
+    const sourceDifference = Math.abs(sourceLeft - sourceRight);
+    const outputDifference = Math.abs(pixelLuma(outputLeft.r, outputLeft.g, outputLeft.b) - pixelLuma(outputRight.r, outputRight.g, outputRight.b));
+    comparisons += 1;
+    totalDifference += Math.abs(sourceDifference - outputDifference);
+    if (sourceDifference >= sourceThreshold) {
+      sourceEdges += 1;
+      if (outputDifference >= outputThreshold) preservedEdges += 1;
+    }
+  };
+  for (let y = 0; y < sampled.height; y += 1) {
+    for (let x = 0; x < sampled.width; x += 1) {
+      const index = y * sampled.width + x;
+      if (x + 1 < sampled.width) compare(index, index + 1);
+      if (y + 1 < sampled.height) compare(index, index + sampled.width);
+    }
+  }
+  return {
+    sourceEdges,
+    preservedEdges,
+    edgeRetention: sourceEdges ? preservedEdges / sourceEdges : 1,
+    meanEdgeDifference: comparisons ? totalDifference / comparisons : 0
+  };
+}
+
+function now() {
+  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 export function compilePattern(imageData, palette, options = {}) {
+  const startedAt = now();
   const source = imageDimensions(imageData);
   const width = clamp(Math.round(options.width || source.width), 1, source.width);
   const height = clamp(Math.round(options.height || source.height), 1, source.height);
   const profile = PATTERN_PROFILES[options.profile] || PATTERN_PROFILES.balanced;
   const requestedColors = clamp(Math.round(options.maximumColors) || 16, 1, palette.length);
   const effectiveColors = clamp(Math.round(requestedColors * profile.colorScale), 1, requestedColors);
+  const sampledAt = now();
   const sampled = downsampleImageData(imageData, width, height, profile.sampling);
+  const quantizedAt = now();
   const quantized = quantizeImageData(sampled, palette, effectiveColors);
+  const cleanedAt = now();
   const cells = cleanupSmallRegions(quantized.cells, width, height, profile.cleanupSize);
+  const measuredAt = now();
+  const metrics = {
+    ...patternMetrics(cells, width, height),
+    ...colorFidelityMetrics(sampled, cells, palette),
+    ...edgeRetentionMetrics(sampled, cells, palette)
+  };
+  const finishedAt = now();
   return {
+    engineVersion: ENGINE_VERSION,
     width,
     height,
     cells,
@@ -213,8 +322,24 @@ export function compilePattern(imageData, palette, options = {}) {
     profile: profile.id,
     requestedColors,
     effectiveColors,
-    metrics: patternMetrics(cells, width, height)
+    metrics,
+    timings: {
+      samplingMs: quantizedAt - sampledAt,
+      quantizationMs: cleanedAt - quantizedAt,
+      cleanupMs: measuredAt - cleanedAt,
+      measurementMs: finishedAt - measuredAt,
+      totalMs: finishedAt - startedAt
+    }
   };
+}
+
+export function patternFingerprint(cells) {
+  let hash = 2166136261;
+  for (const value of cells) {
+    hash ^= value + 2;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 export function countPatternColors(cells) {

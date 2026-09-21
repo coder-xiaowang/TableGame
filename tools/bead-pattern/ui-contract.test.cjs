@@ -53,3 +53,22 @@ test("所有动态材料行均以DOM文本节点构造", () => {
   assert.match(script, /name\.textContent = item\.name/);
   assert.match(script, /E\.materialsBody\.replaceChildren/);
 });
+
+test("开发基准台覆盖六类十二张素材和完整评测闭环", () => {
+  const html = read("benchmarks/benchmark.html");
+  const script = read("benchmarks/benchmark.js");
+  const fixtures = read("benchmarks/fixtures.js");
+  const fixtureIds = fixtures.match(/id: "(?:portrait|pet|anime|logo|scenery|pixel-art)-\d+"/g) || [];
+  const fixtureFiles = [...fixtures.matchAll(/file: "([^"]+\.svg)"/g)].map((match) => match[1]);
+  assert.equal(fixtureIds.length, 12);
+  assert.equal(fixtureFiles.length, 12);
+  for (const file of fixtureFiles) assert.ok(fs.existsSync(path.join(__dirname, "benchmarks", file)), `缺少基准素材 ${file}`);
+  for (const category of ["portrait", "pet", "anime", "logo", "scenery", "pixel-art"]) assert.match(fixtures, new RegExp(`${category}:|category: "${category}"`));
+  for (const id of ["runDefault", "runFull", "baselineInput", "exportResults", "categoryFilter"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /noindex,nofollow/);
+  assert.match(script, /compilePattern/);
+  assert.match(script, /localStorage\.setItem/);
+  assert.match(script, /application\/json/);
+  assert.match(script, /patternFingerprint/);
+  assert.doesNotMatch(read("../index.html"), /benchmarks\/benchmark/);
+});

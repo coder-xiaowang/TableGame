@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>拼豆转换质量基准</title>
+  <link rel="stylesheet" href="benchmark.css">
+</head>
+<body>
+  <header>
+    <div><p>DEVELOPMENT BENCHMARK</p><h1>拼豆转换质量基准</h1></div>
+    <a href="../">返回拼豆工坊</a>
+  </header>
+  <main>
+    <section class="control-panel">
+      <div><strong id="engineVersion"></strong><small>该页面仅用于开发验证，不在公开工具入口展示。</small></div>
+      <label>素材类别<select id="categoryFilter"><option value="all">全部类别</option></select></label>
+      <div class="actions">
+        <button id="runDefault">运行标准基准</button>
+        <button id="runFull" class="secondary">运行完整组合</button>
+        <label class="file-button">导入旧基准<input id="baselineInput" type="file" accept="application/json"></label>
+        <button id="exportResults" class="secondary" disabled>导出评测 JSON</button>
+      </div>
+      <div class="progress"><span id="progressBar"></span></div>
+      <p id="statusText" role="status">等待运行</p>
+    </section>
+    <section class="legend">
+      <span>颜色误差：Lab 距离，越低越好</span><span>轮廓保留：越接近 100% 越好</span><span>碎片：越少越容易制作</span>
+    </section>
+    <div id="results"></div>
+  </main>
+  <template id="ratingTemplate">
+    <details class="rating-panel">
+      <summary>人工评测与问题记录</summary>
+      <div class="rating-grid"></div>
+      <fieldset><legend>问题标签</legend><div class="issue-grid"></div></fieldset>
+      <textarea rows="2" placeholder="补充观察或预计需要手工修改的地方"></textarea>
+    </details>
+  </template>
+  <script type="module" src="benchmark.js"></script>
+</body>
+</html>

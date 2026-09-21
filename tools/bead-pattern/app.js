@@ -1,7 +1,7 @@
 "use strict";
 
 import { GENERIC_PALETTE } from "./palette.js";
-import { PATTERN_PROFILES, clamp, compilePattern, hexToRgb, materialCsv, materialRows, rasterLine } from "./core.js";
+import { PATTERN_PROFILES, clamp, compilePattern, hexToRgb, materialCsv, materialRows, patternMetrics, rasterLine } from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
@@ -530,7 +530,8 @@ function renderMaterials() {
   const total = rows.reduce((sum, item) => sum + item.count, 0);
   const profile = PATTERN_PROFILES[pattern.generation?.profile];
   const profileText = profile ? `${profile.label}模式 · ` : "";
-  const cleanupText = pattern.generation?.metrics?.isolated ? ` · ${pattern.generation.metrics.isolated} 个孤立色块` : "";
+  const currentMetrics = patternMetrics(pattern.cells, pattern.columns, pattern.rows);
+  const cleanupText = currentMetrics.isolated ? ` · ${currentMetrics.isolated} 个孤立色块` : "";
   E.patternSummary.textContent = `${profileText}${pattern.columns} × ${pattern.rows} 格 · ${rows.length} 种颜色 · ${total} 颗拼豆${cleanupText}`;
   E.materialTotals.innerHTML = `<strong>${total} 颗</strong>${rows.length} 种颜色`;
   E.materialsBody.replaceChildren(...rows.map((item) => {
