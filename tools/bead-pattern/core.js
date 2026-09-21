@@ -30,6 +30,68 @@ export function labDistanceSquared(left, right) {
   return (left.l - right.l) ** 2 + (left.a - right.a) ** 2 + (left.b - right.b) ** 2;
 }
 
+export const PATTERN_PROFILES = Object.freeze({
+  easy: Object.freeze({ id: "easy", label: "省豆", colorScale: 0.65, sampling: "average", cleanupSize: 1 }),
+  balanced: Object.freeze({ id: "balanced", label: "均衡", colorScale: 0.85, sampling: "representative", cleanupSize: 1 }),
+  detailed: Object.freeze({ id: "detailed", label: "细腻", colorScale: 1, sampling: "representative", cleanupSize: 0 })
+});
+
+function imageDimensions(imageData) {
+  const width = Number(imageData?.width);
+  const height = Number(imageData?.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    throw new TypeError("图像数据缺少有效的宽度或高度");
+  }
+  if (!imageData.data || imageData.data.length !== width * height * 4) {
+    throw new TypeError("图像像素数量与尺寸不一致");
+  }
+  return { width, height };
+}
+
+export function downsampleImageData(imageData, targetWidth, targetHeight, mode = "representative") {
+  const source = imageDimensions(imageData);
+  const width = clamp(Math.round(targetWidth), 1, source.width);
+  const height = clamp(Math.round(targetHeight), 1, source.height);
+  const output = new Uint8ClampedArray(width * height * 4);
+
+  for (let row = 0; row < height; row += 1) {
+    const startY = Math.floor(row * source.height / height);
+    const endY = Math.max(startY + 1, Math.ceil((row + 1) * source.height / height));
+    for (let column = 0; column < width; column += 1) {
+      const startX = Math.floor(column * source.width / width);
+      const endX = Math.max(startX + 1, Math.ceil((column + 1) * source.width / width));
+      const samples = [];
+      let red = 0, green = 0, blue = 0, alpha = 0, weight = 0, sampleSlots = 0;
+      for (let y = startY; y < Math.min(endY, source.height); y += 1) {
+        for (let x = startX; x < Math.min(endX, source.width); x += 1) {
+          sampleSlots += 1;
+          const index = (y * source.width + x) * 4;
+          const a = imageData.data[index + 3] / 255;
+          if (a <= 0) continue;
+          const sample = { r: imageData.data[index], g: imageData.data[index + 1], b: imageData.data[index + 2], a };
+          samples.push(sample);
+          red += sample.r * a; green += sample.g * a; blue += sample.b * a; alpha += a; weight += a;
+        }
+      }
+      const outputIndex = (row * width + column) * 4;
+      if (!samples.length || weight < 0.125) continue;
+      const mean = { r: red / weight, g: green / weight, b: blue / weight };
+      let color = mean;
+      if (mode === "representative") {
+        color = samples.reduce((best, sample) => {
+          const distance = (sample.r - mean.r) ** 2 + (sample.g - mean.g) ** 2 + (sample.b - mean.b) ** 2;
+          return distance < best.distance ? { ...sample, distance } : best;
+        }, { ...samples[0], distance: Number.POSITIVE_INFINITY });
+      }
+      output[outputIndex] = Math.round(color.r);
+      output[outputIndex + 1] = Math.round(color.g);
+      output[outputIndex + 2] = Math.round(color.b);
+      output[outputIndex + 3] = Math.round(clamp(alpha / sampleSlots, 0, 1) * 255);
+    }
+  }
+  return { width, height, data: output };
+}
+
 export function preparePalette(palette) {
   return palette.map((color, index) => ({ ...color, index, rgb: hexToRgb(color.hex), lab: rgbToLab(hexToRgb(color.hex)) }));
 }
@@ -83,6 +145,76 @@ export function quantizeImageData(imageData, palette, maximumColors) {
     return nearest;
   });
   return { cells, paletteIndexes: selected };
+}
+
+export function cleanupSmallRegions(cells, width, height, maximumRegionSize = 1) {
+  const result = cells.slice();
+  if (maximumRegionSize < 1) return result;
+  const visited = new Uint8Array(cells.length);
+  const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  for (let start = 0; start < cells.length; start += 1) {
+    if (visited[start] || cells[start] < 0) continue;
+    const color = cells[start];
+    const region = [];
+    const boundary = new Map();
+    const queue = [start];
+    visited[start] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      region.push(index);
+      const x = index % width, y = Math.floor(index / width);
+      for (const [dx, dy] of neighbors) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const next = ny * width + nx;
+        if (cells[next] === color && !visited[next]) { visited[next] = 1; queue.push(next); }
+        else if (cells[next] >= 0 && cells[next] !== color) boundary.set(cells[next], (boundary.get(cells[next]) || 0) + 1);
+      }
+    }
+    if (region.length > maximumRegionSize || !boundary.size) continue;
+    const replacement = [...boundary.entries()].sort((left, right) => right[1] - left[1] || left[0] - right[0])[0][0];
+    for (const index of region) result[index] = replacement;
+  }
+  return result;
+}
+
+export function patternMetrics(cells, width, height) {
+  const colors = countPatternColors(cells).size;
+  let filled = 0, isolated = 0;
+  for (let index = 0; index < cells.length; index += 1) {
+    if (cells[index] < 0) continue;
+    filled += 1;
+    const x = index % width, y = Math.floor(index / width);
+    const connected = (x > 0 && cells[index - 1] === cells[index])
+      || (x + 1 < width && cells[index + 1] === cells[index])
+      || (y > 0 && cells[index - width] === cells[index])
+      || (y + 1 < height && cells[index + width] === cells[index]);
+    if (!connected) isolated += 1;
+  }
+  return { colors, filled, isolated, isolatedRatio: filled ? isolated / filled : 0 };
+}
+
+export function compilePattern(imageData, palette, options = {}) {
+  const source = imageDimensions(imageData);
+  const width = clamp(Math.round(options.width || source.width), 1, source.width);
+  const height = clamp(Math.round(options.height || source.height), 1, source.height);
+  const profile = PATTERN_PROFILES[options.profile] || PATTERN_PROFILES.balanced;
+  const requestedColors = clamp(Math.round(options.maximumColors) || 16, 1, palette.length);
+  const effectiveColors = clamp(Math.round(requestedColors * profile.colorScale), 1, requestedColors);
+  const sampled = downsampleImageData(imageData, width, height, profile.sampling);
+  const quantized = quantizeImageData(sampled, palette, effectiveColors);
+  const cells = cleanupSmallRegions(quantized.cells, width, height, profile.cleanupSize);
+  return {
+    width,
+    height,
+    cells,
+    paletteIndexes: [...countPatternColors(cells).keys()],
+    profile: profile.id,
+    requestedColors,
+    effectiveColors,
+    metrics: patternMetrics(cells, width, height)
+  };
 }
 
 export function countPatternColors(cells) {

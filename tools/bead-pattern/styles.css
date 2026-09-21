@@ -58,6 +58,7 @@ main { width: min(1320px, calc(100% - 32px)); margin: 0 auto 100px; }
 .field { display: grid; gap: 8px; margin-bottom: 18px; font-size: 14px; font-weight: 800; }
 .field span { display: flex; justify-content: space-between; gap: 10px; }.field output { color: #a35934; }
 .field input[type="number"] { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid #d9c59f; border-radius: 13px; color: var(--ink); background: var(--paper); }
+.field select { width: 100%; min-height: 48px; padding: 0 38px 0 14px; border: 1px solid #d9c59f; border-radius: 13px; color: var(--ink); background: var(--paper); font: inherit; }
 .field input[type="range"] { width: 100%; accent-color: var(--orange); }
 .setting-note { display: flex; gap: 10px; padding: 13px; border-radius: 14px; color: #665847; background: rgba(255,255,255,.62); font-size: 13px; line-height: 1.55; }.setting-note p { margin: 0; }.setting-note span { color: var(--orange); }
 .setup-actions, .export-actions { margin-top: 20px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }

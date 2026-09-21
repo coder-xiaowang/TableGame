@@ -50,10 +50,18 @@
               <label class="field"><span>纵向格数</span><input id="gridRows" type="number" min="8" max="100" value="29" inputmode="numeric"></label>
             </div>
             <label class="field full-field">
+              <span>制作目标</span>
+              <select id="generationProfile">
+                <option value="easy">省豆 · 少颜色、减少零碎单点</option>
+                <option value="balanced" selected>均衡 · 兼顾辨识度与制作难度</option>
+                <option value="detailed">细腻 · 尽量保留原图细节</option>
+              </select>
+            </label>
+            <label class="field full-field">
               <span>最多使用颜色 <output id="colorLimitOutput">16 种</output></span>
               <input id="colorLimit" type="range" min="2" max="32" value="16" step="1">
             </label>
-            <div class="setting-note"><span aria-hidden="true">✦</span><p>第一版采用35色通用色卡。实际制作前，请用材料清单对照手中的品牌色号。</p></div>
+            <div class="setting-note"><span aria-hidden="true">✦</span><p>“最多颜色”是上限，省豆和均衡模式可能主动少用一些颜色。当前仍采用35色通用色卡。</p></div>
             <div class="setup-actions">
               <button id="resetCropButton" type="button" class="button secondary" disabled>重置裁剪</button>
               <button id="generateButton" type="button" class="button primary" disabled>生成拼豆图纸</button>
