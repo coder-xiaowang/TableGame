@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GENERIC_PALETTE } from "./palette.js";
-import { ENGINE_VERSION, cleanupSmallRegions, compilePattern, countPatternColors, downsampleImageData, materialCsv, patternFingerprint, quantizeImageData, rasterLine } from "./core.js";
+import { ENGINE_VERSION, bilateralFilterImageData, cleanupSmallRegions, compilePattern, countPatternColors, downsampleImageData, materialCsv, patternFingerprint, quantizeImageData, rasterLine, regularizePattern } from "./core.js";
 
 test("自动配色遵守最大颜色数并保留透明格", () => {
   const imageData = {
@@ -75,7 +75,7 @@ test("确定性编译管线遵守模式与颜色上限", () => {
   });
   assert.equal(result.cells.length, 16);
   assert.equal(result.profile, "easy");
-  assert.ok(result.metrics.colors <= 7);
+  assert.ok(result.metrics.colors <= result.effectiveColors);
   assert.equal(result.metrics.filled, 16);
 });
 
@@ -132,4 +132,53 @@ test("100×100最大网格在性能预算内完成", { timeout: 1500 }, () => {
   const result = compilePattern(syntheticImage(400, 400), GENERIC_PALETTE, { width: 100, height: 100, maximumColors: 32, profile: "balanced" });
   assert.equal(result.cells.length, 10000);
   assert.ok(performance.now() - startedAt < 500, "桌面自动化环境应在500ms保护线上完成");
+});
+
+test("人物插画采样会保留落在格子中心的高对比小特征", () => {
+  const data = new Uint8ClampedArray(4 * 4 * 4).fill(255);
+  const darkPixel = (1 * 4 + 1) * 4;
+  data.set([20, 20, 20, 255], darkPixel);
+  data.set([20, 20, 20, 255], darkPixel + 4);
+  const average = downsampleImageData({ width: 4, height: 4, data }, 1, 1, "average");
+  const feature = downsampleImageData({ width: 4, height: 4, data }, 1, 1, "feature");
+  assert.ok(feature.data[0] < average.data[0] - 100);
+});
+
+test("Logo主色采样不会把抗锯齿边界平均成新的脏色", () => {
+  const data = new Uint8ClampedArray([
+    230, 30, 40, 255, 230, 30, 40, 255,
+    230, 30, 40, 255, 80, 60, 180, 255
+  ]);
+  const dominant = downsampleImageData({ width: 2, height: 2, data }, 1, 1, "dominant");
+  assert.ok(dominant.data[0] > 200 && dominant.data[2] < 80);
+});
+
+test("保边滤波降低同色噪声但不会跨越强黑白边界", () => {
+  const data = new Uint8ClampedArray([
+    20, 20, 20, 255,
+    50, 45, 40, 255,
+    245, 245, 245, 255
+  ]);
+  const filtered = bilateralFilterImageData({ width: 3, height: 1, data }, 1, 35);
+  assert.ok(filtered.data[4] < 50);
+  assert.ok(filtered.data[8] > 235);
+});
+
+test("区域规则化清理平坦区域中的边界杂色", () => {
+  const sampled = { width: 3, height: 3, data: new Uint8ClampedArray(3 * 3 * 4) };
+  for (let index = 0; index < sampled.data.length; index += 4) sampled.data.set([247, 244, 234, 255], index);
+  const cells = [0, 0, 0, 0, 3, 0, 0, 0, 0];
+  const regularized = regularizePattern(cells, sampled, GENERIC_PALETTE, 8, 2);
+  assert.equal(regularized[4], 0);
+});
+
+test("四种内容模式均为显式、确定且受颜色上限约束", () => {
+  const image = syntheticImage(48, 48);
+  for (const contentMode of ["photo", "illustration", "icon", "pixel"]) {
+    const first = compilePattern(image, GENERIC_PALETTE, { width: 12, height: 12, maximumColors: 10, profile: "balanced", contentMode });
+    const second = compilePattern(image, GENERIC_PALETTE, { width: 12, height: 12, maximumColors: 10, profile: "balanced", contentMode });
+    assert.equal(first.contentMode, contentMode);
+    assert.ok(first.metrics.colors <= 10);
+    assert.deepEqual(first.cells, second.cells);
+  }
 });

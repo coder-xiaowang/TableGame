@@ -9,7 +9,7 @@ const read = (name) => fs.readFileSync(path.join(__dirname, name), "utf8");
 test("拼豆工坊包含从图片生成到导出的完整操作闭环", () => {
   const html = read("index.html"), script = read("app.js");
   for (const id of [
-    "imageInput", "cropCanvas", "cropZoom", "gridColumns", "gridRows", "generationProfile", "colorLimit", "generateButton",
+    "imageInput", "cropCanvas", "cropZoom", "gridColumns", "gridRows", "contentMode", "generationProfile", "colorLimit", "generateButton",
     "editorCanvas", "paletteGrid", "undoButton", "redoButton", "materialsBody", "exportCsvButton", "exportPngButton"
   ]) assert.match(html, new RegExp(`id=["']${id}["']`), `缺少 #${id}`);
   assert.match(script, /compilePattern\(croppedImageData/);

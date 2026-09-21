@@ -2,7 +2,7 @@ export function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export const ENGINE_VERSION = "2.1.0-benchmark";
+export const ENGINE_VERSION = "2.2.0-edge-aware";
 
 export function hexToRgb(hex) {
   const value = String(hex).replace("#", "");
@@ -33,9 +33,16 @@ export function labDistanceSquared(left, right) {
 }
 
 export const PATTERN_PROFILES = Object.freeze({
-  easy: Object.freeze({ id: "easy", label: "省豆", colorScale: 0.65, sampling: "average", cleanupSize: 1 }),
-  balanced: Object.freeze({ id: "balanced", label: "均衡", colorScale: 0.85, sampling: "representative", cleanupSize: 1 }),
-  detailed: Object.freeze({ id: "detailed", label: "细腻", colorScale: 1, sampling: "representative", cleanupSize: 0 })
+  easy: Object.freeze({ id: "easy", label: "省豆", colorScale: 0.8, cleanupSize: 1, regularizationScale: 1.25 }),
+  balanced: Object.freeze({ id: "balanced", label: "均衡", colorScale: 1, cleanupSize: 1, regularizationScale: 1 }),
+  detailed: Object.freeze({ id: "detailed", label: "细腻", colorScale: 1, cleanupSize: 0, regularizationScale: 0.7 })
+});
+
+export const CONTENT_MODES = Object.freeze({
+  photo: Object.freeze({ id: "photo", label: "照片 / 风景", sampling: "representative", bilateralRadius: 1, rangeSigma: 34, regularization: 2.6, preserveAccents: 2 }),
+  illustration: Object.freeze({ id: "illustration", label: "人物 / 插画", sampling: "feature", bilateralRadius: 1, rangeSigma: 48, regularization: 3.4, preserveAccents: 3, preserveSmallRegions: true }),
+  icon: Object.freeze({ id: "icon", label: "Logo / 图标", sampling: "dominant", bilateralRadius: 0, rangeSigma: 0, regularization: 4.8, preserveAccents: 3, preserveSmallRegions: true }),
+  pixel: Object.freeze({ id: "pixel", label: "像素画", sampling: "center", bilateralRadius: 0, rangeSigma: 0, regularization: 0, preserveAccents: 3, preserveSmallRegions: true })
 });
 
 function imageDimensions(imageData) {
@@ -71,6 +78,7 @@ export function downsampleImageData(imageData, targetWidth, targetHeight, mode =
           const a = imageData.data[index + 3] / 255;
           if (a <= 0) continue;
           const sample = { r: imageData.data[index], g: imageData.data[index + 1], b: imageData.data[index + 2], a };
+          sample.luma = pixelLuma(sample.r, sample.g, sample.b);
           samples.push(sample);
           red += sample.r * a; green += sample.g * a; blue += sample.b * a; alpha += a; weight += a;
         }
@@ -79,7 +87,45 @@ export function downsampleImageData(imageData, targetWidth, targetHeight, mode =
       if (!samples.length || weight < 0.125) continue;
       const mean = { r: red / weight, g: green / weight, b: blue / weight };
       let color = mean;
-      if (mode === "representative") {
+      if (mode === "center") {
+        const centerX = Math.min(source.width - 1, Math.floor((startX + endX - 1) / 2));
+        const centerY = Math.min(source.height - 1, Math.floor((startY + endY - 1) / 2));
+        const centerIndex = (centerY * source.width + centerX) * 4;
+        color = imageData.data[centerIndex + 3] >= 32 ? {
+          r: imageData.data[centerIndex], g: imageData.data[centerIndex + 1], b: imageData.data[centerIndex + 2]
+        } : mean;
+      } else if (mode === "dominant") {
+        const buckets = new Map();
+        for (const sample of samples) {
+          const key = `${sample.r >> 4},${sample.g >> 4},${sample.b >> 4}`;
+          const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+          bucket.count += sample.a; bucket.r += sample.r * sample.a; bucket.g += sample.g * sample.a; bucket.b += sample.b * sample.a;
+          buckets.set(key, bucket);
+        }
+        const bucket = [...buckets.values()].sort((left, right) => right.count - left.count)[0];
+        color = { r: bucket.r / bucket.count, g: bucket.g / bucket.count, b: bucket.b / bucket.count };
+      } else if (mode === "feature") {
+        const ordered = samples.slice().sort((left, right) => left.luma - right.luma);
+        const featureCount = Math.max(2, Math.ceil(samples.length * 0.25));
+        const dark = ordered.slice(0, featureCount), bright = ordered.slice(-featureCount);
+        const darkMean = dark.reduce((sum, sample) => sum + sample.luma, 0) / dark.length;
+        const brightMean = bright.reduce((sum, sample) => sum + sample.luma, 0) / bright.length;
+        const meanLuma = pixelLuma(mean.r, mean.g, mean.b);
+        const centerX = Math.min(source.width - 1, Math.floor((startX + endX - 1) / 2));
+        const centerY = Math.min(source.height - 1, Math.floor((startY + endY - 1) / 2));
+        const centerIndex = (centerY * source.width + centerX) * 4;
+        const centerLuma = pixelLuma(imageData.data[centerIndex], imageData.data[centerIndex + 1], imageData.data[centerIndex + 2]);
+        const feature = Math.abs(centerLuma - darkMean) <= Math.abs(centerLuma - brightMean) ? dark : bright;
+        if (Math.max(meanLuma - darkMean, brightMean - meanLuma) >= 32) {
+          const targetLuma = feature.reduce((sum, sample) => sum + sample.luma, 0) / feature.length;
+          color = feature.reduce((best, sample) => Math.abs(sample.luma - targetLuma) < Math.abs(best.luma - targetLuma) ? sample : best, feature[0]);
+        } else {
+          color = samples.reduce((best, sample) => {
+            const distance = (sample.r - mean.r) ** 2 + (sample.g - mean.g) ** 2 + (sample.b - mean.b) ** 2;
+            return distance < best.distance ? { ...sample, distance } : best;
+          }, { ...samples[0], distance: Number.POSITIVE_INFINITY });
+        }
+      } else if (mode === "representative") {
         color = samples.reduce((best, sample) => {
           const distance = (sample.r - mean.r) ** 2 + (sample.g - mean.g) ** 2 + (sample.b - mean.b) ** 2;
           return distance < best.distance ? { ...sample, distance } : best;
@@ -94,11 +140,43 @@ export function downsampleImageData(imageData, targetWidth, targetHeight, mode =
   return { width, height, data: output };
 }
 
+export function bilateralFilterImageData(imageData, radius = 1, rangeSigma = 40) {
+  const { width, height } = imageDimensions(imageData);
+  if (radius < 1) return { width, height, data: new Uint8ClampedArray(imageData.data) };
+  const output = new Uint8ClampedArray(imageData.data.length);
+  const rangeFactor = 2 * rangeSigma * rangeSigma;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const center = (y * width + x) * 4;
+      if (imageData.data[center + 3] < 32) continue;
+      let red = 0, green = 0, blue = 0, alpha = 0, weightSum = 0;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const next = (ny * width + nx) * 4;
+          if (imageData.data[next + 3] < 32) continue;
+          const colorDistance = (imageData.data[next] - imageData.data[center]) ** 2
+            + (imageData.data[next + 1] - imageData.data[center + 1]) ** 2
+            + (imageData.data[next + 2] - imageData.data[center + 2]) ** 2;
+          const spatialWeight = dx === 0 && dy === 0 ? 1 : (dx === 0 || dy === 0 ? 0.8 : 0.58);
+          const weight = spatialWeight * Math.exp(-colorDistance / rangeFactor);
+          red += imageData.data[next] * weight; green += imageData.data[next + 1] * weight; blue += imageData.data[next + 2] * weight;
+          alpha += imageData.data[next + 3] * weight; weightSum += weight;
+        }
+      }
+      output[center] = Math.round(red / weightSum); output[center + 1] = Math.round(green / weightSum);
+      output[center + 2] = Math.round(blue / weightSum); output[center + 3] = Math.round(alpha / weightSum);
+    }
+  }
+  return { width, height, data: output };
+}
+
 export function preparePalette(palette) {
   return palette.map((color, index) => ({ ...color, index, rgb: hexToRgb(color.hex), lab: rgbToLab(hexToRgb(color.hex)) }));
 }
 
-export function quantizeImageData(imageData, palette, maximumColors) {
+export function quantizeImageData(imageData, palette, maximumColors, options = {}) {
   const prepared = preparePalette(palette);
   const pixels = [];
   for (let index = 0; index < imageData.data.length; index += 4) {
@@ -111,8 +189,13 @@ export function quantizeImageData(imageData, palette, maximumColors) {
   if (!opaquePixels.length) return { cells: pixels.map(() => -1), paletteIndexes: [] };
 
   const limit = clamp(Math.round(maximumColors) || 1, 1, prepared.length);
-  const selected = [];
+  const selected = [...new Set(options.seedPaletteIndexes || [])].filter((index) => prepared[index]).slice(0, limit);
   const bestDistances = opaquePixels.map(() => Number.POSITIVE_INFINITY);
+
+  for (const paletteIndex of selected) {
+    const lab = prepared[paletteIndex].lab;
+    opaquePixels.forEach((pixel, index) => { bestDistances[index] = Math.min(bestDistances[index], labDistanceSquared(pixel, lab)); });
+  }
 
   while (selected.length < limit) {
     let bestCandidate = -1;
@@ -147,6 +230,76 @@ export function quantizeImageData(imageData, palette, maximumColors) {
     return nearest;
   });
   return { cells, paletteIndexes: selected };
+}
+
+export function featurePaletteSeeds(imageData, palette, maximumSeeds = 3) {
+  if (maximumSeeds < 1) return [];
+  const prepared = preparePalette(palette);
+  const pixels = [];
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    if (imageData.data[index + 3] < 32) continue;
+    const rgb = { r: imageData.data[index], g: imageData.data[index + 1], b: imageData.data[index + 2] };
+    const maximum = Math.max(rgb.r, rgb.g, rgb.b), minimum = Math.min(rgb.r, rgb.g, rgb.b);
+    pixels.push({ rgb, lab: rgbToLab(rgb), luma: pixelLuma(rgb.r, rgb.g, rgb.b), chroma: maximum - minimum });
+  }
+  if (!pixels.length) return [];
+  const byLuma = pixels.slice().sort((left, right) => left.luma - right.luma);
+  const byChroma = pixels.slice().sort((left, right) => right.chroma - left.chroma);
+  const representatives = [
+    byLuma[Math.floor((byLuma.length - 1) * 0.08)],
+    byLuma[Math.floor((byLuma.length - 1) * 0.92)],
+    byChroma[Math.floor((byChroma.length - 1) * 0.05)]
+  ];
+  const seeds = [];
+  for (const representative of representatives) {
+    let nearest = 0, distance = Number.POSITIVE_INFINITY;
+    for (const color of prepared) {
+      const next = labDistanceSquared(representative.lab, color.lab);
+      if (next < distance) { nearest = color.index; distance = next; }
+    }
+    if (!seeds.includes(nearest)) seeds.push(nearest);
+    if (seeds.length >= maximumSeeds) break;
+  }
+  return seeds;
+}
+
+export function regularizePattern(cells, sampled, palette, strength = 0, iterations = 1) {
+  if (strength <= 0) return cells.slice();
+  const prepared = preparePalette(palette);
+  let current = cells.slice();
+  const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (let pass = 0; pass < iterations; pass += 1) {
+    const next = current.slice();
+    for (let index = 0; index < current.length; index += 1) {
+      if (current[index] < 0 || sampled.data[index * 4 + 3] < 32) continue;
+      const x = index % sampled.width, y = Math.floor(index / sampled.width);
+      const neighbors = [];
+      let strongestSourceEdge = 0;
+      const sourceLuma = pixelLuma(sampled.data[index * 4], sampled.data[index * 4 + 1], sampled.data[index * 4 + 2]);
+      for (const [dx, dy] of offsets) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= sampled.width || ny >= sampled.height) continue;
+        const neighbor = ny * sampled.width + nx;
+        if (current[neighbor] >= 0) neighbors.push(current[neighbor]);
+        const neighborLuma = pixelLuma(sampled.data[neighbor * 4], sampled.data[neighbor * 4 + 1], sampled.data[neighbor * 4 + 2]);
+        strongestSourceEdge = Math.max(strongestSourceEdge, Math.abs(sourceLuma - neighborLuma));
+      }
+      const candidates = [...new Set([current[index], ...neighbors])];
+      if (candidates.length < 2) continue;
+      const sourceLab = rgbToLab({ r: sampled.data[index * 4], g: sampled.data[index * 4 + 1], b: sampled.data[index * 4 + 2] });
+      const edgeProtection = strongestSourceEdge >= 36 ? 0.15 : strongestSourceEdge >= 22 ? 0.45 : 1;
+      let best = current[index], bestScore = Number.POSITIVE_INFINITY;
+      for (const candidate of candidates) {
+        const fidelity = Math.sqrt(labDistanceSquared(sourceLab, prepared[candidate].lab));
+        const mismatch = neighbors.reduce((count, color) => count + Number(color !== candidate), 0);
+        const score = fidelity + mismatch * strength * edgeProtection;
+        if (score < bestScore || (score === bestScore && candidate === current[index])) { best = candidate; bestScore = score; }
+      }
+      next[index] = best;
+    }
+    current = next;
+  }
+  return current;
 }
 
 export function cleanupSmallRegions(cells, width, height, maximumRegionSize = 1) {
@@ -298,19 +451,33 @@ export function compilePattern(imageData, palette, options = {}) {
   const width = clamp(Math.round(options.width || source.width), 1, source.width);
   const height = clamp(Math.round(options.height || source.height), 1, source.height);
   const profile = PATTERN_PROFILES[options.profile] || PATTERN_PROFILES.balanced;
+  const content = CONTENT_MODES[options.contentMode] || CONTENT_MODES.illustration;
   const requestedColors = clamp(Math.round(options.maximumColors) || 16, 1, palette.length);
   const effectiveColors = clamp(Math.round(requestedColors * profile.colorScale), 1, requestedColors);
+  const preprocessedAt = now();
+  const preprocessed = bilateralFilterImageData(imageData, content.bilateralRadius, content.rangeSigma);
   const sampledAt = now();
-  const sampled = downsampleImageData(imageData, width, height, profile.sampling);
+  const sampled = downsampleImageData(preprocessed, width, height, content.sampling);
+  const reference = downsampleImageData(imageData, width, height, content.sampling);
   const quantizedAt = now();
-  const quantized = quantizeImageData(sampled, palette, effectiveColors);
+  const seeds = featurePaletteSeeds(sampled, palette, Math.min(content.preserveAccents, effectiveColors));
+  const quantized = quantizeImageData(sampled, palette, effectiveColors, { seedPaletteIndexes: seeds });
+  const regularizedAt = now();
+  const regularized = regularizePattern(
+    quantized.cells,
+    sampled,
+    palette,
+    content.regularization * profile.regularizationScale,
+    profile.id === "easy" ? 2 : 1
+  );
   const cleanedAt = now();
-  const cells = cleanupSmallRegions(quantized.cells, width, height, profile.cleanupSize);
+  const cleanupSize = content.preserveSmallRegions ? 0 : profile.cleanupSize;
+  const cells = cleanupSmallRegions(regularized, width, height, cleanupSize);
   const measuredAt = now();
   const metrics = {
     ...patternMetrics(cells, width, height),
-    ...colorFidelityMetrics(sampled, cells, palette),
-    ...edgeRetentionMetrics(sampled, cells, palette)
+    ...colorFidelityMetrics(reference, cells, palette),
+    ...edgeRetentionMetrics(reference, cells, palette)
   };
   const finishedAt = now();
   return {
@@ -320,12 +487,15 @@ export function compilePattern(imageData, palette, options = {}) {
     cells,
     paletteIndexes: [...countPatternColors(cells).keys()],
     profile: profile.id,
+    contentMode: content.id,
     requestedColors,
     effectiveColors,
     metrics,
     timings: {
+      preprocessingMs: sampledAt - preprocessedAt,
       samplingMs: quantizedAt - sampledAt,
-      quantizationMs: cleanedAt - quantizedAt,
+      quantizationMs: regularizedAt - quantizedAt,
+      regularizationMs: cleanedAt - regularizedAt,
       cleanupMs: measuredAt - cleanedAt,
       measurementMs: finishedAt - measuredAt,
       totalMs: finishedAt - startedAt

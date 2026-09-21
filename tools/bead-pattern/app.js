@@ -1,12 +1,12 @@
 "use strict";
 
 import { GENERIC_PALETTE } from "./palette.js";
-import { PATTERN_PROFILES, clamp, compilePattern, hexToRgb, materialCsv, materialRows, patternMetrics, rasterLine } from "./core.js";
+import { CONTENT_MODES, PATTERN_PROFILES, clamp, compilePattern, hexToRgb, materialCsv, materialRows, patternMetrics, rasterLine } from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "imageInput", "uploadZone", "cropStage", "cropCanvas", "cropHint", "cropZoom", "cropZoomOutput",
-  "gridColumns", "gridRows", "generationProfile", "colorLimit", "colorLimitOutput", "resetCropButton", "generateButton",
+  "gridColumns", "gridRows", "contentMode", "generationProfile", "colorLimit", "colorLimitOutput", "resetCropButton", "generateButton",
   "workspace", "patternSummary", "toolHint", "zoomOutButton", "fitCanvasButton", "zoomInButton", "editorZoomOutput",
   "canvasViewport", "editorCanvas", "paletteGrid", "selectedColorLabel", "toolDock", "undoButton",
   "redoButton", "materialsBody", "materialTotals", "showCodes", "copyListButton", "exportCsvButton",
@@ -156,7 +156,7 @@ function endCropDrag(event) {
   if (cropDrag?.pointerId === event.pointerId) cropDrag = null;
 }
 
-function croppedImageData(columns, rows) {
+function croppedImageData(columns, rows, contentMode) {
   const output = document.createElement("canvas");
   const samplingScale = 4;
   output.width = columns * samplingScale;
@@ -168,7 +168,7 @@ function croppedImageData(columns, rows) {
   const sourceWidth = Math.min(E.cropCanvas.width / transform.scale, sourceImage.naturalWidth - sourceX);
   const sourceHeight = Math.min(E.cropCanvas.height / transform.scale, sourceImage.naturalHeight - sourceY);
   context.clearRect(0, 0, output.width, output.height);
-  context.imageSmoothingEnabled = true;
+  context.imageSmoothingEnabled = contentMode !== "pixel";
   context.imageSmoothingQuality = "high";
   context.drawImage(sourceImage, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, output.width, output.height);
   return context.getImageData(0, 0, output.width, output.height);
@@ -181,11 +181,12 @@ async function generatePattern() {
   E.generateButton.textContent = "正在配色…";
   await new Promise((resolve) => requestAnimationFrame(resolve));
   try {
-    const result = compilePattern(croppedImageData(columns, rows), GENERIC_PALETTE, {
+    const result = compilePattern(croppedImageData(columns, rows, E.contentMode.value), GENERIC_PALETTE, {
       width: columns,
       height: rows,
       maximumColors: Number(E.colorLimit.value),
-      profile: E.generationProfile.value
+      profile: E.generationProfile.value,
+      contentMode: E.contentMode.value
     });
     pattern = { columns, rows, cells: result.cells, generation: result };
     selectedPaletteIndex = result.paletteIndexes[0] ?? selectedPaletteIndex;
@@ -529,7 +530,8 @@ function renderMaterials() {
   const rows = materialRows(pattern.cells, GENERIC_PALETTE);
   const total = rows.reduce((sum, item) => sum + item.count, 0);
   const profile = PATTERN_PROFILES[pattern.generation?.profile];
-  const profileText = profile ? `${profile.label}模式 · ` : "";
+  const content = CONTENT_MODES[pattern.generation?.contentMode];
+  const profileText = `${content ? `${content.label} · ` : ""}${profile ? `${profile.label}模式 · ` : ""}`;
   const currentMetrics = patternMetrics(pattern.cells, pattern.columns, pattern.rows);
   const cleanupText = currentMetrics.isolated ? ` · ${currentMetrics.isolated} 个孤立色块` : "";
   E.patternSummary.textContent = `${profileText}${pattern.columns} × ${pattern.rows} 格 · ${rows.length} 种颜色 · ${total} 颗拼豆${cleanupText}`;

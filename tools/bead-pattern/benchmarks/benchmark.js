@@ -16,9 +16,16 @@ function loadImage(url) {
   return new Promise((resolve,reject) => { const image=new Image(); image.onload=()=>resolve(image); image.onerror=reject; image.src=url; });
 }
 
-function rasterize(image,width,height) {
+function contentModeFor(category) {
+  if (category === "logo") return "icon";
+  if (category === "pixel-art") return "pixel";
+  if (category === "portrait" || category === "anime") return "illustration";
+  return "photo";
+}
+
+function rasterize(image,width,height,contentMode) {
   const scale=4, canvas=document.createElement("canvas"); canvas.width=width*scale; canvas.height=height*scale;
-  const context=canvas.getContext("2d",{willReadFrequently:true});
+  const context=canvas.getContext("2d",{willReadFrequently:true});context.imageSmoothingEnabled=contentMode!=="pixel";context.imageSmoothingQuality="high";
   const factor=Math.max(canvas.width/image.naturalWidth,canvas.height/image.naturalHeight);
   const drawWidth=image.naturalWidth*factor, drawHeight=image.naturalHeight*factor;
   context.drawImage(image,(canvas.width-drawWidth)/2,(canvas.height-drawHeight)/2,drawWidth,drawHeight);
@@ -53,7 +60,7 @@ function renderResults(fixtures,scenarios) {
 }
 
 async function run(scenarios){if(running)return;running=true;activeResults=[];$("exportResults").disabled=true;const category=$("categoryFilter").value;const fixtures=FIXTURES.filter(item=>category==="all"||item.category===category);const total=fixtures.length*scenarios.length;let completed=0;$("results").innerHTML='<p class="empty">正在生成基准结果……</p>';
-  try{for(const fixture of fixtures){const image=await loadImage(fixture.file);for(const scenario of scenarios){$("statusText").textContent=`正在处理 ${fixture.title} · ${scenario.label}`;await new Promise(resolve=>requestAnimationFrame(resolve));const result=compilePattern(rasterize(image,scenario.width,scenario.height),GENERIC_PALETTE,scenario);activeResults.push({...result,fixtureId:fixture.id,category:fixture.category,scenario,fingerprint:patternFingerprint(result.cells)});completed+=1;$("progressBar").style.width=`${completed/total*100}%`;}}
+  try{for(const fixture of fixtures){const image=await loadImage(fixture.file);const contentMode=contentModeFor(fixture.category);for(const scenario of scenarios){$("statusText").textContent=`正在处理 ${fixture.title} · ${scenario.label}`;await new Promise(resolve=>requestAnimationFrame(resolve));const options={...scenario,contentMode};const result=compilePattern(rasterize(image,scenario.width,scenario.height,contentMode),GENERIC_PALETTE,options);activeResults.push({...result,fixtureId:fixture.id,category:fixture.category,scenario:{...scenario,contentMode},fingerprint:patternFingerprint(result.cells)});completed+=1;$("progressBar").style.width=`${completed/total*100}%`;}}
     renderResults(fixtures,scenarios);$("statusText").textContent=`完成 ${completed} 项结果 · ${new Date().toLocaleTimeString()}`;$("exportResults").disabled=false;
   }catch(error){console.error(error);$("statusText").textContent=`运行失败：${error.message}`;}finally{running=false;}}
 
