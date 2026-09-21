@@ -39,6 +39,11 @@ test("间谍危机使用地点档案库与分布式情报网络外壳", () => {
   assert.match(script, /catchUpThreshold: 2/);
   assert.match(script, /severeBacklogThreshold: 5/);
   assert.match(script, /urgentPriority: 4/);
+  assert.match(script, /captureLocalInteraction\(\);[\s\S]*?reconcileLocalInteraction\(nextView\);[\s\S]*?view = nextView/);
+  assert.match(script, /data-local-draft=["']spy-location["']/);
+  assert.match(script, /select\.value = spyLocationDraft/);
+  assert.match(script, /nextView\.phase === "accusationVote"/);
+  assert.match(script, /contextChanged \|\| \["lobby", "secretReveal", "roundEnd"\]\.includes\(nextView\.phase\)/);
   assert.doesNotMatch(script, /https?:\/\//);
 
   assert.match(css, /\.operation-grid \{ display: grid; grid-template-columns: 236px/);

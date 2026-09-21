@@ -35,6 +35,9 @@ let view = null;
 let spectatorUi = null;
 let selectionMode = null;
 let presentation = null;
+let interactionContextKey = "";
+let spyLocationDraft = "";
+let restoreSpyLocationFocus = false;
 
 const sessions = createSessionStore({ gameId: "spyfall" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -44,8 +47,9 @@ const room = createAuthoritativeRoomClient({
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
     onView(nextView) {
+      captureLocalInteraction();
+      reconcileLocalInteraction(nextView);
       view = nextView;
-      if (!selectionStillLegal()) selectionMode = null;
       enterRoom();
       render();
       presentation?.sync(nextView.presentationEvents);
@@ -119,11 +123,44 @@ function playPresentationObject(event) {
   };
 }
 
-function selectionStillLegal() {
-  if (!view || !selectionMode) return false;
-  return selectionMode === "question" ? view.permissions.canSelectQuestionTarget
-    : selectionMode === "accuse" ? view.permissions.canAccuse
-      : selectionMode === "nominate" ? view.permissions.canNominate : false;
+function captureLocalInteraction() {
+  const select = E.actionButtons.querySelector('[data-local-draft="spy-location"]');
+  if (!select) return;
+  spyLocationDraft = select.value;
+  restoreSpyLocationFocus = document.activeElement === select;
+}
+
+function resetLocalInteraction() {
+  selectionMode = null;
+  spyLocationDraft = "";
+  restoreSpyLocationFocus = false;
+}
+
+function selectionStillLegal(nextView = view) {
+  if (!nextView || !selectionMode) return false;
+  return selectionMode === "question" ? nextView.permissions.canSelectQuestionTarget
+    : selectionMode === "accuse" ? nextView.permissions.canAccuse
+      : selectionMode === "nominate" ? nextView.permissions.canNominate : false;
+}
+
+function selectionCanResumeAfterInterruption(nextView) {
+  if (selectionStillLegal(nextView)) return true;
+  if (["question", "accuse"].includes(selectionMode) && nextView.phase === "accusationVote") return true;
+  return selectionMode === "nominate" && nextView.phase === "timeoutVote";
+}
+
+function reconcileLocalInteraction(nextView) {
+  const nextContextKey = `${room.snapshot().roomCode || ""}:${nextView.round ?? 0}`;
+  const contextChanged = interactionContextKey && interactionContextKey !== nextContextKey;
+  interactionContextKey = nextContextKey;
+
+  if (contextChanged || ["lobby", "secretReveal", "roundEnd"].includes(nextView.phase) || !nextView.selfId) {
+    resetLocalInteraction();
+    return;
+  }
+
+  if (spyLocationDraft && !nextView.locations.some((item) => item.id === spyLocationDraft)) spyLocationDraft = "";
+  if (selectionMode && !selectionCanResumeAfterInterruption(nextView)) selectionMode = null;
 }
 
 function enterRoom() {
@@ -231,8 +268,12 @@ function addLocationGuess() {
   const wrap = document.createElement("div");
   wrap.className = "location-select";
   const select = document.createElement("select");
+  select.dataset.localDraft = "spy-location";
   select.setAttribute("aria-label", "选择猜测地点");
   select.innerHTML = '<option value="">选择地点……</option>' + view.locations.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+  if (view.locations.some((item) => item.id === spyLocationDraft)) select.value = spyLocationDraft;
+  select.oninput = () => { spyLocationDraft = select.value; };
+  select.onchange = () => { spyLocationDraft = select.value; };
   const button = document.createElement("button");
   button.type = "button";
   button.className = "danger";
@@ -243,6 +284,10 @@ function addLocationGuess() {
   };
   wrap.append(select, button);
   E.actionButtons.append(wrap);
+  if (restoreSpyLocationFocus) {
+    restoreSpyLocationFocus = false;
+    requestAnimationFrame(() => select.focus({ preventScroll: true }));
+  }
 }
 
 function renderSecret(memberRole) {
