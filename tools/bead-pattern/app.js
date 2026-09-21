@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "imageInput", "uploadZone", "cropStage", "cropCanvas", "cropHint", "cropZoom", "cropZoomOutput",
   "gridColumns", "gridRows", "colorLimit", "colorLimitOutput", "resetCropButton", "generateButton",
-  "workspace", "patternSummary", "toolHint", "zoomOutButton", "zoomInButton", "editorZoomOutput",
+  "workspace", "patternSummary", "toolHint", "zoomOutButton", "fitCanvasButton", "zoomInButton", "editorZoomOutput",
   "canvasViewport", "editorCanvas", "paletteGrid", "selectedColorLabel", "toolDock", "undoButton",
   "redoButton", "materialsBody", "materialTotals", "showCodes", "copyListButton", "exportCsvButton",
   "exportPngButton", "toast"
@@ -22,6 +22,7 @@ const TOOL_HINTS = {
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HISTORY = 40;
+const BASE_CELL_SIZE = 18;
 
 let sourceImage = null;
 let sourceUrl = "";
@@ -31,9 +32,11 @@ let cropOffsetY = 0;
 let cropDrag = null;
 let pattern = null;
 let selectedPaletteIndex = 5;
-let activeTool = "pencil";
-let cellSize = 18;
+let activeTool = "pan";
 let drawing = null;
+let pinchGesture = null;
+const editorPointers = new Map();
+const camera = { x: 0, y: 0, scale: 1, fitScale: 1, minimumScale: 1, maximumScale: 6, ready: false };
 let undoStack = [];
 let redoStack = [];
 let toastTimer = 0;
@@ -182,12 +185,15 @@ async function generatePattern() {
     selectedPaletteIndex = result.paletteIndexes[0] ?? selectedPaletteIndex;
     undoStack = [];
     redoStack = [];
+    camera.ready = false;
     E.workspace.hidden = false;
+    setTool("pan");
     renderPalette();
     renderEditor();
     renderMaterials();
     updateHistoryButtons();
     E.workspace.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    requestAnimationFrame(fitCamera);
     showToast("图纸已经生成，可以继续手工修整");
   } catch (error) {
     console.error(error);
@@ -222,8 +228,8 @@ function renderPalette() {
 
 function renderEditor() {
   if (!pattern) return;
-  const logicalWidth = pattern.columns * cellSize;
-  const logicalHeight = pattern.rows * cellSize;
+  const logicalWidth = pattern.columns * BASE_CELL_SIZE;
+  const logicalHeight = pattern.rows * BASE_CELL_SIZE;
   const maximumScale = Math.min(2, 4096 / logicalWidth, 4096 / logicalHeight);
   const pixelRatio = Math.max(1, Math.min(devicePixelRatio || 1, maximumScale));
   E.editorCanvas.width = Math.round(logicalWidth * pixelRatio);
@@ -239,33 +245,90 @@ function renderEditor() {
     for (let column = 0; column < pattern.columns; column += 1) {
       const index = row * pattern.columns + column;
       context.fillStyle = pattern.cells[index] < 0 ? "#ffffff" : GENERIC_PALETTE[pattern.cells[index]].hex;
-      context.fillRect(column * cellSize, row * cellSize, cellSize, cellSize);
+      context.fillRect(column * BASE_CELL_SIZE, row * BASE_CELL_SIZE, BASE_CELL_SIZE, BASE_CELL_SIZE);
     }
   }
   context.lineWidth = 1;
   for (let column = 0; column <= pattern.columns; column += 1) {
     context.beginPath();
     context.strokeStyle = column % 5 === 0 ? "rgba(62,48,37,.56)" : "rgba(62,48,37,.22)";
-    context.moveTo(column * cellSize + .5, 0);
-    context.lineTo(column * cellSize + .5, logicalHeight);
+    context.moveTo(column * BASE_CELL_SIZE + .5, 0);
+    context.lineTo(column * BASE_CELL_SIZE + .5, logicalHeight);
     context.stroke();
   }
   for (let row = 0; row <= pattern.rows; row += 1) {
     context.beginPath();
     context.strokeStyle = row % 5 === 0 ? "rgba(62,48,37,.56)" : "rgba(62,48,37,.22)";
-    context.moveTo(0, row * cellSize + .5);
-    context.lineTo(logicalWidth, row * cellSize + .5);
+    context.moveTo(0, row * BASE_CELL_SIZE + .5);
+    context.lineTo(logicalWidth, row * BASE_CELL_SIZE + .5);
     context.stroke();
   }
-  E.editorZoomOutput.textContent = `${Math.round(cellSize / 18 * 100)}%`;
+  if (camera.ready) applyCamera();
 }
 
-function cellAt(event) {
+function canvasSize() {
+  return pattern ? { width: pattern.columns * BASE_CELL_SIZE, height: pattern.rows * BASE_CELL_SIZE } : { width: 0, height: 0 };
+}
+
+function clampCameraPosition() {
+  if (!pattern) return;
+  const viewportWidth = E.canvasViewport.clientWidth;
+  const viewportHeight = E.canvasViewport.clientHeight;
+  const size = canvasSize();
+  const scaledWidth = size.width * camera.scale;
+  const scaledHeight = size.height * camera.scale;
+  camera.x = scaledWidth <= viewportWidth ? (viewportWidth - scaledWidth) / 2 : clamp(camera.x, viewportWidth - scaledWidth, 0);
+  camera.y = scaledHeight <= viewportHeight ? (viewportHeight - scaledHeight) / 2 : clamp(camera.y, viewportHeight - scaledHeight, 0);
+}
+
+function applyCamera() {
+  if (!pattern) return;
+  clampCameraPosition();
+  E.editorCanvas.style.transform = `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})`;
+  const relativeZoom = Math.round(camera.scale / camera.fitScale * 100);
+  E.editorZoomOutput.textContent = relativeZoom === 100 ? "适屏 100%" : `${relativeZoom}%`;
+}
+
+function fitCamera() {
+  if (!pattern || E.canvasViewport.clientWidth < 1 || E.canvasViewport.clientHeight < 1) return;
+  const size = canvasSize();
+  const padding = 18;
+  camera.fitScale = Math.min(
+    Math.max(1, E.canvasViewport.clientWidth - padding * 2) / size.width,
+    Math.max(1, E.canvasViewport.clientHeight - padding * 2) / size.height,
+    2
+  );
+  camera.minimumScale = camera.fitScale;
+  camera.maximumScale = Math.max(2, camera.fitScale * 8);
+  camera.scale = camera.fitScale;
+  camera.x = (E.canvasViewport.clientWidth - size.width * camera.scale) / 2;
+  camera.y = (E.canvasViewport.clientHeight - size.height * camera.scale) / 2;
+  camera.ready = true;
+  applyCamera();
+}
+
+function zoomCamera(factor, anchorX = E.canvasViewport.clientWidth / 2, anchorY = E.canvasViewport.clientHeight / 2) {
+  if (!pattern || !camera.ready) return;
+  const nextScale = clamp(camera.scale * factor, camera.minimumScale, camera.maximumScale);
+  const worldX = (anchorX - camera.x) / camera.scale;
+  const worldY = (anchorY - camera.y) / camera.scale;
+  camera.x = anchorX - worldX * nextScale;
+  camera.y = anchorY - worldY * nextScale;
+  camera.scale = nextScale;
+  applyCamera();
+}
+
+function cellAtPoint(clientX, clientY) {
   const rect = E.editorCanvas.getBoundingClientRect();
-  const column = Math.floor((event.clientX - rect.left) / rect.width * pattern.columns);
-  const row = Math.floor((event.clientY - rect.top) / rect.height * pattern.rows);
+  const column = Math.floor((clientX - rect.left) / rect.width * pattern.columns);
+  const row = Math.floor((clientY - rect.top) / rect.height * pattern.rows);
   if (column < 0 || row < 0 || column >= pattern.columns || row >= pattern.rows) return null;
   return { column, row, index: row * pattern.columns + column };
+}
+
+function viewportPoint(clientX, clientY) {
+  const rect = E.canvasViewport.getBoundingClientRect();
+  return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
 function pushHistory() {
@@ -285,37 +348,104 @@ function paintCells(from, to) {
   return changed;
 }
 
-function beginEditorPointer(event) {
-  if (!pattern) return;
-  const cell = cellAt(event);
-  if (activeTool === "picker") {
-    if (cell && pattern.cells[cell.index] >= 0) {
-      selectedPaletteIndex = pattern.cells[cell.index];
-      setTool("pencil");
-      renderPalette();
-      showToast(`已选择 ${GENERIC_PALETTE[selectedPaletteIndex].name}`);
-    }
-    return;
-  }
-  E.editorCanvas.setPointerCapture(event.pointerId);
-  if (activeTool === "pan") {
-    drawing = { pointerId: event.pointerId, pan: true, x: event.clientX, y: event.clientY, scrollLeft: E.canvasViewport.scrollLeft, scrollTop: E.canvasViewport.scrollTop };
-    return;
-  }
+function startDrawing(pointerId, cell) {
   if (!cell) return;
+  const undoBefore = undoStack.slice();
+  const redoBefore = redoStack.slice();
+  const cellsBefore = pattern.cells.slice();
   pushHistory();
-  drawing = { pointerId: event.pointerId, last: cell, changed: paintCells(cell, cell) };
+  drawing = { kind: "draw", pointerId, last: cell, changed: paintCells(cell, cell), undoBefore, redoBefore, cellsBefore };
   renderEditor();
 }
 
+function rollbackDrawingForGesture() {
+  if (drawing?.kind !== "draw") return;
+  pattern.cells = drawing.cellsBefore;
+  undoStack = drawing.undoBefore;
+  redoStack = drawing.redoBefore;
+  renderEditor();
+  renderMaterials();
+  updateHistoryButtons();
+}
+
+function beginPinchGesture() {
+  rollbackDrawingForGesture();
+  drawing = null;
+  const points = [...editorPointers.values()].slice(0, 2);
+  const midpointClientX = (points[0].x + points[1].x) / 2;
+  const midpointClientY = (points[0].y + points[1].y) / 2;
+  const midpoint = viewportPoint(midpointClientX, midpointClientY);
+  const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y) || 1;
+  pinchGesture = {
+    startDistance: distance,
+    startScale: camera.scale,
+    worldX: (midpoint.x - camera.x) / camera.scale,
+    worldY: (midpoint.y - camera.y) / camera.scale
+  };
+}
+
+function updatePinchGesture() {
+  if (!pinchGesture || editorPointers.size < 2) return;
+  const points = [...editorPointers.values()].slice(0, 2);
+  const midpointClientX = (points[0].x + points[1].x) / 2;
+  const midpointClientY = (points[0].y + points[1].y) / 2;
+  const midpoint = viewportPoint(midpointClientX, midpointClientY);
+  const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y) || 1;
+  camera.scale = clamp(pinchGesture.startScale * distance / pinchGesture.startDistance, camera.minimumScale, camera.maximumScale);
+  camera.x = midpoint.x - pinchGesture.worldX * camera.scale;
+  camera.y = midpoint.y - pinchGesture.worldY * camera.scale;
+  applyCamera();
+}
+
+function pickColorAt(clientX, clientY) {
+  const cell = cellAtPoint(clientX, clientY);
+  if (!cell || pattern.cells[cell.index] < 0) return;
+  selectedPaletteIndex = pattern.cells[cell.index];
+  setTool("pencil");
+  renderPalette();
+  showToast(`已选择 ${GENERIC_PALETTE[selectedPaletteIndex].name}`);
+}
+
+function beginEditorPointer(event) {
+  if (!pattern) return;
+  event.preventDefault();
+  E.canvasViewport.setPointerCapture(event.pointerId);
+  editorPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (editorPointers.size === 2) { beginPinchGesture(); return; }
+  if (editorPointers.size > 2) return;
+
+  if (activeTool === "pan") {
+    drawing = { kind: "pan", pointerId: event.pointerId, x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
+  } else if (activeTool === "picker") {
+    drawing = { kind: "picker", pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  } else if (event.pointerType === "touch") {
+    drawing = { kind: "pending", pointerId: event.pointerId, x: event.clientX, y: event.clientY, startedAt: performance.now(), startCell: cellAtPoint(event.clientX, event.clientY) };
+  } else {
+    startDrawing(event.pointerId, cellAtPoint(event.clientX, event.clientY));
+  }
+}
+
 function moveEditorPointer(event) {
+  if (!editorPointers.has(event.pointerId)) return;
+  event.preventDefault();
+  editorPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pinchGesture) { updatePinchGesture(); return; }
   if (!drawing || drawing.pointerId !== event.pointerId) return;
-  if (drawing.pan) {
-    E.canvasViewport.scrollLeft = drawing.scrollLeft - (event.clientX - drawing.x);
-    E.canvasViewport.scrollTop = drawing.scrollTop - (event.clientY - drawing.y);
+  if (drawing.kind === "pan") {
+    camera.x = drawing.cameraX + event.clientX - drawing.x;
+    camera.y = drawing.cameraY + event.clientY - drawing.y;
+    applyCamera();
     return;
   }
-  const cell = cellAt(event);
+  if (drawing.kind === "pending") {
+    const moved = Math.hypot(event.clientX - drawing.x, event.clientY - drawing.y);
+    if (moved < 3 && performance.now() - drawing.startedAt < 70) return;
+    const startCell = drawing.startCell;
+    startDrawing(event.pointerId, startCell);
+    if (!drawing) return;
+  }
+  if (drawing.kind !== "draw") return;
+  const cell = cellAtPoint(event.clientX, event.clientY);
   if (!cell || (cell.column === drawing.last.column && cell.row === drawing.last.row)) return;
   drawing.changed = paintCells(drawing.last, cell) || drawing.changed;
   drawing.last = cell;
@@ -323,12 +453,38 @@ function moveEditorPointer(event) {
 }
 
 function endEditorPointer(event) {
+  if (!editorPointers.has(event.pointerId)) return;
+  event.preventDefault();
+  editorPointers.delete(event.pointerId);
+  if (pinchGesture) {
+    pinchGesture = null;
+    drawing = null;
+    return;
+  }
   if (!drawing || drawing.pointerId !== event.pointerId) return;
-  const changed = drawing.changed;
-  if (!drawing.pan && !changed) undoStack.pop();
+  if (drawing.kind === "pending") {
+    startDrawing(event.pointerId, drawing.startCell);
+  } else if (drawing.kind === "picker") {
+    const moved = Math.hypot(event.clientX - drawing.x, event.clientY - drawing.y);
+    if (moved < 8) pickColorAt(event.clientX, event.clientY);
+  }
+  if (drawing?.kind === "draw") {
+    const changed = drawing.changed;
+    if (!changed) { undoStack = drawing.undoBefore; redoStack = drawing.redoBefore; }
+    drawing = null;
+    updateHistoryButtons();
+    if (changed) renderMaterials();
+    return;
+  }
   drawing = null;
-  updateHistoryButtons();
-  if (changed) renderMaterials();
+}
+
+function cancelEditorPointer(event) {
+  if (!editorPointers.has(event.pointerId)) return;
+  editorPointers.delete(event.pointerId);
+  if (drawing?.kind === "draw") rollbackDrawingForGesture();
+  drawing = null;
+  pinchGesture = null;
 }
 
 function updateHistoryButtons() {
@@ -352,8 +508,13 @@ function redo() {
 
 function setTool(tool) {
   activeTool = tool;
-  for (const button of E.toolDock.querySelectorAll("[data-tool]")) button.classList.toggle("active", button.dataset.tool === tool);
+  for (const button of E.toolDock.querySelectorAll("[data-tool]")) {
+    const active = button.dataset.tool === tool;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
   E.toolHint.textContent = TOOL_HINTS[tool];
+  E.canvasViewport.dataset.tool = tool;
   E.editorCanvas.dataset.tool = tool;
 }
 
@@ -488,10 +649,8 @@ function exportPng() {
   canvas.toBlob((blob) => blob && downloadBlob(blob, `拼豆图纸-${pattern.columns}x${pattern.rows}-${fileStamp()}.png`), "image/png");
 }
 
-function changeEditorZoom(delta) {
-  if (!pattern) return;
-  cellSize = clamp(cellSize + delta, 10, 32);
-  renderEditor();
+function changeEditorZoom(factor) {
+  zoomCamera(factor);
 }
 
 function bindEvents() {
@@ -509,15 +668,16 @@ function bindEvents() {
   E.cropCanvas.addEventListener("pointermove", moveCrop);
   E.cropCanvas.addEventListener("pointerup", endCropDrag);
   E.cropCanvas.addEventListener("pointercancel", endCropDrag);
-  E.editorCanvas.addEventListener("pointerdown", beginEditorPointer);
-  E.editorCanvas.addEventListener("pointermove", moveEditorPointer);
-  E.editorCanvas.addEventListener("pointerup", endEditorPointer);
-  E.editorCanvas.addEventListener("pointercancel", endEditorPointer);
+  E.canvasViewport.addEventListener("pointerdown", beginEditorPointer);
+  E.canvasViewport.addEventListener("pointermove", moveEditorPointer);
+  E.canvasViewport.addEventListener("pointerup", endEditorPointer);
+  E.canvasViewport.addEventListener("pointercancel", cancelEditorPointer);
   E.toolDock.addEventListener("click", (event) => { const button = event.target.closest("[data-tool]"); if (button) setTool(button.dataset.tool); });
   E.undoButton.addEventListener("click", undo);
   E.redoButton.addEventListener("click", redo);
-  E.zoomOutButton.addEventListener("click", () => changeEditorZoom(-2));
-  E.zoomInButton.addEventListener("click", () => changeEditorZoom(2));
+  E.zoomOutButton.addEventListener("click", () => changeEditorZoom(1 / 1.25));
+  E.fitCanvasButton.addEventListener("click", fitCamera);
+  E.zoomInButton.addEventListener("click", () => changeEditorZoom(1.25));
   E.copyListButton.addEventListener("click", copyMaterialList);
   E.exportCsvButton.addEventListener("click", exportCsv);
   E.exportPngButton.addEventListener("click", exportPng);
@@ -529,5 +689,22 @@ function bindEvents() {
 }
 
 renderPalette();
-setTool("pencil");
+setTool("pan");
 bindEvents();
+
+let lastViewportWidth = 0;
+new ResizeObserver(() => {
+  const width = E.canvasViewport.clientWidth;
+  if (!pattern || Math.abs(width - lastViewportWidth) < 4) return;
+  lastViewportWidth = width;
+  requestAnimationFrame(fitCamera);
+}).observe(E.canvasViewport);
+
+if ("IntersectionObserver" in window) {
+  new IntersectionObserver(([entry]) => E.toolDock.classList.toggle("canvas-active", entry.isIntersecting), {
+    threshold: 0.08,
+    rootMargin: "0px 0px -64px 0px"
+  }).observe(E.canvasViewport);
+} else {
+  E.toolDock.classList.add("canvas-active");
+}

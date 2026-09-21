@@ -22,15 +22,29 @@ test("拼豆工坊包含从图片生成到导出的完整操作闭环", () => {
 
 test("移动端具有独立画布移动模式和底部吸附工具区", () => {
   const html = read("index.html"), css = read("styles.css"), script = read("app.js");
-  assert.match(html, /data-tool="pan"/);
+  assert.match(html, /data-tool="pan" class="active"/);
+  assert.match(html, /id="fitCanvasButton"/);
   assert.match(html, /viewport-fit=cover/);
   assert.match(css, /\.tool-dock \{ position: sticky/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*?\.tool-dock \{ position: fixed/);
+  assert.match(css, /@media \(max-width: 720px\), \(pointer: coarse\)[\s\S]*?\.tool-dock \{ position: fixed/);
+  assert.match(css, /\.tool-dock\.canvas-active/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
   assert.match(css, /@media \(max-width: 620px\)/);
   assert.match(css, /\.canvas-viewport \{ height: 55vh/);
-  assert.match(script, /drawing = \{ pointerId: event\.pointerId, pan: true/);
-  assert.match(script, /E\.canvasViewport\.scrollLeft/);
+  assert.match(script, /activeTool = "pan"/);
+  assert.match(script, /function fitCamera\(\)/);
+  assert.match(script, /camera\.x = drawing\.cameraX/);
+  assert.match(script, /function beginPinchGesture\(\)/);
+  assert.match(script, /pinchGesture\.startScale \* distance \/ pinchGesture\.startDistance/);
+  assert.doesNotMatch(script, /canvasViewport\.scrollLeft/);
+});
+
+test("手机色盘在视口内以小色块自动换行", () => {
+  const css = read("styles.css");
+  assert.match(css, /\.editor-layout \{ min-width: 0/);
+  assert.match(css, /\.canvas-card, \.palette-card, \.materials-card \{ min-width: 0; max-width: 100%/);
+  assert.match(css, /\.palette-grid \{[\s\S]*?overflow-x: hidden/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*?repeat\(auto-fill, minmax\(30px, 1fr\)\)/);
 });
 
 test("所有动态材料行均以DOM文本节点构造", () => {

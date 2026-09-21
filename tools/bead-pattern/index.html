@@ -71,29 +71,30 @@
         <div class="editor-layout">
           <section class="canvas-card">
             <div class="canvas-head">
-              <div><strong>图纸画布</strong><small id="toolHint">画笔：在格子上滑动即可连续绘制</small></div>
-              <div class="zoom-control" aria-label="画布缩放">
-                <button id="zoomOutButton" type="button" aria-label="缩小">−</button>
-                <output id="editorZoomOutput">100%</output>
-                <button id="zoomInButton" type="button" aria-label="放大">＋</button>
-              </div>
+              <div><strong>图纸画布</strong><small id="toolHint">移动：拖动画布查看其他区域</small></div>
+              <output id="editorZoomOutput" class="zoom-readout">适屏 100%</output>
             </div>
             <div class="tool-dock" id="toolDock" aria-label="图纸编辑工具">
               <div class="tool-group">
-                <button type="button" data-tool="pencil" class="active"><span>✎</span>画笔</button>
+                <button type="button" data-tool="pencil"><span>✎</span>画笔</button>
                 <button type="button" data-tool="eraser"><span>◇</span>橡皮</button>
                 <button type="button" data-tool="picker"><span>◉</span>取色</button>
-                <button type="button" data-tool="pan"><span>✥</span>移动</button>
+                <button type="button" data-tool="pan" class="active"><span>✥</span>移动</button>
               </div>
               <div class="tool-group history-tools">
                 <button id="undoButton" type="button" disabled><span>↶</span>撤销</button>
                 <button id="redoButton" type="button" disabled><span>↷</span>重做</button>
               </div>
+              <div class="tool-group view-tools">
+                <button id="zoomOutButton" type="button" aria-label="缩小图纸"><span>−</span>缩小</button>
+                <button id="fitCanvasButton" type="button"><span>⌗</span>适屏</button>
+                <button id="zoomInButton" type="button" aria-label="放大图纸"><span>＋</span>放大</button>
+              </div>
             </div>
             <div class="canvas-viewport" id="canvasViewport">
               <canvas id="editorCanvas" aria-label="可编辑拼豆图纸"></canvas>
             </div>
-            <p class="mobile-canvas-hint">画布较大时，先选择“移动”再拖动画布；使用 ＋/− 调整大小。</p>
+            <p class="mobile-canvas-hint">默认可单指移动；双指捏合缩放。选择画笔后单指绘制，双指仍只缩放和移动。</p>
           </section>
 
           <aside class="palette-card">
