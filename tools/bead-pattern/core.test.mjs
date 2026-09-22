@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GENERIC_PALETTE } from "./palette.js";
-import { ENGINE_VERSION, bilateralFilterImageData, cleanupSmallRegions, compilePattern, countPatternColors, downsampleImageData, materialCsv, patternFingerprint, quantizeImageData, rasterLine, regularizePattern } from "./core.js";
+import { ENGINE_VERSION, analyzePixelArtImage, bilateralFilterImageData, cleanupSmallRegions, compilePattern, countPatternColors, downsampleImageData, materialCsv, patternFingerprint, quantizeImageData, rasterLine, regularizePattern } from "./core.js";
 
 test("自动配色遵守最大颜色数并保留透明格", () => {
   const imageData = {
@@ -180,5 +180,57 @@ test("四种内容模式均为显式、确定且受颜色上限约束", () => {
     assert.equal(first.contentMode, contentMode);
     assert.ok(first.metrics.colors <= 10);
     assert.deepEqual(first.cells, second.cells);
+  }
+});
+
+test("像素画直转可以恢复被整数放大的逻辑网格", () => {
+  const logicalSize = 8, blockSize = 4, width = logicalSize * blockSize;
+  const colors = [[25, 35, 45], [230, 65, 75], [75, 170, 95], [70, 115, 210], [245, 210, 75]];
+  const data = new Uint8ClampedArray(width * width * 4);
+  for (let y = 0; y < width; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const color = colors[(Math.floor(x / blockSize) + Math.floor(y / blockSize) * 3) % colors.length];
+      data.set([...color, 255], (y * width + x) * 4);
+    }
+  }
+  const analysis = analyzePixelArtImage({ width, height: width, data });
+  assert.equal(analysis.columns, logicalSize);
+  assert.equal(analysis.rows, logicalSize);
+  assert.equal(analysis.blockWidth, blockSize);
+  assert.equal(analysis.blockHeight, blockSize);
+  assert.equal(analysis.offGridRatio, 0);
+  assert.equal(analysis.likelyPixelArt, true);
+});
+
+test("原生低分辨率有限色图片会被识别为直接像素网格", () => {
+  const image = syntheticImage(16, 12);
+  for (let index = 0; index < image.data.length; index += 4) {
+    const color = (index / 4) % 2 ? 30 : 230;
+    image.data.set([color, color, color, 255], index);
+  }
+  const analysis = analyzePixelArtImage(image);
+  assert.equal(analysis.columns, 16);
+  assert.equal(analysis.rows, 12);
+  assert.equal(analysis.likelyPixelArt, true);
+});
+
+test("放大的像素画可以按检测网格直接编译为一格一豆", () => {
+  const logicalSize = 8, blockSize = 4, width = logicalSize * blockSize;
+  const data = new Uint8ClampedArray(width * width * 4);
+  for (let y = 0; y < width; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const light = (Math.floor(x / blockSize) + Math.floor(y / blockSize)) % 2 === 0;
+      data.set(light ? [247, 244, 234, 255] : [32, 33, 36, 255], (y * width + x) * 4);
+    }
+  }
+  const result = compilePattern({ width, height: width, data }, GENERIC_PALETTE, {
+    width: logicalSize, height: logicalSize, maximumColors: 8, profile: "balanced", contentMode: "pixel"
+  });
+  assert.equal(result.cells.length, logicalSize * logicalSize);
+  assert.equal(result.metrics.colors, 2);
+  for (let row = 0; row < logicalSize; row += 1) {
+    for (let column = 0; column < logicalSize; column += 1) {
+      if (column > 0) assert.notEqual(result.cells[row * logicalSize + column], result.cells[row * logicalSize + column - 1]);
+    }
   }
 });

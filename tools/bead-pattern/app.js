@@ -1,12 +1,14 @@
 "use strict";
 
 import { GENERIC_PALETTE } from "./palette.js";
-import { CONTENT_MODES, PATTERN_PROFILES, clamp, compilePattern, hexToRgb, materialCsv, materialRows, patternMetrics, rasterLine } from "./core.js";
+import { CONTENT_MODES, PATTERN_PROFILES, analyzePixelArtImage, clamp, compilePattern, hexToRgb, materialCsv, materialRows, patternMetrics, rasterLine } from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "imageInput", "uploadZone", "cropStage", "cropCanvas", "cropHint", "cropZoom", "cropZoomOutput",
   "gridColumns", "gridRows", "contentMode", "generationProfile", "colorLimit", "colorLimitOutput", "resetCropButton", "generateButton",
+  "pixelDirectPanel", "pixelConfidenceBadge", "pixelAnalysisStatus", "pixelSourceSize", "pixelDetectedGrid",
+  "pixelBlockSize", "pixelColorStats", "applyDetectedGrid", "pixelAnalysisHint",
   "workspace", "patternSummary", "toolHint", "zoomOutButton", "fitCanvasButton", "zoomInButton", "editorZoomOutput",
   "canvasViewport", "editorCanvas", "paletteGrid", "selectedColorLabel", "toolDock", "undoButton",
   "redoButton", "materialsBody", "materialTotals", "showCodes", "copyListButton", "exportCsvButton",
@@ -40,6 +42,7 @@ const camera = { x: 0, y: 0, scale: 1, fitScale: 1, minimumScale: 1, maximumScal
 let undoStack = [];
 let redoStack = [];
 let toastTimer = 0;
+let pixelAnalysis = null;
 
 function dimensions() {
   return {
@@ -69,6 +72,62 @@ function resetCrop() {
   E.cropZoom.value = "100";
   E.cropZoomOutput.textContent = "100%";
   renderCrop();
+}
+
+function analysisImageData() {
+  const divisor = Math.max(1, Math.ceil(Math.max(sourceImage.naturalWidth, sourceImage.naturalHeight) / 512));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(sourceImage.naturalWidth / divisor));
+  canvas.height = Math.max(1, Math.floor(sourceImage.naturalHeight / divisor));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.imageSmoothingEnabled = false;
+  context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function resetPixelAnalysis(message = "选择像素画模式并上传图片后，工具会分析逻辑网格。") {
+  pixelAnalysis = null;
+  E.pixelAnalysisStatus.textContent = message;
+  E.pixelSourceSize.textContent = "—";
+  E.pixelDetectedGrid.textContent = "—";
+  E.pixelBlockSize.textContent = "—";
+  E.pixelColorStats.textContent = "—";
+  E.pixelConfidenceBadge.textContent = "等待检测";
+  E.pixelConfidenceBadge.className = "";
+  E.applyDetectedGrid.disabled = true;
+}
+
+async function analyzePixelSource() {
+  E.pixelDirectPanel.hidden = E.contentMode.value !== "pixel";
+  if (E.contentMode.value !== "pixel") return;
+  if (!sourceImage) { resetPixelAnalysis(); return; }
+  resetPixelAnalysis("正在分析像素块、颜色和网格规律……");
+  E.pixelConfidenceBadge.textContent = "检测中";
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  try {
+    pixelAnalysis = analyzePixelArtImage(analysisImageData());
+    const confidence = Math.round(pixelAnalysis.confidence * 100);
+    E.pixelSourceSize.textContent = `${sourceImage.naturalWidth} × ${sourceImage.naturalHeight}`;
+    E.pixelDetectedGrid.textContent = `${pixelAnalysis.columns} × ${pixelAnalysis.rows}`;
+    E.pixelBlockSize.textContent = `${pixelAnalysis.blockWidth} × ${pixelAnalysis.blockHeight} px（分析图）`;
+    E.pixelColorStats.textContent = `${pixelAnalysis.exactColors} 原色 / ${pixelAnalysis.approximateColors} 近似色`;
+    E.pixelConfidenceBadge.textContent = `${confidence}% 置信度`;
+    E.pixelConfidenceBadge.className = pixelAnalysis.likelyPixelArt ? "good" : "warn";
+    const usable = pixelAnalysis.columns >= 8 && pixelAnalysis.rows >= 8 && pixelAnalysis.columns <= 100 && pixelAnalysis.rows <= 100;
+    E.applyDetectedGrid.disabled = !usable;
+    if (pixelAnalysis.likelyPixelArt) {
+      E.pixelAnalysisStatus.textContent = `检测到较稳定的逻辑网格；约 ${Math.round(pixelAnalysis.offGridRatio * 100)}% 像素偏离块内主色。`;
+      E.pixelAnalysisHint.textContent = "建议采用检测尺寸，再生成图纸；块内抗锯齿和近似杂色会使用主色归一化。";
+    } else {
+      E.pixelAnalysisStatus.textContent = "没有检测到足够稳定的像素周期，图片可能是伪像素画或网格未对齐。";
+      E.pixelAnalysisHint.textContent = usable ? "可以采用建议尺寸后试生成，但请重点检查网格是否错位；也可以手动填写格数。" : "请手动填写真实逻辑格数，或先裁剪掉边框和留白。";
+    }
+  } catch (error) {
+    console.error(error);
+    resetPixelAnalysis("像素网格分析失败，请手动填写横向和纵向格数。");
+    E.pixelConfidenceBadge.textContent = "检测失败";
+    E.pixelConfidenceBadge.className = "warn";
+  }
 }
 
 function cropCanvasSize() {
@@ -107,7 +166,7 @@ function renderCrop() {
   const context = E.cropCanvas.getContext("2d");
   const transform = cropTransform();
   context.clearRect(0, 0, size.width, size.height);
-  context.imageSmoothingEnabled = true;
+  context.imageSmoothingEnabled = E.contentMode.value !== "pixel";
   context.imageSmoothingQuality = "high";
   context.drawImage(sourceImage, transform.x, transform.y, transform.imageWidth, transform.imageHeight);
 }
@@ -131,6 +190,7 @@ async function loadImageFile(file) {
     E.generateButton.disabled = false;
     E.cropHint.textContent = "拖动画面调整裁剪位置；滑块控制图片缩放。";
     resetCrop();
+    analyzePixelSource();
   };
   image.onerror = () => showToast("无法读取这张图片，请换一张试试");
   image.src = sourceUrl;
@@ -673,9 +733,17 @@ function bindEvents() {
   E.cropZoom.addEventListener("input", () => { cropZoom = Number(E.cropZoom.value) / 100; E.cropZoomOutput.textContent = `${E.cropZoom.value}%`; renderCrop(); });
   E.gridColumns.addEventListener("change", () => { normalizeDimensionInputs(); renderCrop(); });
   E.gridRows.addEventListener("change", () => { normalizeDimensionInputs(); renderCrop(); });
+  E.contentMode.addEventListener("change", () => { renderCrop(); analyzePixelSource(); });
   E.colorLimit.addEventListener("input", () => { E.colorLimitOutput.textContent = `${E.colorLimit.value} 种`; });
   E.resetCropButton.addEventListener("click", resetCrop);
   E.generateButton.addEventListener("click", generatePattern);
+  E.applyDetectedGrid.addEventListener("click", () => {
+    if (!pixelAnalysis) return;
+    E.gridColumns.value = String(clamp(pixelAnalysis.columns, 8, 100));
+    E.gridRows.value = String(clamp(pixelAnalysis.rows, 8, 100));
+    renderCrop();
+    showToast(`已采用 ${E.gridColumns.value} × ${E.gridRows.value} 逻辑网格`);
+  });
   E.cropCanvas.addEventListener("pointerdown", beginCropDrag);
   E.cropCanvas.addEventListener("pointermove", moveCrop);
   E.cropCanvas.addEventListener("pointerup", endCropDrag);

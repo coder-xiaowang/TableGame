@@ -58,6 +58,18 @@
                 <option value="pixel">像素画 · 不平滑原始方格</option>
               </select>
             </label>
+            <section id="pixelDirectPanel" class="pixel-direct-panel" hidden aria-labelledby="pixelDirectTitle">
+              <div class="pixel-direct-heading"><div><small>PIXEL DIRECT</small><strong id="pixelDirectTitle">像素画网格检测</strong></div><span id="pixelConfidenceBadge">等待检测</span></div>
+              <p id="pixelAnalysisStatus">选择像素画模式并上传图片后，工具会分析逻辑网格。</p>
+              <dl class="pixel-analysis-grid">
+                <div><dt>原图尺寸</dt><dd id="pixelSourceSize">—</dd></div>
+                <div><dt>建议网格</dt><dd id="pixelDetectedGrid">—</dd></div>
+                <div><dt>像素块</dt><dd id="pixelBlockSize">—</dd></div>
+                <div><dt>颜色情况</dt><dd id="pixelColorStats">—</dd></div>
+              </dl>
+              <div class="pixel-direct-actions"><button id="applyDetectedGrid" type="button" class="button secondary" disabled>采用检测尺寸</button></div>
+              <p id="pixelAnalysisHint" class="pixel-analysis-hint">检测结果只是建议；生成前可继续修改横向和纵向格数。</p>
+            </section>
             <label class="field full-field">
               <span>制作目标</span>
               <select id="generationProfile">

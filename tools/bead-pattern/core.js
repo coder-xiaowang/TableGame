@@ -2,7 +2,7 @@ export function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export const ENGINE_VERSION = "2.2.0-edge-aware";
+export const ENGINE_VERSION = "2.3.0-pixel-direct";
 
 export function hexToRgb(hex) {
   const value = String(hex).replace("#", "");
@@ -42,7 +42,7 @@ export const CONTENT_MODES = Object.freeze({
   photo: Object.freeze({ id: "photo", label: "照片 / 风景", sampling: "representative", bilateralRadius: 1, rangeSigma: 34, regularization: 2.6, preserveAccents: 2 }),
   illustration: Object.freeze({ id: "illustration", label: "人物 / 插画", sampling: "feature", bilateralRadius: 1, rangeSigma: 48, regularization: 3.4, preserveAccents: 3, preserveSmallRegions: true }),
   icon: Object.freeze({ id: "icon", label: "Logo / 图标", sampling: "dominant", bilateralRadius: 0, rangeSigma: 0, regularization: 4.8, preserveAccents: 3, preserveSmallRegions: true }),
-  pixel: Object.freeze({ id: "pixel", label: "像素画", sampling: "center", bilateralRadius: 0, rangeSigma: 0, regularization: 0, preserveAccents: 3, preserveSmallRegions: true })
+  pixel: Object.freeze({ id: "pixel", label: "像素画直转", sampling: "dominant", bilateralRadius: 0, rangeSigma: 0, regularization: 0, preserveAccents: 3, preserveSmallRegions: true })
 });
 
 function imageDimensions(imageData) {
@@ -170,6 +170,120 @@ export function bilateralFilterImageData(imageData, radius = 1, rangeSigma = 40)
     }
   }
   return { width, height, data: output };
+}
+
+function axisBoundaryEnergy(imageData, axis) {
+  const { width, height } = imageDimensions(imageData);
+  const length = axis === "x" ? width : height;
+  const crossLength = axis === "x" ? height : width;
+  const energies = new Float64Array(length);
+  for (let position = 1; position < length; position += 1) {
+    let total = 0, compared = 0;
+    for (let cross = 0; cross < crossLength; cross += 1) {
+      const left = axis === "x" ? (cross * width + position - 1) * 4 : ((position - 1) * width + cross) * 4;
+      const right = axis === "x" ? (cross * width + position) * 4 : (position * width + cross) * 4;
+      if (imageData.data[left + 3] < 32 && imageData.data[right + 3] < 32) continue;
+      total += Math.abs(imageData.data[left] - imageData.data[right])
+        + Math.abs(imageData.data[left + 1] - imageData.data[right + 1])
+        + Math.abs(imageData.data[left + 2] - imageData.data[right + 2]);
+      compared += 1;
+    }
+    energies[position] = compared ? total / compared : 0;
+  }
+  return energies;
+}
+
+function detectAxisGrid(energies) {
+  const length = energies.length;
+  const totalEnergy = energies.reduce((sum, value) => sum + value, 0);
+  if (totalEnergy < 1) return { blockSize: 1, offset: 0, cells: length, confidence: 0 };
+  const globalMean = totalEnergy / Math.max(1, length - 1);
+  const candidates = [];
+  const maximumBlock = Math.min(96, Math.floor(length / 8));
+  for (let blockSize = 2; blockSize <= maximumBlock; blockSize += 1) {
+    for (let offset = 0; offset < blockSize; offset += 1) {
+      let captured = 0, boundarySlots = 0;
+      const covered = new Uint8Array(length);
+      for (let boundary = offset || blockSize; boundary < length; boundary += blockSize) {
+        if (boundary < 1) continue;
+        boundarySlots += 1;
+        for (let delta = -1; delta <= 1; delta += 1) {
+          const position = boundary + delta;
+          if (position > 0 && position < length && !covered[position]) { captured += energies[position]; covered[position] = 1; }
+        }
+      }
+      if (boundarySlots < 2) continue;
+      const concentration = captured / totalEnergy;
+      const boundaryMean = captured / (boundarySlots * 3);
+      const density = boundaryMean / Math.max(globalMean, 0.0001);
+      const divisibility = 1 - Math.min(1, Math.min((length - offset) % blockSize, blockSize - ((length - offset) % blockSize)) / blockSize);
+      const score = concentration * clamp(density / 2, 0, 1) * (0.82 + divisibility * 0.18);
+      candidates.push({ blockSize, offset, concentration, density, score, divisibility });
+    }
+  }
+  candidates.sort((left, right) => right.score - left.score || right.blockSize - left.blockSize);
+  const best = candidates[0];
+  if (!best) return { blockSize: 1, offset: 0, cells: length, confidence: 0 };
+  const comparable = candidates.filter((candidate) => candidate.concentration >= best.concentration * 0.94 && candidate.score >= best.score * 0.88);
+  const chosen = comparable.sort((left, right) => right.blockSize - left.blockSize)[0] || best;
+  return {
+    blockSize: chosen.blockSize,
+    offset: chosen.offset,
+    cells: Math.max(1, Math.round(length / chosen.blockSize)),
+    confidence: clamp(chosen.score, 0, 1),
+    concentration: chosen.concentration
+  };
+}
+
+export function analyzePixelArtImage(imageData) {
+  const { width, height } = imageDimensions(imageData);
+  const horizontal = detectAxisGrid(axisBoundaryEnergy(imageData, "x"));
+  const vertical = detectAxisGrid(axisBoundaryEnergy(imageData, "y"));
+  const exactColors = new Set(), approximateColors = new Set();
+  for (let index = 0; index < imageData.data.length; index += 4) {
+    if (imageData.data[index + 3] < 32) continue;
+    const red = imageData.data[index], green = imageData.data[index + 1], blue = imageData.data[index + 2];
+    exactColors.add(`${red},${green},${blue}`);
+    approximateColors.add(`${red >> 4},${green >> 4},${blue >> 4}`);
+  }
+  const blockSimilarity = Math.min(horizontal.blockSize, vertical.blockSize) / Math.max(horizontal.blockSize, vertical.blockSize);
+  const detectedConfidence = Math.sqrt(horizontal.confidence * vertical.confidence) * blockSimilarity;
+  const nativeGrid = detectedConfidence < 0.45
+    && width >= 8 && height >= 8 && width <= 128 && height <= 128 && approximateColors.size <= 64;
+  const confidence = nativeGrid ? 0.72 : detectedConfidence;
+  const columns = clamp(nativeGrid ? width : horizontal.cells, 1, 200);
+  const rows = clamp(nativeGrid ? height : vertical.cells, 1, 200);
+  const normalized = downsampleImageData(imageData, columns, rows, "dominant");
+  let offGrid = 0, compared = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const source = (y * width + x) * 4;
+      if (imageData.data[source + 3] < 32) continue;
+      const column = Math.min(columns - 1, Math.floor(x / width * columns));
+      const row = Math.min(rows - 1, Math.floor(y / height * rows));
+      const target = (row * columns + column) * 4;
+      const distance = Math.sqrt(
+        (imageData.data[source] - normalized.data[target]) ** 2
+        + (imageData.data[source + 1] - normalized.data[target + 1]) ** 2
+        + (imageData.data[source + 2] - normalized.data[target + 2]) ** 2
+      );
+      if (distance > 30) offGrid += 1;
+      compared += 1;
+    }
+  }
+  return {
+    sourceWidth: width,
+    sourceHeight: height,
+    columns,
+    rows,
+    blockWidth: nativeGrid ? 1 : horizontal.blockSize,
+    blockHeight: nativeGrid ? 1 : vertical.blockSize,
+    confidence: clamp(confidence, 0, 1),
+    exactColors: exactColors.size,
+    approximateColors: approximateColors.size,
+    offGridRatio: compared ? offGrid / compared : 0,
+    likelyPixelArt: (nativeGrid || confidence >= 0.45) && columns >= 8 && rows >= 8 && columns <= 128 && rows <= 128
+  };
 }
 
 export function preparePalette(palette) {

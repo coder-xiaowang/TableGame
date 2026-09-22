@@ -10,9 +10,11 @@ test("拼豆工坊包含从图片生成到导出的完整操作闭环", () => {
   const html = read("index.html"), script = read("app.js");
   for (const id of [
     "imageInput", "cropCanvas", "cropZoom", "gridColumns", "gridRows", "contentMode", "generationProfile", "colorLimit", "generateButton",
+    "pixelDirectPanel", "pixelAnalysisStatus", "pixelDetectedGrid", "pixelColorStats", "applyDetectedGrid",
     "editorCanvas", "paletteGrid", "undoButton", "redoButton", "materialsBody", "exportCsvButton", "exportPngButton"
   ]) assert.match(html, new RegExp(`id=["']${id}["']`), `缺少 #${id}`);
   assert.match(script, /compilePattern\(croppedImageData/);
+  assert.match(script, /analyzePixelArtImage\(analysisImageData\(\)\)/);
   assert.match(script, /data-tool/);
   assert.match(script, /materialRows\(pattern\.cells/);
   assert.match(script, /canvas\.toBlob/);
