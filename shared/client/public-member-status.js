@@ -26,9 +26,10 @@ export function createPublicMemberStatusLayer({
   room,
   documentRef=globalThis.document,
   windowRef=globalThis.window,
-  notify=(message)=>globalThis.alert?.(message)
+  notify=(message)=>globalThis.alert?.(message),
+  enabled=false
 }={}){
-  if(!documentRef?.body||!room?.setMemberStatus||!room?.subscribeMemberStatuses){
+  if(enabled!==true||!documentRef?.body||!room?.setMemberStatus||!room?.subscribeMemberStatuses){
     return Object.freeze({sync(){},receive(){},refresh(){},open(){},close(){},destroy(){},currentStatus:()=>"present"});
   }
   const style=documentRef.createElement("style");style.dataset.publicMemberStatusStyle="";style.textContent=`

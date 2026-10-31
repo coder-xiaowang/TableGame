@@ -1,12 +1,16 @@
+const EDGE_DISTRIBUTIONS = Object.freeze({
+  0: Object.freeze({ left: 0, top: 0, right: 0 }),
+  1: Object.freeze({ left: 0, top: 1, right: 0 }),
+  2: Object.freeze({ left: 0, top: 2, right: 0 }),
+  3: Object.freeze({ left: 1, top: 1, right: 1 }),
+  4: Object.freeze({ left: 1, top: 2, right: 1 }),
+  5: Object.freeze({ left: 2, top: 1, right: 2 }),
+  6: Object.freeze({ left: 2, top: 2, right: 2 })
+});
+
 export function distributeEdgeCounts(playerCount) {
-  const count = Math.max(0, Math.floor(Number(playerCount) || 0));
-  const base = Math.floor(count / 3);
-  const remainder = count % 3;
-  return {
-    top: base + (remainder >= 1 ? 1 : 0),
-    left: base + (remainder >= 2 ? 1 : 0),
-    right: base
-  };
+  const count = Math.max(0, Math.min(6, Math.floor(Number(playerCount) || 0)));
+  return EDGE_DISTRIBUTIONS[count];
 }
 
 export function edgeSeatSlots(playerCount, hasSelf) {

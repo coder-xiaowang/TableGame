@@ -5,6 +5,7 @@ import {
   createPresentationTimeline, createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame21PartitionRenderer, createGame21RenderModel } from "./render-partitions.mjs";
+import { compassSeatSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_MS = { secretReveal: 30000, questioning: 480000, accusationVote: 30000, timeoutNomination: 20000, timeoutVote: 30000 };
@@ -12,13 +13,9 @@ const PHASE_LABEL = {
   lobby: "等待行动组集结", secretReveal: "秘密身份确认", questioning: "限时问答",
   accusationVote: "临时指认表决", timeoutNomination: "超时顺序提名", timeoutVote: "最终全票表决", roundEnd: "本轮结算"
 };
-const NODE_LAYOUTS = Object.freeze({
-  3: [[15, 23], [85, 25], [50, 84]],
-  4: [[14, 22], [84, 20], [18, 80], [82, 79]],
-  5: [[13, 20], [83, 18], [91, 59], [51, 86], [10, 62]],
-  6: [[13, 19], [50, 12], [87, 20], [83, 79], [50, 88], [17, 77]],
-  7: [[12, 18], [50, 11], [87, 19], [91, 56], [72, 85], [29, 86], [9, 58]],
-  8: [[13, 17], [49, 10], [86, 18], [92, 52], [82, 84], [51, 90], [18, 84], [8, 51]]
+const NODE_COORDS = Object.freeze({
+  northwest: [18, 20], north: [50, 17], northeast: [82, 20], east: [82, 50],
+  southeast: [82, 80], south: [50, 83], southwest: [18, 80], west: [18, 50]
 });
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
@@ -220,9 +217,10 @@ function orderedPlayers() {
 
 function renderNetworkWires() {
   const ordered = orderedPlayers();
-  const layout = NODE_LAYOUTS[ordered.length] || NODE_LAYOUTS[8];
+  const hasSelfSeat = ordered.some((item) => item.id === view.selfId);
+  const slots = compassSeatSlots(ordered.length, { hasSelf: hasSelfSeat });
   E.networkWires.innerHTML = ordered.map((item, index) => {
-    const [x, y] = layout[index];
+    const [x, y] = NODE_COORDS[slots[index]];
     const active = [view.questionerId, view.questionTargetId, view.currentNominatorId].includes(item.id);
     const bendX = 50 + (x - 50) * .18;
     const bendY = 50 + (y - 50) * .18;
@@ -232,12 +230,13 @@ function renderNetworkWires() {
 
 function renderPlayers() {
   const ordered = orderedPlayers();
-  const layout = NODE_LAYOUTS[ordered.length] || NODE_LAYOUTS[8];
+  const hasSelfSeat = ordered.some((item) => item.id === view.selfId);
+  const slots = compassSeatSlots(ordered.length, { hasSelf: hasSelfSeat });
   const targets = targetIds();
   const existing = new Map([...E.players.querySelectorAll(":scope > [data-player-id]")]
     .map((seat) => [seat.dataset.playerId, seat]));
   ordered.forEach((item, index) => {
-    const [x, y] = layout[index];
+    const slot = slots[index];
     const active = [view.questionerId, view.questionTargetId, view.currentNominatorId].includes(item.id);
     const badges = [
       item.id === view.questionerId ? '<span class="badge question">提问者</span>' : "",
@@ -249,14 +248,12 @@ function renderPlayers() {
     const targetable = targets.has(item.id);
     const responseState = view.phase === "accusationVote" && view.accusation?.targetId === item.id ? "accused" : view.phase === "timeoutVote" && view.nomination?.targetId === item.id ? "accused" : "";
     const voted = [...(view.submittedAccusationVoteIds || []), ...(view.submittedTimeoutVoteIds || [])].includes(item.id);
-    const renderKey = JSON.stringify([item,index,x,y,active,targetable,responseState,voted,badges,view.selfId,view.phase,view.permissions.canManage]);
+    const renderKey = JSON.stringify([item,index,slot,active,targetable,responseState,voted,badges,view.selfId,view.phase,view.permissions.canManage]);
     let seat = existing.get(item.id);
     if (!seat) { seat = document.createElement("article"); seat.dataset.playerId = item.id; }
     if (seat.dataset.renderKey !== renderKey) {
       const presentationFocus = seat.classList.contains("presentation-focus");
-      seat.dataset.renderKey = renderKey; seat.dataset.nodeIndex = String(index);
-      seat.style.setProperty("--node-x", `${x}%`); seat.style.setProperty("--node-y", `${y}%`);
-      seat.className = `player-seat agent-node ${item.id === view.selfId ? "self" : ""} ${!item.connected ? "offline" : ""} ${active ? "active" : ""} ${targetable ? "targetable" : ""} ${responseState} ${voted ? "responded" : ""}`;
+      seat.dataset.renderKey = renderKey; seat.dataset.nodeIndex = String(index); seat.dataset.nodeSlot = slot;
       if (presentationFocus) seat.classList.add("presentation-focus");
       seat.innerHTML = `<div class="seat-head"><div><b>${escapeHtml(item.name)}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"} · ${item.score}分</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div><div class="seat-badges">${badges || '<span class="badge">身份保密</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]");
@@ -270,6 +267,10 @@ function renderPlayers() {
         seat.removeAttribute("data-target-id"); seat.removeAttribute("role"); seat.removeAttribute("tabindex"); seat.onclick = null; seat.onkeydown = null;
       }
     }
+    seat.classList.add("player-seat", "agent-node");
+    seat.classList.toggle("self", item.id === view.selfId); seat.classList.toggle("offline", !item.connected);
+    seat.classList.toggle("active", active); seat.classList.toggle("targetable", targetable);
+    seat.classList.toggle("accused", responseState === "accused"); seat.classList.toggle("responded", voted);
     const expected = E.players.children[index];
     if (expected !== seat) E.players.insertBefore(seat, expected || null);
     existing.delete(item.id);

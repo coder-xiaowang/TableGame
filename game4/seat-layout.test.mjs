@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { distributeEdgeCounts, edgeSeatSlots } from "./seat-layout.mjs";
 
-test("无法均分时按上、左、右顺序补充分配", () => {
+test("边缘席位始终使用对称分配", () => {
   assert.deepEqual(distributeEdgeCounts(1), { top: 1, left: 0, right: 0 });
-  assert.deepEqual(distributeEdgeCounts(2), { top: 1, left: 1, right: 0 });
+  assert.deepEqual(distributeEdgeCounts(2), { left: 0, top: 2, right: 0 });
   assert.deepEqual(distributeEdgeCounts(4), { top: 2, left: 1, right: 1 });
-  assert.deepEqual(distributeEdgeCounts(5), { top: 2, left: 2, right: 1 });
+  assert.deepEqual(distributeEdgeCounts(5), { left: 2, top: 1, right: 2 });
 });
 
 test("玩家视角底部只有自己并沿左上右保持连续行动顺序", () => {
-  assert.deepEqual(edgeSeatSlots(6, true).map((slot) => slot.edge), ["bottom", "left", "left", "top", "top", "right"]);
+  assert.deepEqual(edgeSeatSlots(6, true).map((slot) => slot.edge), ["bottom", "left", "left", "top", "right", "right"]);
   assert.equal(edgeSeatSlots(6, true).filter((slot) => slot.edge === "bottom").length, 1);
 });
 

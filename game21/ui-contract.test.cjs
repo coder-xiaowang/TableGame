@@ -27,7 +27,8 @@ test("间谍危机使用地点档案库与分布式情报网络外壳", () => {
   const supportAt = html.indexOf('class="support-console"');
   assert.ok(locationsAt >= 0 && tableAt > locationsAt && dockAt > tableAt && supportAt > dockAt);
 
-  assert.match(script, /const NODE_LAYOUTS = Object\.freeze/);
+  assert.match(script, /const NODE_COORDS = Object\.freeze/);
+  assert.match(script, /import \{ compassSeatSlots \}/);
   assert.match(script, /class="network-wire/);
   assert.match(script, /seat\.dataset\.nodeIndex = String\(index\)/);
   assert.match(script, /setAttribute\("data-target-id", item\.id\)/);
@@ -48,7 +49,9 @@ test("间谍危机使用地点档案库与分布式情报网络外壳", () => {
 
   assert.match(css, /\.operation-grid \{ display: grid; grid-template-columns: 236px/);
   assert.match(css, /\.network-wire\.active/);
-  assert.match(css, /\.player-seat \{ position: absolute; left: var\(--node-x\); top: var\(--node-y\)/);
+  assert.match(css, /player-seat\[data-node-slot="south"\]/);
+  assert.doesNotMatch(css, /left: var\(--node-x\)|top: var\(--node-y\)/);
+  assert.doesNotMatch(script, /seat\.className\s*=/);
   assert.match(css, /\.control-dock \{ position: sticky/);
   assert.match(css, /\.control-dock\[data-role="spectator"\] \{ position: relative/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.network-wires \{ display: none/);

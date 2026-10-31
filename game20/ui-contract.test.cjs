@@ -29,7 +29,9 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
 
   assert.match(script, /setAttribute\("data-target-id", item\.id\)/);
   assert.match(script, /seat\.dataset\.playerAnchor = item\.id/);
-  assert.match(script, /Math\.cos\(radians\)/);
+  assert.match(script, /import \{ compassSeatSlots \}/);
+  assert.match(script, /seat\.dataset\.seatSlot = slot/);
+  assert.doesNotMatch(script, /Math\.cos|Math\.sin|--seat-x|--seat-y|seat\.className\s*=/);
   assert.match(script, /view\.answerHistory/);
   assert.match(script, /type: "markCorrectGuesser"/);
   assert.match(script, /type: "submitSecondVote"/);
@@ -47,6 +49,7 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
   assert.match(css, /\.control-dock\[data-role="spectator"\] \{ position: relative/);
   assert.match(css, /\.salon-archive \{ display: grid; grid-template-columns:/);
   assert.match(css, /\.public-focus[\s\S]*?border-radius: 50%/);
+  assert.match(css, /player-seat\[data-seat-slot="south"\]/);
   assert.match(css, /\.presentation-effects/);
   assert.match(css, /\.presentation-trail\.active/);
   assert.match(css, /\.presentation-token/);

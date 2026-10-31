@@ -9,6 +9,7 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
+  const seatStyles = fs.readFileSync(path.join(__dirname, "seat-layout.css"), "utf8");
   assert.ok(html.indexOf('id="roomHeaderTools"') < html.indexOf("</header>"));
   assert.match(html, /<details class="panel rule-card">/); assert.doesNotMatch(html, /<details class="panel rule-card" open>/);
   assert.ok(html.indexOf('class="panel log-card"') < html.indexOf('id="spectatorPanel"'));
@@ -20,6 +21,10 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   assert.match(html, /name="joinIntent" value="spectate"/); assert.match(script, /createSpectatorUi/);
   assert.doesNotMatch(script, /https?:\/\//); assert.match(script, /escapeHtml/);
   assert.match(script, /setAttribute\("data-side",side\)/);
+  assert.match(script, /import \{ sideColumnSlots \}/);
+  assert.match(html, /id="leftPlayerRail"/); assert.match(html, /id="rightPlayerRail"/);
+  assert.match(seatStyles, /Stable saloon seating/);
+  assert.doesNotMatch(script, /--seat-y|seat\.className\s*=/);
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(next\.presentationEvents\)/);
   assert.match(script, /sceneKey:\(event\)=>event\.sceneId\|\|event\.id/);
@@ -43,7 +48,7 @@ test("权威视图分区更新并保留合法的本地牌与目标选择", () =>
   assert.match(script, /createGame19PartitionRenderer, createGame19RenderModel/);
   assert.match(script, /partitionRenderer=createGame19PartitionRenderer\(\{room:renderRoom,status:renderStatus,table:renderTable,players:renderPlayers/);
   assert.match(script, /private:\(model\)=>renderHand\(model\.memberRole\),decision:\(model\)=>renderActions\(model\.memberRole\)/);
-  assert.match(script, /querySelectorAll\(":scope > \[data-player-id\]"\)/);
+  assert.match(script, /querySelectorAll\("\[data-player-id\]"\)/);
   assert.match(script, /if\(!view\.permissions\.canPlay\|\|!selected\)\{selectedCardId=null;selectedTargetId=null;\}/);
   assert.match(script, /else if\(selectedTargetId&&!eligibleTargets\(selected\)\.some/);
   assert.match(script, /selectedCardId=button\.dataset\.card;selectedTargetId=null;render\(\)/);

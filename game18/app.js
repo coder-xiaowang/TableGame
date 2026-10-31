@@ -6,6 +6,7 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame18PartitionRenderer, createGame18RenderModel } from "./render-partitions.mjs";
+import { sideColumnSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_TIMER_MS = { caseStory: 45000, turn: 45000, chooseTarget: 30000, trade: 30000, passLeft: 30000, dogPick: 30000, privateReveal: 20000, dogReveal: 20000, roundReview: 8000 };
@@ -29,7 +30,7 @@ const E = Object.fromEntries([
   "playerCountSelect", "targetScoreSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools",
   "roomPlayerCountSelect", "roomTargetScoreSelect", "spectatorSettingButton", "seatActionButton",
   "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton", "notice", "caseText", "roundNumber",
-  "targetScoreLabel", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "discardCount", "discardPile",
+  "targetScoreLabel", "players", "leftPlayerRail", "rightPlayerRail", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "discardCount", "discardPile",
   "privateZone", "myHand", "toggleLogButton", "logList", "caseBoard", "caseHeading", "discardArea",
   "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
@@ -160,25 +161,21 @@ function renderPlayers() {
   E.players.dataset.count = String(view.players.length);
   const ownIndex = view.players.findIndex((player) => player.id === view.selfId);
   const orderedPlayers = ownIndex < 0 ? view.players : [...view.players.slice(ownIndex), ...view.players.slice(0, ownIndex)];
-  const leftCount = Math.floor(orderedPlayers.length / 2);
-  const rightCount = orderedPlayers.length - leftCount;
+  const slots = sideColumnSlots(orderedPlayers.length);
   const targetIds = new Set(eligibleTargetPlayers().map((player) => player.id));
-  const existing = new Map([...E.players.querySelectorAll(":scope > [data-player-id]")]
+  const existing = new Map([...E.players.querySelectorAll("[data-player-id]")]
     .map((seat) => [seat.dataset.playerId, seat]));
+  const rails = { left: E.leftPlayerRail, right: E.rightPlayerRail };
+  const railIndexes = { left: 0, right: 0 };
   orderedPlayers.forEach((player, index) => {
-    const side = index < leftCount ? "left" : "right";
-    const sideIndex = side === "left" ? index : index - leftCount;
-    const sideCount = side === "left" ? leftCount : rightCount;
-    const y = sideCount === 1 ? 50 : 8 + 84 * (sideIndex + .5) / sideCount;
+    const { side } = slots[index];
     const targetable = targetIds.has(player.id);
-    const renderKey = JSON.stringify([player,index,side,y,targetable,view.selfId,view.currentPlayerId,view.phase,view.targetScore,view.permissions.canKick]);
+    const renderKey = JSON.stringify([player,index,side,targetable,view.selfId,view.currentPlayerId,view.phase,view.targetScore,view.permissions.canKick]);
     let seat = existing.get(player.id);
     if (!seat) { seat = document.createElement("article"); seat.dataset.playerId = player.id; }
     if (seat.dataset.renderKey !== renderKey) {
       seat.dataset.renderKey = renderKey;
       seat.setAttribute("data-seat-side", side);
-      seat.className = `player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase) ? "current" : ""} ${!player.connected ? "offline" : ""} ${targetable ? "targetable" : ""}`;
-      seat.style.setProperty("--seat-y", `${y}%`);
       seat.innerHTML = `<header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header><div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div><div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]"); if (kick) kick.onclick = () => kickPlayer(kick.dataset.kick);
       if (targetable) {
@@ -190,7 +187,15 @@ function renderPlayers() {
         seat.removeAttribute("data-target-player-id"); seat.removeAttribute("role"); seat.removeAttribute("tabindex"); seat.removeAttribute("aria-label"); seat.onclick = null; seat.onkeydown = null;
       }
     }
-    const expected = E.players.children[index]; if (expected !== seat) E.players.insertBefore(seat, expected || null);
+    seat.classList.add("player-seat");
+    seat.classList.toggle("self", player.id === view.selfId);
+    seat.classList.toggle("current", player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase));
+    seat.classList.toggle("offline", !player.connected);
+    seat.classList.toggle("targetable", targetable);
+    const rail = rails[side];
+    const railIndex = railIndexes[side]++;
+    const expected = rail.children[railIndex];
+    if (expected !== seat) rail.insertBefore(seat, expected || null);
     existing.delete(player.id);
   });
   existing.forEach((seat) => seat.remove());

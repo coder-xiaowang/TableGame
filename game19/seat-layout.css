@@ -1,0 +1,63 @@
+/* Stable saloon seating. This file is the only authoritative player-seat geometry. */
+.western-table {
+  min-height: max(760px, calc(100vh - 250px));
+  overflow: hidden;
+}
+.players {
+  position: absolute;
+  inset: 76px 18px 24px;
+  display: grid;
+  grid-template-columns: clamp(158px, 19%, 205px) minmax(260px, 1fr) clamp(158px, 19%, 205px);
+  gap: 16px;
+  min-height: 0;
+  pointer-events: none;
+}
+.player-rail {
+  display: grid;
+  align-content: space-evenly;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+.player-rail-left { grid-column: 1; }
+.saloon-safe-zone { grid-column: 2; }
+.player-rail-right { grid-column: 3; }
+.players .player-seat,
+.players[data-count] .player-seat:nth-child(n) {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 118px;
+  min-height: 0;
+  padding: 8px 9px;
+  overflow: hidden;
+  transform: none;
+  pointer-events: auto;
+}
+.players .seat-head b { display: block; max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.players .character { margin: 4px 0; overflow: hidden; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.players .equipment { max-height: 38px; overflow: hidden; }
+.players .equip { padding: 2px 4px; font-size: 9px; }
+.table-center { top: 50%; width: min(390px, 42%); }
+
+@media (min-width: 851px) and (max-width: 1080px) {
+  .western-table { min-height: 790px; }
+  .players { inset-inline: 10px; grid-template-columns: 150px minmax(235px,1fr) 150px; gap: 10px; }
+  .players .player-seat { height: 112px; padding: 7px; }
+  .table-center { width: min(340px, 40%); }
+}
+
+@media (max-width: 850px) {
+  .western-table { min-height: 0; overflow: visible; padding: 10px; }
+  .players { position: static; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .player-rail, .saloon-safe-zone { display: contents; }
+  .players .player-seat,
+  .players[data-count] .player-seat:nth-child(n) { position: relative; inset: auto; width: auto; height: auto; min-height: 96px; transform: none; }
+  .table-center { position: relative; inset: auto; width: 100%; margin: 10px 0 0; transform: none; }
+}
+
+@media (max-width: 520px) {
+  .players { grid-template-columns: 1fr; }
+  .players .player-seat { min-height: 88px; }
+}

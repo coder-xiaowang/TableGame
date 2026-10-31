@@ -25,7 +25,7 @@ class FakeDocument{
   getElementById(id){if(id==="connectionStatus")return this.connection;if(id==="startGameButton")return this.start;return null;}
   addAnchor(id){const node=new FakeNode();node.dataset.playerId=id;this.anchors.set(id,node);this.body.append(node);return node;}
   querySelector(selector){for(const [id,node] of this.anchors)if(selector.includes(`"${id}"`))return node;return null;}
-  querySelectorAll(selector){const found=[];const visit=(node)=>{if(selector===".shared-lobby-ready-badge"&&node.classList.contains("shared-lobby-ready-badge"))found.push(node);for(const child of node.children)visit(child);};visit(this.body);return found;}
+  querySelectorAll(selector){const found=[];const visit=(node)=>{if(selector.includes("shared-lobby-player-ready")&&(node.classList.contains("shared-lobby-player-ready")||node.classList.contains("shared-lobby-player-waiting")))found.push(node);for(const child of node.children)visit(child);};visit(this.body);return found;}
 }
 
 test("the lobby layer marks stable player anchors and lets a guest confirm readiness",async()=>{
@@ -34,7 +34,7 @@ test("the lobby layer marks stable player anchors and lets a guest confirm readi
   const layer=createLobbyReadinessLayer({room,documentRef});
   const waiting={active:true,members:[{id:"host",isHost:true,connected:true,ready:true},{id:"guest",isHost:false,connected:true,ready:false}]};
   layer.sync({selfId:"guest",roomRole:"player",lobbyReadiness:waiting},{playerId:"guest"});await Promise.resolve();
-  assert.equal(hostAnchor.children.at(-1).children[0].dataset.ready,"true");assert.equal(guestAnchor.children.at(-1).children[0].dataset.ready,"false");assert.equal(documentRef.start.classList.contains("shared-lobby-all-ready"),false);
+  assert.equal(hostAnchor.children.length,0);assert.equal(guestAnchor.children.length,0);assert.equal(documentRef.start.classList.contains("shared-lobby-all-ready"),false);
   assert.equal(hostAnchor.classList.contains("shared-lobby-player-ready"),true);assert.equal(guestAnchor.classList.contains("shared-lobby-player-waiting"),true);assert.equal(documentRef.start.attributes.get("aria-disabled"),"true");
   await Promise.resolve();assert.deepEqual(calls,[false],"a real lobby client registers readiness enforcement even before clicking ready");
   await documentRef.connection.inserted.children[0].click();assert.deepEqual(calls,[false,true]);

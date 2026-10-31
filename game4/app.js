@@ -165,7 +165,8 @@ function renderSeats() {
   const winningIds = new Set((view.handWinners || []).flatMap((result) => result.ids).map(String));
   const showdownActive = view.phase === "handResult" && view.showdown;
   const orderedPlayers = playersFromViewerSeat();
-  const slots = edgeSeatSlots(orderedPlayers.length, Boolean(view.selfId));
+  const hasSelfSeat = orderedPlayers.some((player) => player.id === view.selfId);
+  const slots = edgeSeatSlots(orderedPlayers.length, hasSelfSeat);
   const rails = { top: E.seatTopRail, left: E.seatLeftRail, right: E.seatRightRail, bottom: E.seatBottomRail };
   const railIndexes = { top: 0, left: 0, right: 0, bottom: 0 };
   orderedPlayers.forEach((player, orderIndex) => {

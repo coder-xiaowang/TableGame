@@ -55,8 +55,9 @@ test("牌桌采用本地矩形四边槽位排座并提供权威摊牌演出", ()
   assert.match(script, /function playersFromViewerSeat/);
   assert.match(script, /characters\.slice\(0, limit\).*…/);
   assert.match(seatLayout, /function distributeEdgeCounts/);
-  assert.match(seatLayout, /top: base \+ \(remainder >= 1/);
-  assert.match(seatLayout, /left: base \+ \(remainder >= 2/);
+  assert.match(seatLayout, /EDGE_DISTRIBUTIONS/);
+  assert.match(seatLayout, /5: Object\.freeze\(\{ left: 2, top: 1, right: 2 \}\)/);
+  assert.match(script, /const hasSelfSeat = orderedPlayers\.some/);
   assert.match(script, /import \{ edgeSeatSlots \} from "\.\/seat-layout\.mjs"/);
   assert.match(script, /rail\.insertBefore\(seat, currentAtIndex \|\| null\)/);
   assert.doesNotMatch(script, /seat\.className\s*=/);

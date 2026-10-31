@@ -6,6 +6,7 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame19PartitionRenderer, createGame19RenderModel } from "./render-partitions.mjs";
+import { sideColumnSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_MS = { turnStart: 20000, draw: 20000, drawChoice: 20000, kitChoice: 20000, judgmentChoice: 20000, play: 75000, defense: 15000, duel: 12000, dying: 15000, discardExcess: 25000, generalStore: 20000 };
@@ -15,7 +16,7 @@ const CARD = {
 };
 const ROLE = { sheriff:"警长", deputy:"副警长", outlaw:"歹徒", renegade:"叛徒" };
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","restartGameButton","endGameButton","notice","westernTable","players","tableCenter","centerMoment","deckPile","deckCount","discardTop","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons","timerText","timerBar","privateZone","selfSummary","myHand","toggleLogButton","logList"].map((id)=>[id,$(id)]));
+const E = Object.fromEntries(["hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","restartGameButton","endGameButton","notice","westernTable","players","leftPlayerRail","rightPlayerRail","tableCenter","centerMoment","deckPile","deckCount","discardTop","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons","timerText","timerBar","privateZone","selfSummary","myHand","toggleLogButton","logList"].map((id)=>[id,$(id)]));
 
 let view = null, selectedCardId = null, selectedTargetId = null, spectatorUi = null, presentation = null, partitionRenderer = null;
 const sessions = createSessionStore({ gameId:"bang" });
@@ -61,24 +62,28 @@ function addButton(label,handler,kind=""){const button=document.createElement("b
 function renderPlayers(){
   const selfIndex=view.players.findIndex((p)=>p.id===view.selfId);
   const seats=selfIndex<0?view.players:[...view.players.slice(selfIndex),...view.players.slice(0,selfIndex)];
-  const leftCount=Math.floor(seats.length/2),rightCount=seats.length-leftCount;
+  const slots=sideColumnSlots(seats.length);
   E.players.dataset.count=String(seats.length);
-  const existing=new Map([...E.players.querySelectorAll(":scope > [data-player-id]")].map((seat)=>[seat.dataset.playerId,seat]));
+  const existing=new Map([...E.players.querySelectorAll("[data-player-id]")].map((seat)=>[seat.dataset.playerId,seat]));
+  const rails={left:E.leftPlayerRail,right:E.rightPlayerRail},railIndexes={left:0,right:0};
   seats.forEach((p,index)=>{
-    const side=index<leftCount?"left":"right",sideIndex=side==="left"?index:index-leftCount,sideCount=side==="left"?leftCount:rightCount,y=sideCount===1?50:8+84*(sideIndex+.5)/sideCount;
+    const {side}=slots[index];
     const responding=view.pending?.actorId===p.id&&["defense","duel","dying"].includes(view.phase),source=view.pending?.sourceId===p.id;
-    const renderKey=JSON.stringify([p,index,side,y,responding,source,view.selfId,view.currentPlayerId,view.phase,view.permissions.canManage]);
+    const renderKey=JSON.stringify([p,index,side,responding,source,view.selfId,view.currentPlayerId,view.phase,view.permissions.canManage]);
     let seat=existing.get(p.id);
     if(!seat){seat=document.createElement("article");seat.dataset.playerId=p.id;}
     if(seat.dataset.renderKey!==renderKey){
       const presentationFocus=seat.classList.contains("presentation-focus");
-      seat.dataset.renderKey=renderKey;seat.setAttribute("data-side",side);seat.style.setProperty("--seat-y",`${y}%`);
-      seat.className=`player-seat ${p.id===view.selfId?"self":""} ${p.id===view.currentPlayerId?"current":""} ${responding?"responding":""} ${source?"action-source":""} ${!p.alive?"dead":""} ${!p.connected?"offline":""}`;
+      seat.dataset.renderKey=renderKey;seat.setAttribute("data-side",side);
       if(presentationFocus)seat.classList.add("presentation-focus");
       seat.innerHTML=`<div class="seat-head"><div><b>${escapeHtml(p.name)}${p.id===view.selfId?" · 你":""}</b><small>${p.connected?"在线":"离线"} · ${p.handCount}张手牌${p.distance?` · 距离${p.distance}`:""}</small></div><div class="seat-tools"><span class="role">${escapeHtml(p.role?ROLE[p.role]:"身份隐藏")}</span>${view.permissions.canManage&&view.phase==="lobby"&&!p.isHost?`<button class="kick small" data-kick="${escapeHtml(p.id)}">移出</button>`:""}</div></div><div class="character">${escapeHtml(p.characterName||"等待角色")} <span class="life">${p.alive?"♥".repeat(Math.max(0,p.life)):"已出局"}${p.maxLife?` / ${p.maxLife}`:""}</span></div><div class="equipment">${p.equipment.map((card)=>`<span class="equip">${escapeHtml(cardName(card.type))}</span>`).join("")||"<small>无装备</small>"}</div>`;
       const kick=seat.querySelector("[data-kick]");if(kick)kick.onclick=()=>kickPlayer(kick.dataset.kick);
     }
-    const expected=E.players.children[index];if(expected!==seat)E.players.insertBefore(seat,expected||null);
+    seat.classList.add("player-seat");
+    seat.classList.toggle("self",p.id===view.selfId);seat.classList.toggle("current",p.id===view.currentPlayerId);
+    seat.classList.toggle("responding",responding);seat.classList.toggle("action-source",source);
+    seat.classList.toggle("dead",!p.alive);seat.classList.toggle("offline",!p.connected);
+    const rail=rails[side],railIndex=railIndexes[side]++,expected=rail.children[railIndex];if(expected!==seat)rail.insertBefore(seat,expected||null);
     existing.delete(p.id);
   });
   existing.forEach((seat)=>seat.remove());

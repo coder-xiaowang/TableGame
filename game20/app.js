@@ -5,6 +5,7 @@ import {
   createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame20PartitionRenderer, createGame20RenderModel } from "./render-partitions.mjs";
+import { compassSeatSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_MS = { secretReveal: 30000, questioning: 300000, firstVote: 30000, secondVote: 30000, tieBreak: 20000 };
@@ -178,14 +179,13 @@ function renderPlayers() {
   const ordered = selfIndex < 0 ? view.players : [...view.players.slice(selfIndex), ...view.players.slice(0, selfIndex)];
   const kind = targetMode();
   const targets = eligibleTargetIds(kind);
+  const hasSelfSeat = ordered.some((item) => item.id === view.selfId);
+  const slots = compassSeatSlots(ordered.length, { hasSelf: hasSelfSeat });
   E.players.dataset.count = String(ordered.length);
   const existing = new Map([...E.players.querySelectorAll(":scope > [data-player-anchor]")]
     .map((seat) => [seat.dataset.playerAnchor, seat]));
   ordered.forEach((item, index) => {
-    const angle = -90 + (180 / ordered.length) + index * (360 / ordered.length);
-    const radians = angle * Math.PI / 180;
-    const x = 50 + Math.cos(radians) * 41;
-    const y = 51 + Math.sin(radians) * 38;
+    const slot = slots[index];
     const targetable = targets.has(item.id);
     const badges = [
       item.isMaster ? '<span class="badge master">主持人</span>' : "",
@@ -195,15 +195,13 @@ function renderPlayers() {
       view.phase === "firstVote" && view.submittedFirstVoteIds.includes(item.id) ? '<span class="badge">已投票</span>' : "",
       view.phase === "secondVote" && view.submittedSecondVoteIds.includes(item.id) ? '<span class="badge">已投票</span>' : ""
     ].join("");
-    const renderKey = JSON.stringify([item,index,x,y,targetable,badges,view.selfId,view.phase,view.permissions.canManage]);
+    const renderKey = JSON.stringify([item,index,slot,targetable,badges,view.selfId,view.phase,view.permissions.canManage]);
     let seat = existing.get(item.id);
     if (!seat) { seat = document.createElement("article"); seat.dataset.playerAnchor = item.id; }
     if (seat.dataset.renderKey !== renderKey) {
       const presentationFocus = seat.classList.contains("presentation-focus");
       seat.dataset.renderKey = renderKey;
-      seat.style.setProperty("--seat-x", `${x.toFixed(2)}%`);
-      seat.style.setProperty("--seat-y", `${y.toFixed(2)}%`);
-      seat.className = `player-seat ${item.id === view.selfId ? "self" : ""} ${item.isMaster ? "master" : ""} ${!item.connected ? "offline" : ""} ${targetable ? "targetable" : ""}`;
+      seat.dataset.seatSlot = slot;
       if (presentationFocus) seat.classList.add("presentation-focus");
       seat.innerHTML = `<div class="seat-head"><div><b>${escapeHtml(item.name)}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"}</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div><div class="seat-badges">${badges || '<span class="badge">身份隐藏</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]");
@@ -217,6 +215,11 @@ function renderPlayers() {
         seat.removeAttribute("data-target-id"); seat.removeAttribute("role"); seat.removeAttribute("tabindex"); seat.removeAttribute("aria-label"); seat.onclick = null; seat.onkeydown = null;
       }
     }
+    seat.classList.add("player-seat");
+    seat.classList.toggle("self", item.id === view.selfId);
+    seat.classList.toggle("master", Boolean(item.isMaster));
+    seat.classList.toggle("offline", !item.connected);
+    seat.classList.toggle("targetable", targetable);
     const expected = E.players.children[index];
     if (expected !== seat) E.players.insertBefore(seat, expected || null);
     existing.delete(item.id);

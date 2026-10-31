@@ -42,7 +42,7 @@ class FakeDocument{
 test("status badges reconcile independently and stale events cannot overwrite newer state",async()=>{
   const documentRef=new FakeDocument(),anchor=documentRef.addAnchor("p1");
   const room={setMemberStatus:async()=>{},subscribeMemberStatuses(listener){this.listener=listener;return()=>{};}};
-  const layer=createPublicMemberStatusLayer({room,documentRef,windowRef:{innerWidth:800,innerHeight:600,addEventListener(){},removeEventListener(){}}});
+  const layer=createPublicMemberStatusLayer({room,documentRef,enabled:true,windowRef:{innerWidth:800,innerHeight:600,addEventListener(){},removeEventListener(){}}});
   const menuStyle=documentRef.head.children.find((node)=>Object.hasOwn(node.dataset,"publicMemberStatusStyle"));
   assert.match(menuStyle.textContent,/--member-status-menu-text,#182128/);
   assert.match(menuStyle.textContent,/--member-status-menu-bg,#fffaf2/);
@@ -66,9 +66,17 @@ test("status badges reconcile independently and stale events cannot overwrite ne
 test("an offline player does not retain a misleading manual status badge",async()=>{
   const documentRef=new FakeDocument(),anchor=documentRef.addAnchor("p2");
   const room={setMemberStatus:async()=>{},subscribeMemberStatuses(){return()=>{};}};
-  const layer=createPublicMemberStatusLayer({room,documentRef,windowRef:{addEventListener(){},removeEventListener(){}}});
+  const layer=createPublicMemberStatusLayer({room,documentRef,enabled:true,windowRef:{addEventListener(){},removeEventListener(){}}});
   layer.sync({players:[{id:"p2",connected:false}],memberStatuses:[{id:"p2",status:"away",updatedAt:4}]},{});
   await Promise.resolve();
   assert.equal(anchor.children.length,0);
   layer.destroy();
+});
+
+test("the public status entry is disabled by default",()=>{
+  const documentRef=new FakeDocument();
+  const room={setMemberStatus:async()=>{},subscribeMemberStatuses(){throw new Error("disabled layers must not subscribe");}};
+  createPublicMemberStatusLayer({room,documentRef});
+  assert.equal(documentRef.status.inserted,undefined);
+  assert.equal(documentRef.querySelectorAll(".shared-member-status-badge").length,0);
 });

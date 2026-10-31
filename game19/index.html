@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="seat-layout.css">
 </head>
 <body>
 <main class="shell">
@@ -71,7 +72,11 @@
     <section class="game-area">
       <div id="notice" class="notice">等待玩家加入</div>
       <section id="westernTable" class="western-table">
-        <div id="players" class="players"></div>
+        <div id="players" class="players">
+          <div id="leftPlayerRail" class="player-rail player-rail-left" aria-label="左侧枪手席"></div>
+          <div class="saloon-safe-zone" aria-hidden="true"></div>
+          <div id="rightPlayerRail" class="player-rail player-rail-right" aria-label="右侧枪手席"></div>
+        </div>
         <div id="tableCenter" class="table-center">
           <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
           <div class="piles"><div id="deckPile" class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
