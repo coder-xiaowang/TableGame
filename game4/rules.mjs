@@ -88,5 +88,6 @@ export function evaluateBestFive(cards) {
 }
 
 export function rankName(rank) {
+  if (rank?.[0] === 8 && rank?.[1] === 14) return "皇家同花顺";
   return ["高牌", "一对", "两对", "三条", "顺子", "同花", "葫芦", "四条", "同花顺"][rank?.[0]] || "未知牌型";
 }

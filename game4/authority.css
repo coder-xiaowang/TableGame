@@ -76,13 +76,16 @@
   border-style: dashed;
 }
 
-.seat > [data-kick-player] {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  min-height: 24px;
-  padding: 0 6px;
-  font-size: 10px;
+.seat > .seat-admin-proxy.shared-player-admin-trigger {
+  position: absolute !important;
+  width: 1px !important;
+  min-width: 0 !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }
 
 @media (max-width: 850px) {

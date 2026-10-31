@@ -21,7 +21,7 @@ test("七张牌评估覆盖皇家同花顺、葫芦和A2345顺子", () => {
   const wheel = evaluateBestHand([
     card(14, "♠"), card(2, "♥"), card(3, "♦"), card(4, "♣"), card(5, "♠"), card(9, "♥"), card(10, "♣")
   ]);
-  assert.equal(rankName(royal), "同花顺");
+  assert.equal(rankName(royal), "皇家同花顺");
   assert.equal(rankName(fullHouse), "葫芦");
   assert.deepEqual(wheel, [4, 5]);
   assert.ok(compareRanks(royal, fullHouse) > 0);
@@ -37,7 +37,7 @@ test("最佳牌型评估同时返回用于摊牌展示的准确五张牌", () =>
     card(14, "♠"), card(13, "♠"), card(12, "♠"), card(11, "♠"), card(10, "♠"), card(10, "♥"), card(2, "♣")
   ];
   const result = evaluateBestFive(cards);
-  assert.equal(rankName(result.rank), "同花顺");
+  assert.equal(rankName(result.rank), "皇家同花顺");
   assert.equal(result.cards.length, 5);
   assert.deepEqual(new Set(result.cards.map((item) => item.s)), new Set(["♠"]));
 });

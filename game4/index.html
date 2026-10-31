@@ -103,15 +103,16 @@
           <aside class="hand-rank-guide" aria-label="德州扑克牌型大小">
             <p class="eyebrow">HAND RANKS</p>
             <ol>
-              <li data-rank="8"><b>同花顺</b><span class="mini-hand red">10♥ J♥ Q♥ K♥ A♥</span></li>
-              <li data-rank="7"><b>四条</b><span class="mini-hand">8♠ 8♥ 8♦ 8♣ K♠</span></li>
-              <li data-rank="6"><b>葫芦</b><span class="mini-hand red">Q♠ Q♥ Q♦ 7♣ 7♥</span></li>
-              <li data-rank="5"><b>同花</b><span class="mini-hand">A♣ J♣ 8♣ 5♣ 2♣</span></li>
-              <li data-rank="4"><b>顺子</b><span class="mini-hand red">9♠ 8♥ 7♦ 6♣ 5♥</span></li>
-              <li data-rank="3"><b>三条</b><span class="mini-hand">J♠ J♥ J♦ 6♣ 2♠</span></li>
-              <li data-rank="2"><b>两对</b><span class="mini-hand red">A♠ A♥ 9♦ 9♣ 4♥</span></li>
-              <li data-rank="1"><b>一对</b><span class="mini-hand">K♠ K♥ 8♦ 5♣ 2♠</span></li>
-              <li data-rank="0"><b>高牌</b><span class="mini-hand red">A♠ J♥ 9♦ 6♣ 3♥</span></li>
+              <li data-rank-name="皇家同花顺"><b>皇家同花顺</b><span class="mini-hand red">10♥ J♥ Q♥ K♥ A♥</span></li>
+              <li data-rank-name="同花顺"><b>同花顺</b><span class="mini-hand">5♣ 6♣ 7♣ 8♣ 9♣</span></li>
+              <li data-rank-name="四条"><b>四条</b><span class="mini-hand">8♠ 8♥ 8♦ 8♣ K♠</span></li>
+              <li data-rank-name="葫芦"><b>葫芦</b><span class="mini-hand red">Q♠ Q♥ Q♦ 7♣ 7♥</span></li>
+              <li data-rank-name="同花"><b>同花</b><span class="mini-hand">A♣ J♣ 8♣ 5♣ 2♣</span></li>
+              <li data-rank-name="顺子"><b>顺子</b><span class="mini-hand red">9♠ 8♥ 7♦ 6♣ 5♥</span></li>
+              <li data-rank-name="三条"><b>三条</b><span class="mini-hand">J♠ J♥ J♦ 6♣ 2♠</span></li>
+              <li data-rank-name="两对"><b>两对</b><span class="mini-hand red">A♠ A♥ 9♦ 9♣ 4♥</span></li>
+              <li data-rank-name="一对"><b>一对</b><span class="mini-hand">K♠ K♥ 8♦ 5♣ 2♠</span></li>
+              <li data-rank-name="高牌"><b>高牌</b><span class="mini-hand red">A♠ J♥ 9♦ 6♣ 3♥</span></li>
             </ol>
           </aside>
 
@@ -127,7 +128,12 @@
           </div>
 
           <div id="seatBoundary" class="seat-boundary" aria-label="牌桌玩家席边界">
-            <div class="seats" id="seats"></div>
+            <div class="seats" id="seats">
+              <div id="seatTopRail" class="seat-rail seat-rail-top" aria-label="上方玩家席"></div>
+              <div id="seatLeftRail" class="seat-rail seat-rail-left" aria-label="左侧玩家席"></div>
+              <div id="seatRightRail" class="seat-rail seat-rail-right" aria-label="右侧玩家席"></div>
+              <div id="seatBottomRail" class="seat-rail seat-rail-bottom" aria-label="自己的玩家席"></div>
+            </div>
           </div>
 
           <section class="action-panel table-action-dock">
