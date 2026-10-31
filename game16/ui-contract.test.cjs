@@ -16,6 +16,7 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(html, /name="joinIntent" value="spectate"/);
   assert.match(html, /id="courtEffects"/); assert.match(html, /id="momentAnnouncement"/); assert.match(html, /id="momentTrail"/);
   assert.match(html, /id="seatBoundary"[\s\S]*id="players"/);
+  for (const rail of ["galleryRail", "leftCourtRail", "rightCourtRail", "throneRail"]) assert.match(html, new RegExp(`id="${rail}"`));
   assert.doesNotMatch(html, /id="roomRoleBanner"/); assert.match(html, /id="spectatorList"/); assert.match(html, /id="privateZone"/);
   assert.ok(roomToolsAt >= 0 && roomToolsAt < heroEnd, "房间管理必须位于标题栏内");
   assert.match(html, /<details class="panel rule-card">/); assert.doesNotMatch(html, /<details class="panel rule-card" open>/);
@@ -23,24 +24,32 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(script, /createSpectatorUi/); assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(script, /reactionId: view\.reaction\?\.id/); assert.match(script, /expectedVersion: room\.snapshot\(\)\.version/);
   assert.match(script, /createPresentationTimeline/); assert.match(script, /presentation\.sync\(view\.moments\)/); assert.match(script, /data-influence-slot/); assert.match(script, /moment\.actorId === view\.selfId/);
-  assert.match(script, /function playersFromViewerSeat\(\)/); assert.match(script, /Math\.PI \/ 2/);
-  assert.match(script, /function ellipseAngles\(/); assert.match(script, /function seatsOverlap\(/);
-  assert.match(script, /new ResizeObserver\(scheduleSeatLayout\)/); assert.match(script, /data-seat-order/);
+  assert.match(script, /import \{ courtSeatSlots \}/);
+  assert.match(script, /function playersFromViewerSeat\(\)/); assert.match(script, /function playerNameLabel\(/);
+  assert.match(script, /const hasSelfSeat = orderedPlayers\.some\(\(player\) => player\.id === view\.selfId\)/);
+  assert.match(script, /const slots = courtSeatSlots\(orderedPlayers\.length, hasSelfSeat\)/); assert.match(script, /rail\.insertBefore\(element, expected \|\| null\)/);
+  assert.match(script, /classList\.toggle\("current"/); assert.match(script, /class="seat-admin-proxy"/);
+  assert.doesNotMatch(script, /function ellipseAngles\(/); assert.doesNotMatch(script, /function seatsOverlap\(/);
+  assert.doesNotMatch(script, /ResizeObserver/); assert.doesNotMatch(script, /--seat-[xy]/);
+  assert.doesNotMatch(script, /element\.className\s*=/);
   assert.match(script, /sceneKey: \(moment\) => moment\.sceneId \|\| moment\.id/);
   assert.match(script, /catchUpThreshold: 2/); assert.match(script, /severeBacklogThreshold: 4/);
   assert.match(script, /urgentPriority: 4/); assert.match(script, /retainPriority: 4/);
   assert.match(script, /setHidden\(E\.roomHeaderTools, false\)/);
   assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/);
   assert.match(styles, /@media \(min-width: 761px\)/);
-  assert.match(styles, /\.seat-boundary \{ position: absolute/); assert.match(styles, /left: var\(--seat-x\)/); assert.match(styles, /top: var\(--seat-y\)/);
-  assert.doesNotMatch(styles, /\.player-seat:nth-child\(1\) \{ left: 50%; bottom: 22px/);
+  assert.match(styles, /\.seat-boundary \{ position: absolute/);
+  assert.match(styles, /--court-seat-width/); assert.match(styles, /--court-seat-height/);
+  assert.match(styles, /\.gallery-rail \{/); assert.match(styles, /\.left-court-rail \{/);
+  assert.match(styles, /\.right-court-rail \{/); assert.match(styles, /\.throne-rail \{/);
+  assert.match(styles, /\.seat-admin-proxy\.shared-player-admin-trigger/);
+  assert.doesNotMatch(styles, /left: var\(--seat-x\)/); assert.doesNotMatch(styles, /top: var\(--seat-y\)/);
   assert.match(styles, /@media \(max-width: 520px\)/);
-  assert.match(styles, /players\[data-count\] > \.player-seat:nth-child\(n\)/);
+  assert.match(styles, /\.court-rail \{ display: contents; \}/);
   assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) auto/);
   assert.match(styles, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /\.moment-announcement/); assert.match(styles, /\.influence-card\.claim-pulse/); assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(styles, /sidebar \.rule-card[^}]*display:\s*none/); assert.doesNotMatch(styles, /sidebar \.log-card[^}]*display:\s*none/);
-  for (const count of [3, 4, 5]) assert.match(styles, new RegExp(`players\\[data-count="${count}"\\]`));
 });
 
 test("普通权威广播不会清空仍合法的行动与换牌选择", () => {
@@ -73,7 +82,7 @@ test("宫廷入场外壳与角色画像保持主题完整且不泄露隐藏身�
   assert.match(script, /: `<span class="role-back-mark"/);
 });
 
-test("政变权威视图按圆桌、私人身份、响应窗口和倒计时分区更新", () => {
+test("政变权威视图按宫廷席位、私人身份、响应窗口和倒计时分区更新", () => {
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const partitions = fs.readFileSync(path.join(__dirname, "render-partitions.mjs"), "utf8");
   assert.match(script, /createGame16PartitionRenderer/);

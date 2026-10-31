@@ -6,6 +6,7 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame16PartitionRenderer, createGame16RenderModel } from "./render-partitions.mjs";
+import { courtSeatSlots } from "./court-seat-layout.mjs";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_TIMER_MS = { action: 45000, challengeAction: 18000, block: 18000, challengeBlock: 18000, proveClaim: 15000, loseInfluence: 20000, exchange: 30000 };
@@ -15,7 +16,7 @@ const E = Object.fromEntries([
   "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField",
   "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton",
   "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton",
-  "notice", "courtPanel", "courtCenter", "courtEffects", "momentTrail", "momentAnnouncement", "momentLabel", "momentText", "deckCount", "seatBoundary", "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
+  "notice", "courtPanel", "courtCenter", "courtEffects", "momentTrail", "momentAnnouncement", "momentLabel", "momentText", "deckCount", "seatBoundary", "players", "galleryRail", "leftCourtRail", "rightCourtRail", "throneRail", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
   "privateZone", "coinCount", "myInfluences", "toggleLogButton", "logList"
 ].map((id) => [id, $(id)]));
 
@@ -43,10 +44,7 @@ let exchangeSelection = new Set();
 let exchangeDraftKey = "";
 let spectatorUi = null;
 let actionPending = false;
-let seatLayoutFrame = 0;
 let partitionRenderer = null;
-
-const wideSeatLayout = window.matchMedia("(min-width: 761px)");
 
 const sessions = createSessionStore({ gameId: "coup" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
@@ -126,12 +124,6 @@ async function joinGameRoom() {
   } catch (error) { alert(`加入失败：${error.message}`); }
   finally { E.joinRoomButton.disabled = false; }
 }
-async function kickPlayer(playerId) {
-  const player = view.players.find((item) => item.id === playerId);
-  if (!player || player.isHost || !confirm(`确定移出 ${player.name} 吗？进行中的牌局会返回大厅。`)) return;
-  try { await room.kick(playerId); } catch (error) { alert(error.message); }
-}
-
 function roleCard(card, { own = false, selectable = false, selected = false, dataKind = "", slotIndex = null } = {}) {
   const known = Boolean(card.role); const meta = ROLE_META[card.role];
   const label = known ? meta.label : card.revealed ? "已失去" : "隐藏身份";
@@ -154,122 +146,52 @@ function playersFromViewerSeat() {
   return players.slice(selfIndex).concat(players.slice(0, selfIndex));
 }
 
-function ellipseAngles(count, radiusX, radiusY) {
-  if (count <= 1) return [Math.PI / 2];
-  const start = Math.PI / 2;
-  const samples = 720;
-  const points = [];
-  const lengths = [0];
-  let total = 0;
-  let previous = { x: radiusX * Math.cos(start), y: radiusY * Math.sin(start) };
-  points.push({ angle: start, ...previous });
-  for (let index = 1; index <= samples; index += 1) {
-    const angle = start + (Math.PI * 2 * index) / samples;
-    const point = { angle, x: radiusX * Math.cos(angle), y: radiusY * Math.sin(angle) };
-    total += Math.hypot(point.x - previous.x, point.y - previous.y);
-    lengths.push(total);
-    points.push(point);
-    previous = point;
-  }
-  return Array.from({ length: count }, (_, seatIndex) => {
-    const target = (total * seatIndex) / count;
-    const high = lengths.findIndex((length) => length >= target);
-    if (high <= 0) return start;
-    const low = high - 1;
-    const segment = lengths[high] - lengths[low] || 1;
-    const ratio = (target - lengths[low]) / segment;
-    return points[low].angle + (points[high].angle - points[low].angle) * ratio;
-  });
-}
-
-function clearSeatCoordinates(seats) {
-  E.players.classList.remove("ellipse-layout", "layout-fallback");
-  seats.forEach((seat) => {
-    seat.style.removeProperty("--seat-x");
-    seat.style.removeProperty("--seat-y");
-  });
-}
-
-function seatsOverlap(placements, gap = 8) {
-  return placements.some((seat, index) => placements.slice(index + 1).some((other) => (
-    Math.abs(seat.x - other.x) < (seat.width + other.width) / 2 + gap
-    && Math.abs(seat.y - other.y) < (seat.height + other.height) / 2 + gap
-  )));
-}
-
-function layoutPlayerSeats() {
-  seatLayoutFrame = 0;
-  const seats = [...E.players.querySelectorAll(".player-seat")];
-  if (!wideSeatLayout.matches || !seats.length) {
-    clearSeatCoordinates(seats);
-    return;
-  }
-
-  E.players.classList.remove("layout-fallback");
-  E.players.classList.add("ellipse-layout");
-  const boundary = E.seatBoundary.getBoundingClientRect();
-  if (!boundary.width || !boundary.height) return;
-
-  const sizes = seats.map((seat) => {
-    const rect = seat.getBoundingClientRect();
-    return { width: rect.width, height: rect.height };
-  });
-  const widest = Math.max(...sizes.map((size) => size.width));
-  const tallest = Math.max(...sizes.map((size) => size.height));
-  const edgeGap = 8;
-  const radiusX = Math.max(0, boundary.width / 2 - widest / 2 - edgeGap);
-  const radiusY = Math.max(0, boundary.height / 2 - tallest / 2 - edgeGap);
-  const angles = ellipseAngles(seats.length, radiusX, radiusY);
-  const placements = seats.map((seat, index) => ({
-    x: boundary.width / 2 + radiusX * Math.cos(angles[index]),
-    y: boundary.height / 2 + radiusY * Math.sin(angles[index]),
-    ...sizes[index]
-  }));
-
-  if (radiusX < widest * 0.55 || radiusY < tallest * 0.65 || seatsOverlap(placements)) {
-    E.players.classList.remove("ellipse-layout");
-    E.players.classList.add("layout-fallback");
-    seats.forEach((seat) => {
-      seat.style.removeProperty("--seat-x");
-      seat.style.removeProperty("--seat-y");
-    });
-    return;
-  }
-
-  seats.forEach((seat, index) => {
-    seat.style.setProperty("--seat-x", `${placements[index].x}px`);
-    seat.style.setProperty("--seat-y", `${placements[index].y}px`);
-  });
-}
-
-function scheduleSeatLayout() {
-  if (seatLayoutFrame) cancelAnimationFrame(seatLayoutFrame);
-  seatLayoutFrame = requestAnimationFrame(layoutPlayerSeats);
+function playerNameLabel(value, limit = 5) {
+  const characters = [...String(value || "玩家")];
+  return characters.length > limit ? `${characters.slice(0, limit).join("")}…` : characters.join("");
 }
 
 function renderPlayers() {
   const orderedPlayers = playersFromViewerSeat();
   E.players.dataset.count = String(view.players.length);
-  const existing = new Map([...E.players.querySelectorAll(":scope > [data-player-id]")]
+  const existing = new Map([...E.players.querySelectorAll("[data-player-id]")]
     .map((element) => [element.dataset.playerId, element]));
+  const hasSelfSeat = orderedPlayers.some((player) => player.id === view.selfId);
+  const slots = courtSeatSlots(orderedPlayers.length, hasSelfSeat);
+  const rails = { gallery: E.galleryRail, left: E.leftCourtRail, right: E.rightCourtRail, throne: E.throneRail };
+  const railIndexes = { gallery: 0, left: 0, right: 0, throne: 0 };
   orderedPlayers.forEach((player, seatIndex) => {
     const active = player.influences.filter((card) => !card.revealed).length;
+    const slot = slots[seatIndex] || { rail: "gallery" };
     const renderKey = JSON.stringify([player,seatIndex,view.selfId,view.currentPlayerId,view.phase,view.permissions.canKick]);
     let element = existing.get(player.id);
     if (!element) { element = document.createElement("article"); element.dataset.playerId = player.id; }
     if (element.dataset.renderKey !== renderKey) {
       element.dataset.renderKey = renderKey;
       element.setAttribute("data-seat-order", String(seatIndex));
-      element.className = `player-seat ${player.id === view.selfId ? "self" : ""} ${player.id === view.currentPlayerId && view.phase !== "lobby" ? "current" : ""} ${player.eliminated ? "eliminated" : ""} ${!player.connected ? "offline" : ""}`;
-      element.innerHTML = `<header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header><div class="wealth"><span>● ${player.coins} 金币</span><span>${player.eliminated ? "已出局" : `${active} 点影响力`}</span></div><div class="seat-cards">${player.influences.map((card, index) => roleCard(card, { slotIndex: index })).join("") || '<p class="waiting">等待开局</p>'}</div>`;
-      const kick = element.querySelector("[data-kick]"); if (kick) kick.onclick = () => kickPlayer(kick.dataset.kick);
+      element.innerHTML = `<header><div><b title="${escapeHtml(player.name)}">${escapeHtml(playerNameLabel(player.name))}</b><small>${player.id === view.selfId ? "你 · " : ""}${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div></header><div class="wealth"><span>● ${player.coins} 金币</span><span>${player.eliminated ? "已出局" : `${active} 点影响力`}</span></div><div class="seat-cards">${player.influences.map((card, index) => roleCard(card, { slotIndex: index })).join("") || '<p class="waiting">等待开局</p>'}</div><span class="seat-admin-proxy" data-kick="${escapeHtml(player.id)}" aria-hidden="true"></span>`;
     }
-    const expected = E.players.children[seatIndex]; if (expected !== element) E.players.insertBefore(element, expected || null);
+    element.dataset.courtRail = slot.rail;
+    element.classList.add("player-seat");
+    element.classList.toggle("self", player.id === view.selfId);
+    element.classList.toggle("current", player.id === view.currentPlayerId && view.phase !== "lobby");
+    element.classList.toggle("eliminated", Boolean(player.eliminated));
+    element.classList.toggle("offline", !player.connected);
+    const manageable = Boolean(view.permissions.canKick && !player.isHost);
+    const adminProxy = element.querySelector("[data-kick]");
+    adminProxy.setAttribute("aria-hidden", String(!manageable));
+    element.tabIndex = manageable ? 0 : -1;
+    element.setAttribute("aria-haspopup", manageable ? "menu" : "false");
+    element.onkeydown = manageable ? (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); element.click(); }
+    } : null;
+    const rail = rails[slot.rail];
+    const railIndex = railIndexes[slot.rail]++;
+    const expected = rail.children[railIndex];
+    if (expected !== element) rail.insertBefore(element, expected || null);
     existing.delete(player.id);
   });
   existing.forEach((element) => element.remove());
-  // Presentation effects resolve seat positions immediately after render.
-  layoutPlayerSeats();
 }
 
 function addButton(text, handler, className = "") {
@@ -453,8 +375,6 @@ async function init() {
   E.startGameButton.onclick = () => submit({ type: "start" }); E.restartGameButton.onclick = () => submit({ type: "restart" });
   E.endGameButton.onclick = () => { if (confirm("确定结束当前牌局并返回大厅吗？")) submit({ type: "end" }); };
   E.toggleLogButton.onclick = () => { const collapsed = E.logList.classList.toggle("collapsed"); E.toggleLogButton.textContent = collapsed ? "展开" : "收起"; };
-  new ResizeObserver(scheduleSeatLayout).observe(E.seatBoundary);
-  wideSeatLayout.addEventListener("change", scheduleSeatLayout);
   selectMode("host"); try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* create/join will report */ }
 }
 init();
