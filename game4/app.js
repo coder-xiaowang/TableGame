@@ -21,7 +21,8 @@ const E = Object.fromEntries([
   "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton",
   "startGameButton", "endGameButton", "blindBadge", "handNumber", "blindLevel", "aliveCount", "notice", "streetName",
   "potValue", "potList", "board", "seats", "actionTitle", "timerText", "timerBar", "actionArea", "logList",
-  "toggleLogButton", "spectatorPanel", "spectatorCountBadge", "spectatorList"
+  "toggleLogButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "seatBoundary",
+  "showdownOverlay", "showdownKicker", "showdownTitle", "showdownResults"
 ].map((id) => [id, $(id)]));
 
 let view = null;
@@ -29,6 +30,7 @@ let spectatorUi = null;
 let actionPending = false;
 let decisionKey = "";
 let raiseDraft = null;
+let seatLayoutFrame = 0;
 
 const sessions = createSessionStore({ gameId: "texas-holdem" });
 const countdown = createCountdown({
@@ -141,11 +143,49 @@ function renderTable() {
     : "";
 }
 
+function playersFromViewerSeat() {
+  const players = [...view.players];
+  const anchorId = view.selfId || players.find((player) => player.isHost)?.id;
+  const anchorIndex = players.findIndex((player) => player.id === anchorId);
+  if (anchorIndex <= 0) return players;
+  return players.slice(anchorIndex).concat(players.slice(0, anchorIndex));
+}
+
+function layoutSeats() {
+  seatLayoutFrame = 0;
+  if (!E.seatBoundary || !E.seats || !view) return;
+  const seats = [...E.seats.querySelectorAll("[data-player-id]")];
+  if (!seats.length) return;
+  const boundary = E.seatBoundary.getBoundingClientRect();
+  if (boundary.width <= 0 || boundary.height <= 0) return;
+  const maximumWidth = Math.max(...seats.map((seat) => seat.offsetWidth || 108));
+  const maximumHeight = Math.max(...seats.map((seat) => seat.offsetHeight || 58));
+  const radiusX = Math.max(0, (boundary.width - maximumWidth) / 2 - 3);
+  const radiusY = Math.max(0, (boundary.height - maximumHeight) / 2 - 3);
+  seats.forEach((seat, index) => {
+    const angle = Math.PI / 2 + (Math.PI * 2 * index) / seats.length;
+    seat.style.setProperty("--seat-x", `${boundary.width / 2 + radiusX * Math.cos(angle)}px`);
+    seat.style.setProperty("--seat-y", `${boundary.height / 2 + radiusY * Math.sin(angle)}px`);
+    seat.dataset.layoutAngle = angle.toFixed(4);
+  });
+  E.seats.dataset.count = String(seats.length);
+}
+
+function scheduleSeatLayout() {
+  if (seatLayoutFrame) cancelAnimationFrame(seatLayoutFrame);
+  seatLayoutFrame = requestAnimationFrame(layoutSeats);
+}
+
 function renderSeats() {
   const existing = new Map([...E.seats.querySelectorAll("[data-player-id]")].map((element) => [element.dataset.playerId, element]));
   const retained = new Set();
-  view.players.forEach((player, index) => {
+  const results = new Map((view.showdownResults || []).map((result) => [String(result.playerId), result]));
+  const winningIds = new Set((view.handWinners || []).flatMap((result) => result.ids).map(String));
+  const showdownActive = view.phase === "handResult" && view.showdown;
+  playersFromViewerSeat().forEach((player, orderIndex) => {
     const id = String(player.id);
+    const index = view.players.findIndex((item) => item.id === player.id);
+    const result = results.get(id);
     let seat = existing.get(id);
     if (!seat) {
       seat = document.createElement("article");
@@ -153,32 +193,74 @@ function renderSeats() {
       seat.innerHTML = `
         <div class="seat-top"><span class="seat-name" data-seat-name></span><span class="chips" data-seat-chips></span></div>
         <div class="seat-meta" data-seat-meta></div><div class="hole" data-seat-hole></div>
+        <span class="seat-bet" data-seat-bet></span><span class="showdown-rank" data-showdown-rank></span>
         <button data-kick-player type="button">•••</button>`;
     }
     retained.add(id);
-    seat.className = `seat ${index === view.currentIndex ? "turn" : ""} ${player.folded ? "folded" : ""} ${player.status !== "active" ? "out" : ""} ${!player.connected ? "offline" : ""}`;
-    seat.querySelector("[data-seat-name]").textContent = `${player.name}${player.id === view.selfId ? " · 你" : ""}`;
-    seat.querySelector("[data-seat-chips]").textContent = String(player.chips);
+    seat.className = `seat ${index === view.currentIndex ? "turn" : ""} ${player.folded ? "folded" : ""} ${player.status !== "active" ? "out" : ""} ${!player.connected ? "offline" : ""} ${showdownActive && result ? "showdown-contender" : ""} ${showdownActive && result && winningIds.has(id) ? "showdown-winner" : ""} ${showdownActive && result && !winningIds.has(id) ? "showdown-loser" : ""}`;
+    seat.dataset.seatOrder = String(orderIndex);
+    seat.querySelector("[data-seat-name]").innerHTML = `<i class="seat-status-dot"></i>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}`;
+    seat.querySelector("[data-seat-chips]").textContent = `筹码 ${player.chips}`;
     const badges = [
       index === view.dealerIndex ? '<i class="dealer">D</i>' : "",
       index === view.smallBlindIndex ? '<i class="blind-tag">SB</i>' : "",
       index === view.bigBlindIndex ? '<i class="blind-tag">BB</i>' : "",
       player.allIn ? '<i class="allin">ALL IN</i>' : ""
     ].join("");
-    const status = player.status === "eliminated" ? "已淘汰" : player.folded ? "已弃牌" : player.streetBet ? `本轮 ${player.streetBet}` : "等待";
-    seat.querySelector("[data-seat-meta]").innerHTML = `${badges}${status} · ${player.connected ? "在线" : "离线"}`;
+    const status = player.status === "eliminated" ? "已淘汰" : player.folded ? "已弃牌" : player.allIn ? "全押" : "";
+    seat.querySelector("[data-seat-meta]").innerHTML = `${badges}${status}`;
+    const bet = seat.querySelector("[data-seat-bet]");
+    bet.textContent = player.streetBet ? `下注 ${player.streetBet}` : "";
+    setHidden(bet, !player.streetBet);
+    seat.querySelector("[data-showdown-rank]").textContent = result?.rankName || "";
     const hole = seat.querySelector("[data-seat-hole]");
     const holeKey = JSON.stringify(player.hole);
     if (hole.dataset.key !== holeKey) { hole.innerHTML = player.hole.map(cardHtml).join(""); hole.dataset.key = holeKey; }
     const kick = seat.querySelector("[data-kick-player]");
     kick.dataset.kickPlayer = id;
     setHidden(kick, !view.permissions?.canKick || player.isHost);
-    const atIndex = E.seats.children[index];
+    const atIndex = E.seats.children[orderIndex];
     if (atIndex !== seat) E.seats.insertBefore(seat, atIndex || null);
   });
   [...E.seats.querySelectorAll("[data-player-id]")].forEach((seat) => {
     if (!retained.has(seat.dataset.playerId)) seat.remove();
   });
+  scheduleSeatLayout();
+}
+
+function resultCardsHtml(cards) {
+  return `<div class="best-five">${(cards || []).map(cardHtml).join("")}</div>`;
+}
+
+function renderShowdown() {
+  const showdown = view.phase === "handResult" && view.showdown;
+  const uncontested = view.phase === "handResult" && !view.showdown;
+  const champion = view.phase === "ended";
+  setHidden(E.showdownOverlay, !showdown && !uncontested && !champion);
+  document.querySelectorAll(".hand-rank-guide li").forEach((item) => item.classList.remove("active"));
+  if (!showdown && !uncontested && !champion) return;
+  if (champion) {
+    const names = view.winnerIds.map((id) => view.players.find((player) => player.id === id)?.name).filter(Boolean);
+    E.showdownKicker.textContent = "TOURNAMENT CHAMPION";
+    E.showdownTitle.textContent = `${names.join("、") || "玩家"} 赢得锦标赛`;
+    E.showdownResults.innerHTML = '<div class="showdown-pot"><b>♛ 最后的筹码持有者</b></div>';
+    return;
+  }
+  E.showdownKicker.textContent = showdown ? "SHOWDOWN" : "POT AWARDED";
+  E.showdownTitle.textContent = showdown ? "最佳五张牌揭晓" : "其他玩家均已弃牌";
+  if (showdown) {
+    const ranks = new Set((view.showdownResults || []).map((result) => String(result.rank?.[0])));
+    for (const rank of ranks) document.querySelector(`.hand-rank-guide li[data-rank="${rank}"]`)?.classList.add("active");
+  }
+  E.showdownResults.innerHTML = (view.handWinners || []).map((pot) => {
+    const winnerNames = pot.ids.map((id) => view.players.find((player) => player.id === id)?.name).filter(Boolean).join("、");
+    const firstResult = (view.showdownResults || []).find((result) => pot.ids.includes(result.playerId));
+    const payoutText = (pot.payouts || []).map((payout) => {
+      const name = view.players.find((player) => player.id === payout.playerId)?.name || "玩家";
+      return `${name} +${payout.amount}`;
+    }).join(" · ");
+    return `<div class="showdown-pot"><span>${escapeHtml(pot.potLabel)} ${pot.amount}</span><b>${escapeHtml(winnerNames)} · ${escapeHtml(pot.rankName)}</b>${firstResult ? resultCardsHtml(firstResult.bestFive) : ""}<span>${escapeHtml(payoutText)}</span></div>`;
+  }).join("");
 }
 
 function actionContextKey() {
@@ -263,7 +345,8 @@ function renderLog() {
 
 function renderTimer() {
   if (view.deadline && ["playing", "handResult"].includes(view.phase)) {
-    countdown.start(view.deadline, view.phase === "playing" ? view.actionDurationMs : 5000);
+    const resultDuration = view.showdown ? 9000 : 4500;
+    countdown.start(view.deadline, view.phase === "playing" ? view.actionDurationMs : resultDuration);
   } else {
     countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0";
   }
@@ -275,6 +358,7 @@ function render() {
   renderRoomShell();
   renderTable();
   renderSeats();
+  renderShowdown();
   renderNotice();
   renderActions();
   renderLog();
@@ -286,7 +370,16 @@ E.startGameButton.onclick = () => submit({ type: "start" });
 E.endGameButton.onclick = () => {
   if (confirm("确定结束当前锦标赛并返回准备阶段吗？本局筹码和成绩将被清空。")) submit({ type: "end" });
 };
-E.toggleLogButton.onclick = () => E.logList.classList.toggle("collapsed");
+E.toggleLogButton.onclick = () => {
+  const collapsed = E.logList.classList.toggle("collapsed");
+  E.toggleLogButton.textContent = collapsed ? "展开" : "收起";
+};
+
+if (globalThis.ResizeObserver) {
+  const seatResizeObserver = new ResizeObserver(scheduleSeatLayout);
+  seatResizeObserver.observe(E.seatBoundary);
+}
+window.addEventListener("resize", scheduleSeatLayout);
 
 async function init() {
   roomEntry.bind();

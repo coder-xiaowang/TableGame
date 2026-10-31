@@ -65,17 +65,26 @@ export function compareRanks(left, right) {
 }
 
 export function evaluateBestHand(cards) {
+  return evaluateBestFive(cards).rank;
+}
+
+export function evaluateBestFive(cards) {
   if (!Array.isArray(cards) || cards.length < 5) throw new TypeError("at least five cards are required");
   let best = null;
+  let bestCards = null;
   for (let a = 0; a < cards.length - 4; a += 1)
     for (let b = a + 1; b < cards.length - 3; b += 1)
       for (let c = b + 1; c < cards.length - 2; c += 1)
         for (let d = c + 1; d < cards.length - 1; d += 1)
           for (let e = d + 1; e < cards.length; e += 1) {
-            const rank = fiveCardRank([cards[a], cards[b], cards[c], cards[d], cards[e]]);
-            if (!best || compareRanks(rank, best) > 0) best = rank;
+            const candidate = [cards[a], cards[b], cards[c], cards[d], cards[e]];
+            const rank = fiveCardRank(candidate);
+            if (!best || compareRanks(rank, best) > 0) {
+              best = rank;
+              bestCards = candidate.map((card) => ({ ...card }));
+            }
           }
-  return best;
+  return { rank: best, cards: bestCards };
 }
 
 export function rankName(rank) {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { blindInfo, compareRanks, evaluateBestHand, rankName } from "./rules.mjs";
+import { blindInfo, compareRanks, evaluateBestFive, evaluateBestHand, rankName } from "./rules.mjs";
 
 const card = (r, s) => ({ r, s });
 
@@ -30,4 +30,14 @@ test("七张牌评估覆盖皇家同花顺、葫芦和A2345顺子", () => {
 test("同牌型按关键牌和踢脚逐项比较", () => {
   assert.ok(compareRanks([1, 14, 13, 9, 2], [1, 14, 12, 11, 10]) > 0);
   assert.equal(compareRanks([2, 10, 8, 14], [2, 10, 8, 14]), 0);
+});
+
+test("最佳牌型评估同时返回用于摊牌展示的准确五张牌", () => {
+  const cards = [
+    card(14, "♠"), card(13, "♠"), card(12, "♠"), card(11, "♠"), card(10, "♠"), card(10, "♥"), card(2, "♣")
+  ];
+  const result = evaluateBestFive(cards);
+  assert.equal(rankName(result.rank), "同花顺");
+  assert.equal(result.cards.length, 5);
+  assert.deepEqual(new Set(result.cards.map((item) => item.s)), new Set(["♠"]));
 });

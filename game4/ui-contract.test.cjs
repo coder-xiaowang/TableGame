@@ -38,6 +38,25 @@ test("无关广播不会重建正在输入加注金额的决策区", () => {
   assert.doesNotMatch(script, /deadline: view\.deadline/);
 });
 
+test("牌桌采用本地明确边界排座并提供权威摊牌演出", () => {
+  const html = read("index.html");
+  const script = read("app.js");
+  const css = read("layout.css");
+  assert.match(html, /id="seatBoundary"/);
+  assert.match(html, /class="hand-rank-guide"/);
+  assert.match(html, /id="showdownOverlay"/);
+  assert.match(html, /class="action-panel table-action-dock"/);
+  assert.match(script, /function playersFromViewerSeat/);
+  assert.match(script, /Math\.PI \/ 2/);
+  assert.match(script, /--seat-x/);
+  assert.match(script, /new ResizeObserver\(scheduleSeatLayout\)/);
+  assert.match(script, /renderShowdown\(\)/);
+  assert.match(css, /\.seat-boundary/);
+  assert.match(css, /\.showdown-winner/);
+  assert.match(css, /\.table-action-dock/);
+  assert.doesNotMatch(script, /shared.*round|create.*RoundTable/i);
+});
+
 test("权威服务使用独立SQLite和8790默认端口", () => {
   const server = read("signal-server.js");
   assert.match(server, /GAME4_DB_PATH/);

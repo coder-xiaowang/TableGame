@@ -1,5 +1,5 @@
 import {
-  ACTION_SECONDS, STARTING_CHIPS, blindInfo, cardKey, compareRanks, createDeck, evaluateBestHand, rankName
+  ACTION_SECONDS, STARTING_CHIPS, blindInfo, cardKey, compareRanks, createDeck, evaluateBestFive, rankName
 } from "../rules.mjs";
 
 export const STATE_VERSION = 1;
@@ -7,8 +7,8 @@ export { ACTION_SECONDS };
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 export const SUPPORTS_SPECTATORS = true;
-const HAND_RESULT_MS = 5000;
-const TOURNAMENT_RESULT_MS = 3500;
+const SHOWDOWN_RESULT_MS = 9000;
+const UNCONTESTED_RESULT_MS = 4500;
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {
@@ -141,7 +141,7 @@ function endHand(state, showdown, now) {
     }
   }
   state.phase = "handResult";
-  state.deadline = now + (alive(state).length <= 1 ? TOURNAMENT_RESULT_MS : HAND_RESULT_MS);
+  state.deadline = now + (showdown ? SHOWDOWN_RESULT_MS : UNCONTESTED_RESULT_MS);
 }
 
 function awardUncontested(state, now) {
@@ -149,7 +149,7 @@ function awardUncontested(state, now) {
   const amount = state.players.reduce((sum, player) => sum + player.totalBet, 0);
   if (winner) {
     winner.chips += amount;
-    state.handWinners = [{ ids: [winner.id], amount, rankName: "其他玩家均弃牌" }];
+    state.handWinners = [{ potIndex: 0, potLabel: "底池", ids: [winner.id], amount, rankName: "其他玩家均弃牌", payouts: [{ playerId: winner.id, amount }] }];
     addLog(state, `${winner.name} 赢得底池 ${amount}（其他玩家均弃牌）`, now);
   }
   endHand(state, false, now);
@@ -167,23 +167,45 @@ function winnerOrderFromDealer(state, winners) {
 function showdown(state, now) {
   state.showdown = true;
   state.handWinners = [];
-  for (const pot of pots(state)) {
+  state.showdownResults = [];
+  const rankings = new Map();
+  for (const player of state.players.filter((item) => item.status === "active" && !item.folded)) {
+    const result = evaluateBestFive([...player.hole, ...state.board]);
+    const publicResult = { playerId: player.id, rank: [...result.rank], rankName: rankName(result.rank), bestFive: result.cards.map((card) => ({ ...card })) };
+    rankings.set(player.id, publicResult);
+    state.showdownResults.push(publicResult);
+  }
+  const allPots = pots(state);
+  for (let potIndex = 0; potIndex < allPots.length; potIndex += 1) {
+    const pot = allPots[potIndex];
     const candidates = state.players.filter((player) => pot.eligible.includes(player.id));
     if (!candidates.length) continue;
     let best = null;
     let winners = [];
     for (const player of candidates) {
-      const rank = evaluateBestHand([...player.hole, ...state.board]);
+      const rank = rankings.get(player.id).rank;
       if (!best || compareRanks(rank, best) > 0) { best = rank; winners = [player]; }
       else if (compareRanks(rank, best) === 0) winners.push(player);
     }
     const share = Math.floor(pot.amount / winners.length);
     const remainder = pot.amount % winners.length;
-    for (const winner of winners) winner.chips += share;
     const ordered = winnerOrderFromDealer(state, winners);
-    for (let index = 0; index < remainder; index += 1) ordered[index % ordered.length].chips += 1;
+    const payouts = winners.map((winner) => ({ playerId: winner.id, amount: share }));
+    for (const payout of payouts) state.players.find((player) => player.id === payout.playerId).chips += payout.amount;
+    for (let index = 0; index < remainder; index += 1) {
+      const receiver = ordered[index % ordered.length];
+      receiver.chips += 1;
+      payouts.find((payout) => payout.playerId === receiver.id).amount += 1;
+    }
     const label = rankName(best);
-    state.handWinners.push({ ids: winners.map((winner) => winner.id), amount: pot.amount, rankName: label });
+    state.handWinners.push({
+      potIndex,
+      potLabel: allPots.length === 1 ? "底池" : potIndex === 0 ? "主池" : `边池 ${potIndex}`,
+      ids: winners.map((winner) => winner.id),
+      amount: pot.amount,
+      rankName: label,
+      payouts
+    });
     addLog(state, `${winners.map((winner) => winner.name).join("、")} 以${label}赢得 ${pot.amount}`, now);
   }
   endHand(state, true, now);
@@ -222,6 +244,7 @@ function startHand(state, now, random) {
   state.handNumber += 1;
   state.showdown = false;
   state.handWinners = [];
+  state.showdownResults = [];
   state.street = "preflop";
   state.board = [];
   state.burned = [];
@@ -274,6 +297,7 @@ function resetToLobby(state) {
   state.logSequence = 0;
   state.showdown = false;
   state.handWinners = [];
+  state.showdownResults = [];
   state.winnerIds = [];
   for (const player of state.players) Object.assign(player, {
     chips: STARTING_CHIPS, status: "active", hole: [], folded: false, allIn: false,
@@ -287,7 +311,7 @@ export function createLobby({ capacity, host }) {
     players: [makePlayer({ ...host, isHost: true })], handNumber: 0, dealerIndex: -1,
     street: "waiting", board: [], burned: [], deck: [], currentIndex: null, currentBet: 0,
     lastFullRaise: 20, smallBlindIndex: null, bigBlindIndex: null, deadline: 0,
-    logs: [], logSequence: 0, showdown: false, handWinners: [], winnerIds: []
+    logs: [], logSequence: 0, showdown: false, showdownResults: [], handWinners: [], winnerIds: []
   };
 }
 
@@ -438,7 +462,12 @@ function buildPublicState(state, viewerId, permissions) {
     bigBlindIndex: state.bigBlindIndex, deadline: state.deadline, showdown: state.showdown,
     blind: currentBlind(state), logs: state.logs.map((entry) => ({ ...entry })),
     pots: pots(state).map((pot) => ({ amount: pot.amount, eligible: [...pot.eligible] })),
-    handWinners: state.handWinners.map((result) => ({ ...result, ids: [...result.ids] })),
+    showdownResults: state.showdownResults.map((result) => ({
+      ...result, rank: [...result.rank], bestFive: result.bestFive.map((card) => ({ ...card }))
+    })),
+    handWinners: state.handWinners.map((result) => ({
+      ...result, ids: [...result.ids], payouts: result.payouts.map((payout) => ({ ...payout }))
+    })),
     winnerIds: [...state.winnerIds], actionDurationMs: ACTION_SECONDS * 1000,
     players: state.players.map((player, index) => publicPlayer(player, index, state, viewerId, reveal)),
     permissions
@@ -489,6 +518,12 @@ export function serializeState(state) {
 
 export function restoreState(serialized) {
   const state = structuredClone(serialized);
+  state.showdownResults ??= [];
+  state.handWinners ??= [];
+  for (const result of state.handWinners) {
+    result.potLabel ??= result.potIndex ? `边池 ${result.potIndex}` : "底池";
+    result.payouts ??= (result.ids || []).map((playerId) => ({ playerId, amount: 0 }));
+  }
   validateState(state);
   return state;
 }

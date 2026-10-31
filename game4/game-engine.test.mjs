@@ -71,8 +71,24 @@ test("服务器能够从翻牌前完整推进到河牌摊牌并分配底池", ()
   assert.equal(state.showdown, true);
   assert.equal(state.board.length, 5);
   assert.equal(state.handWinners.length > 0, true);
+  assert.equal(state.showdownResults.length, 2);
+  assert.equal(state.showdownResults.every((result) => result.bestFive.length === 5 && result.rankName), true);
+  assert.equal(state.handWinners.every((pot) => pot.potLabel && pot.payouts.length > 0), true);
+  assert.equal(state.handWinners.reduce((sum, pot) => sum + pot.payouts.reduce((part, payout) => part + payout.amount, 0), 0), 40);
+  const publicView = buildView(state, "host");
+  assert.equal(publicView.showdownResults.every((result) => result.bestFive.length === 5), true);
   assert.equal(state.players.reduce((sum, player) => sum + player.chips, 0), 2000);
   assert.equal(validateState(state), true);
+});
+
+test("恢复旧快照时补齐摊牌演出字段", () => {
+  const state = lobby(2);
+  delete state.showdownResults;
+  state.handWinners = [{ potIndex: 0, ids: ["host"], amount: 20, rankName: "其他玩家均弃牌" }];
+  const restored = restoreState(state);
+  assert.deepEqual(restored.showdownResults, []);
+  assert.equal(restored.handWinners[0].potLabel, "底池");
+  assert.deepEqual(restored.handWinners[0].payouts, [{ playerId: "host", amount: 0 }]);
 });
 
 test("掉线状态、房间快照和恢复都由服务端状态承载", () => {
