@@ -1,75 +1,301 @@
 "use strict";
-const SUITS=["♠","♥","♦","♣"],RANKS=[2,3,4,5,6,7,8,9,10,11,12,13,14];
-const BLINDS=[[10,20],[15,30],[25,50],[40,80],[60,120],[100,200],[150,300],[250,500]];
-let mode="host",selfId="",roomCode="",hostId="",resumeToken="",events=null,state=null,guestView=null,actionTimer=null,countdownTimer=null,nextHandTimer=null;
-const $=id=>document.getElementById(id),E={connectionStatus:$("connectionStatus"),setupPanel:$("setupPanel"),roomPanel:$("roomPanel"),hostModeButton:$("hostModeButton"),guestModeButton:$("guestModeButton"),hostSetup:$("hostSetup"),guestSetup:$("guestSetup"),hostNameInput:$("hostNameInput"),guestNameInput:$("guestNameInput"),playerCountSelect:$("playerCountSelect"),createRoomButton:$("createRoomButton"),joinRoomButton:$("joinRoomButton"),roomCodeInput:$("roomCodeInput"),roomCodeDisplay:$("roomCodeDisplay"),hostTools:$("hostTools"),roomPlayerCountSelect:$("roomPlayerCountSelect"),startGameButton:$("startGameButton"),endGameButton:$("endGameButton"),blindBadge:$("blindBadge"),handNumber:$("handNumber"),blindLevel:$("blindLevel"),aliveCount:$("aliveCount"),notice:$("notice"),streetName:$("streetName"),potValue:$("potValue"),potList:$("potList"),board:$("board"),seats:$("seats"),actionTitle:$("actionTitle"),timerText:$("timerText"),timerBar:$("timerBar"),actionArea:$("actionArea"),logList:$("logList"),toggleLogButton:$("toggleLogButton")};
-const uid=p=>`${p}_${Math.random().toString(36).slice(2,10)}`,name=(v,d)=>String(v||"").trim().slice(0,12)||d,esc=v=>String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-const sessionKey=code=>`tablegame:poker:${code}`;const loadSession=code=>{try{return JSON.parse(localStorage.getItem(sessionKey(code))||"null")}catch{return null}};const saveSession=n=>localStorage.setItem(sessionKey(roomCode),JSON.stringify({playerId:selfId,resumeToken,name:n}));const clearSession=()=>roomCode&&localStorage.removeItem(sessionKey(roomCode));
-async function post(path,data){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)throw new Error(await r.text());return r.json()}
-async function signal(to,payload){return post("/api/signal",{roomCode,from:selfId,resumeToken,to,payload})}
-function openEvents(id){events?.close();events=new EventSource(`/api/events?clientId=${encodeURIComponent(id)}&roomCode=${encodeURIComponent(roomCode)}&resumeToken=${encodeURIComponent(resumeToken)}`);events.addEventListener("signal",e=>receive(JSON.parse(e.data)));events.onopen=()=>E.connectionStatus.textContent=`已连接房间 ${roomCode}`;events.onerror=()=>E.connectionStatus.textContent="联机服务正在重连"}
-function receive(msg){const p=msg.payload;if(mode==="host"&&p?.kind==="hello")return admit(msg.from,p.name);if(mode==="host"&&p?.kind==="presence")return updatePresence(p.playerId,p.connected);if(mode==="host"&&p?.kind==="action")return act(msg.from,p.action);if(mode==="guest"&&p?.kind==="view"){guestView=p.view;enter();render()}if(mode==="guest"&&p?.kind==="rejected"){events?.close();alert(p.message);E.connectionStatus.textContent="加入失败"}if(p?.kind==="kicked"){clearSession();events?.close();alert("你已被房主移出房间。");location.reload()}}
-function setMode(m){mode=m;E.hostModeButton.classList.toggle("active",m==="host");E.guestModeButton.classList.toggle("active",m==="guest");E.hostSetup.classList.toggle("hidden",m!=="host");E.guestSetup.classList.toggle("hidden",m!=="guest")}
-function enter(){E.setupPanel.classList.add("hidden");E.roomPanel.classList.remove("hidden");E.hostTools.classList.toggle("hidden",mode!=="host");E.roomCodeDisplay.textContent=roomCode}
-function player(id,n,host=false){return{id,name:n,isHost:host,connected:true,chips:1000,status:"active",hole:[],folded:false,allIn:false,streetBet:0,totalBet:0,acted:false}}
-async function createRoom(){selfId=uid("host");state={phase:"lobby",capacity:Number(E.playerCountSelect.value),players:[player(selfId,name(E.hostNameInput.value,"房主"),true)],handNumber:0,dealerIndex:-1,street:"waiting",board:[],deck:[],currentIndex:null,currentBet:0,lastFullRaise:20,smallBlindIndex:null,bigBlindIndex:null,actionDeadline:0,logs:[],showdown:false};try{const r=await post("/api/rooms",{hostId:selfId,name:state.players[0].name});roomCode=r.roomCode;resumeToken=r.resumeToken;E.roomPlayerCountSelect.value=state.capacity;openEvents(selfId);enter();render()}catch{alert("无法创建房间，请先运行 node game4/signal-server.js")}}
-async function joinRoom(){roomCode=E.roomCodeInput.value.trim().toUpperCase();if(!/^[A-Z0-9]{4}$/.test(roomCode))return alert("请输入四位房间号。");const saved=loadSession(roomCode);selfId=saved?.playerId||uid("guest");try{const r=await post("/api/join",{roomCode,clientId:selfId,resumeToken:saved?.resumeToken,name:saved?"":name(E.guestNameInput.value,"玩家")});selfId=r.clientId;resumeToken=r.resumeToken;hostId=r.hostId;openEvents(selfId);const n=saved?.name||name(E.guestNameInput.value,"玩家");await signal(hostId,{kind:"hello",name:n,resumed:r.resumed});saveSession(n)}catch{alert("房间不存在、身份已失效或联机服务未启动。")}}
-function admit(id,n){const existing=state.players.find(p=>p.id===id);if(existing){existing.connected=true;return sync()}if(state.phase!=="lobby")return signal(id,{kind:"rejected",message:"比赛已经开始，不允许中途加入。"});if(state.players.length>=state.capacity)return signal(id,{kind:"rejected",message:"房间人数已满。"});state.players.push(player(id,name(n,"玩家")));sync()}
-function changeCapacity(){const n=Number(E.roomPlayerCountSelect.value);if(n<state.players.length){alert("人数不能少于已经加入的玩家。");E.roomPlayerCountSelect.value=state.capacity;return}state.capacity=n;sync()}
-function updatePresence(id,connected){const p=state?.players.find(x=>x.id===id);if(!p||p.connected===connected)return;p.connected=connected;if(!connected&&state.phase==="playing"&&p.status==="active"&&!p.folded){p.folded=true;p.acted=true;log(`${p.name} 离线，自动弃牌`);if(state.currentIndex!=null&&state.players[state.currentIndex].id===id)afterAction();else sync()}else sync()}
-async function kickPlayer(id){const p=state?.players.find(x=>x.id===id);if(!p||p.isHost||!confirm(`确定要移出 ${p.name} 吗？`))return;try{await post("/api/kick",{roomCode,hostId:selfId,resumeToken,playerId:id});if(state.phase==="lobby"){state.players=state.players.filter(x=>x.id!==id);sync();return}p.kicked=true;p.connected=false;p.status="eliminated";p.folded=true;log(`${p.name} 被房主移出`);if(state.currentIndex!=null&&state.players[state.currentIndex].id===id)afterAction();else sync()}catch{alert("无法移出该玩家，请检查服务器连接。")}}
-function alive(){return state.players.filter(p=>p.status==="active"&&p.chips>0)}
-function nextIndex(from,predicate=p=>p.status==="active"&&p.chips>0){for(let step=1;step<=state.players.length;step++){const i=(from+step)%state.players.length;if(predicate(state.players[i]))return i}return null}
-function blindInfo(){
-  const level=Math.floor(Math.max(0,state.handNumber-1)/5);
-  if(level<BLINDS.length)return{level:level+1,sb:BLINDS[level][0],bb:BLINDS[level][1]};
-  let sb=BLINDS[BLINDS.length-1][0];
-  for(let n=BLINDS.length;n<=level;n++)sb=Math.ceil(sb*1.5/50)*50;
-  return{level:level+1,sb,bb:sb*2};
+
+import {
+  createAuthoritativeRoomClient,
+  createCountdown,
+  createRoomEntryController,
+  createSessionStore,
+  createSpectatorUi,
+  escapeHtml,
+  renderConnectionStatus,
+  renderCountdown,
+  setHidden
+} from "/shared/client/index.js";
+
+const PROTOCOL_VERSION = 3;
+const ACTION_SECONDS = 60;
+const $ = (id) => document.getElementById(id);
+const E = Object.fromEntries([
+  "connectionStatus", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup",
+  "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput",
+  "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton",
+  "startGameButton", "endGameButton", "blindBadge", "handNumber", "blindLevel", "aliveCount", "notice", "streetName",
+  "potValue", "potList", "board", "seats", "actionTitle", "timerText", "timerBar", "actionArea", "logList",
+  "toggleLogButton", "spectatorPanel", "spectatorCountBadge", "spectatorList"
+].map((id) => [id, $(id)]));
+
+let view = null;
+let spectatorUi = null;
+let actionPending = false;
+let decisionKey = "";
+let raiseDraft = null;
+
+const sessions = createSessionStore({ gameId: "texas-holdem" });
+const countdown = createCountdown({
+  onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); }
+});
+
+const room = createAuthoritativeRoomClient({
+  protocolVersion: PROTOCOL_VERSION,
+  sessionStore: sessions,
+  onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
+  handlers: {
+    onView(nextView) {
+      actionPending = false;
+      view = nextView;
+      enterRoom();
+      render();
+    },
+    onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
+    onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
+  }
+});
+
+spectatorUi = createSpectatorUi({
+  room,
+  getView: () => view,
+  elements: {
+    joinIntentField: E.joinIntentField,
+    seatActionButton: E.seatActionButton,
+    spectatorSettingButton: E.spectatorSettingButton,
+    spectatorPanel: E.spectatorPanel,
+    spectatorCountBadge: E.spectatorCountBadge,
+    spectatorList: E.spectatorList
+  },
+  notify: (message) => alert(message),
+  confirmAction: (message) => confirm(message),
+  onSessionEnded: () => location.reload()
+});
+
+const roomEntry = createRoomEntryController({
+  room,
+  spectatorUi,
+  elements: {
+    root: E.setupPanel, hostModeButton: E.hostModeButton, guestModeButton: E.guestModeButton,
+    hostSetup: E.hostSetup, guestSetup: E.guestSetup, hostTools: E.hostTools,
+    hostNameInput: E.hostNameInput, guestNameInput: E.guestNameInput, roomCodeInput: E.roomCodeInput,
+    createRoomButton: E.createRoomButton, joinRoomButton: E.joinRoomButton, connectionStatus: E.connectionStatus
+  },
+  buildCreatePayload: () => ({ capacity: Number(E.playerCountSelect.value) }),
+  formatError: (kind, error) => kind === "create"
+    ? `创建失败：${error.message}\n请确认已启动 game4 权威服务。`
+    : `加入失败：${error.message}`
+});
+
+function enterRoom() {
+  setHidden(E.setupPanel, true);
+  setHidden(E.roomPanel, false);
+  E.roomCodeDisplay.textContent = room.snapshot().roomCode;
 }
-function deck(){const d=[];for(const s of SUITS)for(const r of RANKS)d.push({r,s});for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d}
-function log(text){state.logs.unshift({id:uid("log"),text});state.logs=state.logs.slice(0,80)}
-function startTournament(){if(state.players.length!==state.capacity)return alert(`需要 ${state.capacity} 人到齐。`);if(state.players.some(p=>!p.connected))return alert("所有玩家在线后才能开始。");state.phase="playing";state.players.forEach(p=>{p.chips=1000;p.status="active"});state.handNumber=0;state.dealerIndex=-1;startHand()}
-function endGame(){if(mode!=="host"||!state||state.phase==="lobby")return;if(!confirm("确定结束当前游戏并返回准备阶段吗？本局筹码和成绩将被清空。"))return;clearTimeout(actionTimer);clearTimeout(nextHandTimer);state.phase="lobby";state.players=state.players.filter(p=>!p.kicked);state.handNumber=0;state.dealerIndex=-1;state.street="waiting";state.board=[];state.deck=[];state.currentIndex=null;state.currentBet=0;state.lastFullRaise=20;state.smallBlindIndex=null;state.bigBlindIndex=null;state.actionDeadline=0;state.logs=[];state.showdown=false;state.players.forEach(p=>{p.chips=1000;p.status="active";p.hole=[];p.folded=false;p.allIn=false;p.streetBet=0;p.totalBet=0;p.acted=false});sync()}
-function startHand(){clearTimeout(nextHandTimer);if(alive().length<=1)return finishTournament();state.handNumber++;state.showdown=false;state.street="preflop";state.board=[];state.deck=deck();state.currentBet=0;state.actionDeadline=0;state.players.forEach(p=>{p.hole=[];p.folded=p.status!=="active";p.allIn=false;p.streetBet=0;p.totalBet=0;p.acted=false});state.dealerIndex=nextIndex(state.dealerIndex);const active=alive();if(active.length===2){state.smallBlindIndex=state.dealerIndex;state.bigBlindIndex=nextIndex(state.dealerIndex)}else{state.smallBlindIndex=nextIndex(state.dealerIndex);state.bigBlindIndex=nextIndex(state.smallBlindIndex)}for(let round=0;round<2;round++)for(let step=1;step<=state.players.length;step++){const i=(state.dealerIndex+step)%state.players.length,p=state.players[i];if(p.status==="active")p.hole.push(state.deck.pop())}const b=blindInfo();postBlind(state.smallBlindIndex,b.sb,"小盲");postBlind(state.bigBlindIndex,b.bb,"大盲");state.currentBet=b.bb;state.lastFullRaise=b.bb;state.currentIndex=nextIndex(state.bigBlindIndex,p=>canAct(p));log(`第 ${state.handNumber} 手开始，盲注 ${b.sb}/${b.bb}`);afterStateChange()}
-function postBlind(i,amount,label){const p=state.players[i],paid=Math.min(amount,p.chips);p.chips-=paid;p.streetBet=paid;p.totalBet=paid;if(!p.chips)p.allIn=true;log(`${p.name} 支付${label} ${paid}`)}
-function canAct(p){return p.status==="active"&&!p.folded&&!p.allIn&&p.chips>0}
-function live(){return state.players.filter(p=>p.status==="active"&&!p.folded)}
-function submit(action){if(mode==="host")act(selfId,action);else signal(hostId,{kind:"action",action}).catch(()=>E.connectionStatus.textContent="操作发送失败")}
-function act(id,a){if(state.phase!=="playing"||state.currentIndex==null)return;const p=state.players[state.currentIndex];if(p.id!==id||!canAct(p))return;const owed=Math.max(0,state.currentBet-p.streetBet);
- if(a.type==="fold"){p.folded=true;p.acted=true;log(`${p.name} 弃牌`)}
- else if(a.type==="check"&&owed===0){p.acted=true;log(`${p.name} 过牌`)}
- else if(a.type==="call"&&owed>0){const paid=Math.min(owed,p.chips);commit(p,paid);p.acted=true;log(`${p.name}${paid<owed?"全押":"跟注"} ${paid}`)}
- else if(a.type==="raise"){if(p.acted)return;let target=Math.floor(Number(a.target));const max=p.streetBet+p.chips;if(!Number.isFinite(target)||target<=state.currentBet)return;target=Math.min(target,max);const increment=target-state.currentBet,isAllIn=target===max,minimum=state.currentBet===0?blindInfo().bb:state.lastFullRaise;if(increment<minimum&&!isAllIn)return;const paid=target-p.streetBet;if(paid<=0)return;commit(p,paid);if(increment>=minimum){state.lastFullRaise=increment;state.players.forEach(x=>{if(canAct(x))x.acted=false})}state.currentBet=Math.max(state.currentBet,target);p.acted=true;log(`${p.name}${p.allIn?"全押到":state.currentBet===target?"加注到":"下注"} ${target}`)}else return;
- afterAction()}
-function commit(p,amount){const paid=Math.min(amount,p.chips);p.chips-=paid;p.streetBet+=paid;p.totalBet+=paid;if(p.chips===0)p.allIn=true}
-function afterAction(){clearTimeout(actionTimer);if(live().length===1)return awardUncontested();if(roundComplete())return advanceStreet();state.currentIndex=nextIndex(state.currentIndex,p=>canAct(p));afterStateChange()}
-function roundComplete(){const actors=state.players.filter(canAct);if(!actors.length)return true;if(actors.length===1&&actors[0].streetBet===state.currentBet)return true;return actors.every(p=>p.acted&&p.streetBet===state.currentBet)}
-function advanceStreet(){clearTimeout(actionTimer);if(state.street==="river")return showdown();state.players.forEach(p=>{p.streetBet=0;p.acted=false});state.currentBet=0;state.lastFullRaise=blindInfo().bb;if(state.street==="preflop"){state.deck.pop();state.board.push(state.deck.pop(),state.deck.pop(),state.deck.pop());state.street="flop"}else if(state.street==="flop"){state.deck.pop();state.board.push(state.deck.pop());state.street="turn"}else{state.deck.pop();state.board.push(state.deck.pop());state.street="river"}log({flop:"翻牌",turn:"转牌",river:"河牌"}[state.street]);const actors=state.players.filter(canAct);if(actors.length<=1)return advanceStreet();state.currentIndex=nextIndex(state.dealerIndex,p=>canAct(p));afterStateChange()}
-function afterStateChange(){if(state.phase!=="playing")return sync();const p=state.players[state.currentIndex];if(!p||!canAct(p)){if(roundComplete())return advanceStreet();state.currentIndex=nextIndex(state.currentIndex,p=>canAct(p))}state.actionDeadline=Date.now()+60000;sync();clearTimeout(actionTimer);actionTimer=setTimeout(autoAction,60050)}
-function autoAction(){if(mode!=="host"||state.phase!=="playing"||state.currentIndex==null)return;const p=state.players[state.currentIndex],owed=Math.max(0,state.currentBet-p.streetBet);act(p.id,{type:owed===0?"check":"fold"})}
-function awardUncontested(){const winner=live()[0],pot=state.players.reduce((s,p)=>s+p.totalBet,0);winner.chips+=pot;log(`${winner.name} 赢得底池 ${pot}（其他玩家均弃牌）`);endHand(false)}
-function pots(){const levels=[...new Set(state.players.map(p=>p.totalBet).filter(Boolean))].sort((a,b)=>a-b);let prev=0;return levels.map(level=>{const contributors=state.players.filter(p=>p.totalBet>=level),amount=(level-prev)*contributors.length,eligible=contributors.filter(p=>!p.folded&&p.status==="active").map(p=>p.id);prev=level;return{amount,eligible}}).filter(p=>p.amount>0)}
-function showdown(){state.showdown=true;const allPots=pots();for(const pot of allPots){const candidates=state.players.filter(p=>pot.eligible.includes(p.id));if(!candidates.length)continue;let best=null,winners=[];for(const p of candidates){const rank=evaluate([...p.hole,...state.board]);if(!best||compareRank(rank,best)>0){best=rank;winners=[p]}else if(compareRank(rank,best)===0)winners.push(p)}const share=Math.floor(pot.amount/winners.length),remainder=pot.amount%winners.length;winners.forEach(p=>p.chips+=share);for(let n=0;n<remainder;n++){const i=nextWinningFromDealer(winners,n);i.chips++}log(`${winners.map(p=>p.name).join("、")} 以${rankName(best)}赢得 ${pot.amount}`)}endHand(true)}
-function nextWinningFromDealer(winners,offset){const ordered=[];for(let step=1;step<=state.players.length;step++){const p=state.players[(state.dealerIndex+step)%state.players.length];if(winners.includes(p))ordered.push(p)}return ordered[offset%ordered.length]}
-function endHand(show){clearTimeout(actionTimer);state.currentIndex=null;state.actionDeadline=0;state.showdown=show;state.players.forEach(p=>{if(p.chips===0){p.status="eliminated";log(`${p.name} 被淘汰`)}});sync();if(alive().length<=1){nextHandTimer=setTimeout(finishTournament,3500)}else nextHandTimer=setTimeout(startHand,5000)}
-function finishTournament(){clearTimeout(actionTimer);clearTimeout(nextHandTimer);state.phase="ended";state.currentIndex=null;state.actionDeadline=0;const winner=alive()[0];if(winner)log(`${winner.name} 获得锦标赛冠军！`);sync()}
-function evaluate(cards){let best=null;for(let a=0;a<cards.length-4;a++)for(let b=a+1;b<cards.length-3;b++)for(let c=b+1;c<cards.length-2;c++)for(let d=c+1;d<cards.length-1;d++)for(let e=d+1;e<cards.length;e++){const r=five([cards[a],cards[b],cards[c],cards[d],cards[e]]);if(!best||compareRank(r,best)>0)best=r}return best}
-function five(cards){const rs=cards.map(c=>c.r).sort((a,b)=>b-a),counts={};rs.forEach(r=>counts[r]=(counts[r]||0)+1);const groups=Object.entries(counts).map(([r,n])=>({r:+r,n})).sort((a,b)=>b.n-a.n||b.r-a.r),flush=cards.every(c=>c.s===cards[0].s),unique=[...new Set(rs)],straightHigh=unique.includes(14)&&[5,4,3,2].every(r=>unique.includes(r))?5:(unique.length===5&&unique[0]-unique[4]===4?unique[0]:0);if(flush&&straightHigh)return[8,straightHigh];if(groups[0].n===4)return[7,groups[0].r,groups[1].r];if(groups[0].n===3&&groups[1].n===2)return[6,groups[0].r,groups[1].r];if(flush)return[5,...rs];if(straightHigh)return[4,straightHigh];if(groups[0].n===3)return[3,groups[0].r,...groups.slice(1).map(g=>g.r).sort((a,b)=>b-a)];if(groups[0].n===2&&groups[1].n===2){const pairs=[groups[0].r,groups[1].r].sort((a,b)=>b-a);return[2,...pairs,groups[2].r]}if(groups[0].n===2)return[1,groups[0].r,...groups.slice(1).map(g=>g.r).sort((a,b)=>b-a)];return[0,...rs]}
-function compareRank(a,b){for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0}
-function rankName(r){return["高牌","一对","两对","三条","顺子","同花","葫芦","四条","同花顺"][r[0]]}
-function buildView(viewer){const reveal=state.showdown||state.phase==="ended";return{selfId:viewer,phase:state.phase,capacity:state.capacity,handNumber:state.handNumber,dealerIndex:state.dealerIndex,street:state.street,board:state.board,currentIndex:state.currentIndex,currentBet:state.currentBet,lastFullRaise:state.lastFullRaise,smallBlindIndex:state.smallBlindIndex,bigBlindIndex:state.bigBlindIndex,actionDeadline:state.actionDeadline,showdown:state.showdown,blind:blindInfo(),logs:state.logs,pots:pots(),players:state.players.map((p,i)=>({...p,hole:p.id===viewer||(reveal&&!p.folded)?p.hole:p.hole.map(()=>null),seat:i}))}}
-function view(){return mode==="host"?(state?buildView(selfId):null):guestView}
-function broadcast(){if(mode!=="host")return;state.players.filter(p=>p.id!==selfId).forEach(p=>signal(p.id,{kind:"view",view:buildView(p.id)}).catch(()=>updatePresence(p.id,false)))}
-function sync(){render();broadcast()}
-function cardHtml(c){if(c===null)return`<div class="card back"></div>`;if(!c)return`<div class="card empty"></div>`;const red=c.s==="♥"||c.s==="♦",r={11:"J",12:"Q",13:"K",14:"A"}[c.r]||c.r;return`<div class="card ${red?"red":""}"><span class="rank">${r}</span><span class="suit">${c.s}</span></div>`}
-function render(){const v=view();if(!v)return;const me=v.players.find(p=>p.id===v.selfId),current=v.players[v.currentIndex],pot=v.players.reduce((s,p)=>s+p.totalBet,0),activeCount=v.players.filter(p=>p.status==="active").length;E.roomCodeDisplay.textContent=roomCode;E.roomPlayerCountSelect.value=v.capacity;E.roomPlayerCountSelect.disabled=v.phase!=="lobby";E.startGameButton.disabled=v.players.length!==v.capacity;E.startGameButton.classList.toggle("hidden",v.phase!=="lobby");E.endGameButton.classList.toggle("hidden",v.phase==="lobby");E.blindBadge.textContent=`${v.blind.sb} / ${v.blind.bb}`;E.handNumber.textContent=v.handNumber;E.blindLevel.textContent=v.blind.level;E.aliveCount.textContent=activeCount;E.potValue.textContent=pot;E.streetName.textContent={waiting:"等待开局",preflop:"翻牌前",flop:"翻牌",turn:"转牌",river:"河牌"}[v.street]||"摊牌";E.board.innerHTML=Array.from({length:5},(_,i)=>cardHtml(v.board[i])).join("");E.potList.textContent=v.pots.length>1?v.pots.map((p,i)=>`${i?`边池 ${i}`:"主池"}：${p.amount}`).join(" · "):"";
- E.seats.innerHTML=v.players.map((p,i)=>`<div class="seat ${i===v.currentIndex?"turn":""} ${p.folded?"folded":""} ${p.status!=="active"?"out":""}"><div class="seat-top"><span class="seat-name">${esc(p.name)}</span><span class="chips">${p.chips}</span></div><div class="seat-meta">${i===v.dealerIndex?'<i class="dealer">D</i>':""}${i===v.smallBlindIndex?'<i class="blind-tag">SB</i>':""}${i===v.bigBlindIndex?'<i class="blind-tag">BB</i>':""}${p.allIn?'<i class="allin">ALL IN</i>':""}${p.status==="eliminated"?"已淘汰":p.folded?"已弃牌":p.streetBet?`本轮 ${p.streetBet}`:""} · ${p.connected?"在线":"离线"}</div><div class="hole">${p.hole.map(cardHtml).join("")}</div>${mode==="host"&&!p.isHost?`<button data-player-id="${esc(p.id)}" type="button">移出</button>`:""}</div>`).join("");
- E.seats.querySelectorAll("[data-player-id]").forEach(b=>b.onclick=()=>kickPlayer(b.dataset.playerId));
- if(v.phase==="lobby")E.notice.textContent=v.players.length===v.capacity?"玩家到齐，房主可以开始锦标赛。":`等待玩家加入：${v.players.length}/${v.capacity}`;else if(v.phase==="ended"){const w=v.players.find(p=>p.status==="active");E.notice.textContent=`锦标赛结束，${w?.name||"玩家"} 获得冠军！`}else E.notice.textContent=v.showdown?"本手牌结算完成，5 秒后开始下一手。":`第 ${v.handNumber} 手 · 盲注 ${v.blind.sb}/${v.blind.bb}`;
- renderActions(v,me,current);E.logList.innerHTML=v.logs.map(x=>`<div class="log-item">${esc(x.text)}</div>`).join("");startCountdown(v)}
-function renderActions(v,me,current){if(v.phase!=="playing"||v.currentIndex==null){E.actionTitle.textContent=v.phase==="ended"?"锦标赛结束":v.showdown?"正在结算":"等待开始";E.actionArea.innerHTML="";return}E.actionTitle.textContent=`轮到 ${current.name}`;if(current.id!==v.selfId){E.actionArea.innerHTML='<span class="player-meta">等待当前玩家操作…</span>';return}const owed=Math.max(0,v.currentBet-me.streetBet),max=me.streetBet+me.chips,min=v.currentBet===0?v.blind.bb:v.currentBet+v.lastFullRaise,actualMin=Math.min(min,max),rangeHint=max<min?`仅可全押至 ${max}`:`可用范围：${actualMin} – ${max}`,canRaise=!me.acted&&max>v.currentBet;E.actionArea.innerHTML=`<button id="foldButton" class="danger">弃牌</button>${owed===0?'<button id="checkButton" class="primary">过牌</button>':`<button id="callButton" class="primary">跟注 ${Math.min(owed,me.chips)}${me.chips<=owed?"（全押）":""}</button>`}${canRaise?`<label>${v.currentBet===0?"下注到":"加注到"}<input id="raiseInput" type="number" min="${actualMin}" max="${max}" value="${Math.min(Math.max(min,v.blind.bb),max)}"><span class="bet-range">${rangeHint}</span></label><div class="quick-bets"><button data-quick="half">1/2池</button><button data-quick="pot">1倍池</button><button data-quick="all">全押</button></div><button id="raiseButton">${max<min?"全押":"确认"}</button>`:""}`;$("foldButton").onclick=()=>submit({type:"fold"});if($("checkButton"))$("checkButton").onclick=()=>submit({type:"check"});if($("callButton"))$("callButton").onclick=()=>submit({type:"call"});if($("raiseButton"))$("raiseButton").onclick=()=>submit({type:"raise",target:Number($("raiseInput").value)});E.actionArea.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{const base=b.dataset.quick==="all"?max:b.dataset.quick==="pot"?me.streetBet+owed+potAfterCall(v,me):me.streetBet+owed+Math.floor(potAfterCall(v,me)/2);$("raiseInput").value=Math.min(max,Math.max(min,base))})}
-function potAfterCall(v,me){return v.players.reduce((s,p)=>s+p.totalBet,0)+Math.min(Math.max(0,v.currentBet-me.streetBet),me.chips)}
-function startCountdown(v){clearInterval(countdownTimer);const update=()=>{if(!v.actionDeadline){E.timerText.textContent="--";E.timerBar.style.width="0";return}const left=Math.max(0,v.actionDeadline-Date.now()),sec=Math.ceil(left/1000);E.timerText.textContent=`${sec}s`;E.timerBar.style.width=`${left/600}%`};update();countdownTimer=setInterval(update,250)}
-async function init(){try{if((await fetch("/api/config",{cache:"no-store"})).ok)E.connectionStatus.textContent="联机服务可用"}catch{E.connectionStatus.textContent="请通过 signal-server.js 打开"}E.hostModeButton.onclick=()=>setMode("host");E.guestModeButton.onclick=()=>setMode("guest");E.createRoomButton.onclick=createRoom;E.joinRoomButton.onclick=joinRoom;E.roomCodeInput.oninput=()=>E.roomCodeInput.value=E.roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g,"");E.roomPlayerCountSelect.onchange=changeCapacity;E.startGameButton.onclick=startTournament;E.endGameButton.onclick=endGame;E.toggleLogButton.onclick=()=>E.logList.classList.toggle("collapsed");setMode("host")}
+
+function submit(action) {
+  if (actionPending) return;
+  actionPending = true;
+  E.actionArea.querySelectorAll("button,input").forEach((control) => { control.disabled = true; });
+  Promise.resolve(room.submitAction(action)).catch((error) => {
+    actionPending = false;
+    E.connectionStatus.textContent = `操作失败：${error.message}`;
+    decisionKey = "";
+    renderActions();
+    alert(error.message);
+  });
+}
+
+function cardHtml(card) {
+  if (card === null) return '<div class="card back" aria-label="隐藏底牌"></div>';
+  if (!card) return '<div class="card empty" aria-hidden="true"></div>';
+  const red = card.s === "♥" || card.s === "♦";
+  const rank = ({ 11: "J", 12: "Q", 13: "K", 14: "A" })[card.r] || card.r;
+  return `<div class="card ${red ? "red" : ""}" aria-label="${rank}${card.s}"><span class="rank">${rank}</span><span class="suit">${card.s}</span></div>`;
+}
+
+function currentPot() {
+  return view?.players.reduce((sum, player) => sum + player.totalBet, 0) || 0;
+}
+
+function renderRoomShell() {
+  const permissions = view.permissions || {};
+  E.roomCodeDisplay.textContent = room.snapshot().roomCode;
+  setHidden(E.hostTools, !permissions.canManage);
+  E.roomPlayerCountSelect.value = String(view.capacity);
+  E.roomPlayerCountSelect.disabled = view.phase !== "lobby" || !permissions.canManage;
+  E.startGameButton.disabled = view.phase !== "lobby"
+    || view.players.length !== view.capacity
+    || view.players.some((player) => !player.connected);
+  setHidden(E.startGameButton, !permissions.canStart);
+  setHidden(E.endGameButton, !permissions.canEnd);
+}
+
+function renderTable() {
+  const activeCount = view.players.filter((player) => player.status === "active").length;
+  const streetLabels = { waiting: "等待开局", preflop: "翻牌前", flop: "翻牌", turn: "转牌", river: "河牌" };
+  E.blindBadge.textContent = `${view.blind.sb} / ${view.blind.bb}`;
+  E.handNumber.textContent = String(view.handNumber);
+  E.blindLevel.textContent = String(view.blind.level);
+  E.aliveCount.textContent = String(activeCount);
+  E.potValue.textContent = String(currentPot());
+  E.streetName.textContent = streetLabels[view.street] || "摊牌";
+  E.board.innerHTML = Array.from({ length: 5 }, (_, index) => cardHtml(view.board[index])).join("");
+  E.potList.textContent = view.pots.length > 1
+    ? view.pots.map((pot, index) => `${index ? `边池 ${index}` : "主池"}：${pot.amount}`).join(" · ")
+    : "";
+}
+
+function renderSeats() {
+  const existing = new Map([...E.seats.querySelectorAll("[data-player-id]")].map((element) => [element.dataset.playerId, element]));
+  const retained = new Set();
+  view.players.forEach((player, index) => {
+    const id = String(player.id);
+    let seat = existing.get(id);
+    if (!seat) {
+      seat = document.createElement("article");
+      seat.dataset.playerId = id;
+      seat.innerHTML = `
+        <div class="seat-top"><span class="seat-name" data-seat-name></span><span class="chips" data-seat-chips></span></div>
+        <div class="seat-meta" data-seat-meta></div><div class="hole" data-seat-hole></div>
+        <button data-kick-player type="button">•••</button>`;
+    }
+    retained.add(id);
+    seat.className = `seat ${index === view.currentIndex ? "turn" : ""} ${player.folded ? "folded" : ""} ${player.status !== "active" ? "out" : ""} ${!player.connected ? "offline" : ""}`;
+    seat.querySelector("[data-seat-name]").textContent = `${player.name}${player.id === view.selfId ? " · 你" : ""}`;
+    seat.querySelector("[data-seat-chips]").textContent = String(player.chips);
+    const badges = [
+      index === view.dealerIndex ? '<i class="dealer">D</i>' : "",
+      index === view.smallBlindIndex ? '<i class="blind-tag">SB</i>' : "",
+      index === view.bigBlindIndex ? '<i class="blind-tag">BB</i>' : "",
+      player.allIn ? '<i class="allin">ALL IN</i>' : ""
+    ].join("");
+    const status = player.status === "eliminated" ? "已淘汰" : player.folded ? "已弃牌" : player.streetBet ? `本轮 ${player.streetBet}` : "等待";
+    seat.querySelector("[data-seat-meta]").innerHTML = `${badges}${status} · ${player.connected ? "在线" : "离线"}`;
+    const hole = seat.querySelector("[data-seat-hole]");
+    const holeKey = JSON.stringify(player.hole);
+    if (hole.dataset.key !== holeKey) { hole.innerHTML = player.hole.map(cardHtml).join(""); hole.dataset.key = holeKey; }
+    const kick = seat.querySelector("[data-kick-player]");
+    kick.dataset.kickPlayer = id;
+    setHidden(kick, !view.permissions?.canKick || player.isHost);
+    const atIndex = E.seats.children[index];
+    if (atIndex !== seat) E.seats.insertBefore(seat, atIndex || null);
+  });
+  [...E.seats.querySelectorAll("[data-player-id]")].forEach((seat) => {
+    if (!retained.has(seat.dataset.playerId)) seat.remove();
+  });
+}
+
+function actionContextKey() {
+  const me = view.players.find((player) => player.id === view.selfId);
+  const current = view.players[view.currentIndex];
+  return JSON.stringify({
+    role: view.roomRole, phase: view.phase, selfId: view.selfId, currentId: current?.id || null,
+    street: view.street, currentBet: view.currentBet, lastFullRaise: view.lastFullRaise,
+    chips: me?.chips ?? null, streetBet: me?.streetBet ?? null, acted: me?.acted ?? null,
+    folded: me?.folded ?? null, allIn: me?.allIn ?? null
+  });
+}
+
+function renderActions() {
+  const nextKey = actionContextKey();
+  if (nextKey === decisionKey) {
+    E.actionArea.querySelectorAll("button,input").forEach((control) => { control.disabled = actionPending; });
+    return;
+  }
+  decisionKey = nextKey;
+  const me = view.players.find((player) => player.id === view.selfId);
+  const current = view.players[view.currentIndex];
+  if (view.phase !== "playing" || view.currentIndex == null) {
+    E.actionTitle.textContent = view.phase === "ended" ? "锦标赛结束" : view.phase === "handResult" ? "本手结算" : "等待开始";
+    E.actionArea.innerHTML = "";
+    return;
+  }
+  E.actionTitle.textContent = `轮到 ${current.name}`;
+  if (view.roomRole === "spectator") {
+    E.actionArea.innerHTML = '<span class="player-meta">旁观模式不提供下注操作</span>';
+    return;
+  }
+  if (!me || current.id !== view.selfId) {
+    E.actionArea.innerHTML = '<span class="player-meta">等待当前玩家操作…</span>';
+    return;
+  }
+  const owed = Math.max(0, view.currentBet - me.streetBet);
+  const maximum = me.streetBet + me.chips;
+  const minimum = view.currentBet === 0 ? view.blind.bb : view.currentBet + view.lastFullRaise;
+  const actualMinimum = Math.min(minimum, maximum);
+  const canRaise = !me.acted && maximum > view.currentBet;
+  const defaultTarget = Math.min(Math.max(minimum, view.blind.bb), maximum);
+  const draftValue = raiseDraft?.key === nextKey ? raiseDraft.value : defaultTarget;
+  raiseDraft = canRaise ? { key: nextKey, value: draftValue } : null;
+  E.actionArea.innerHTML = `
+    <button id="foldButton" class="danger" type="button">弃牌</button>
+    ${owed === 0 ? '<button id="checkButton" class="primary" type="button">过牌</button>' : `<button id="callButton" class="primary" type="button">跟注 ${Math.min(owed, me.chips)}${me.chips <= owed ? "（全押）" : ""}</button>`}
+    ${canRaise ? `<label>${view.currentBet === 0 ? "下注到" : "加注到"}<input id="raiseInput" type="number" min="${actualMinimum}" max="${maximum}" value="${draftValue}"><span class="bet-range">${maximum < minimum ? `仅可全押至 ${maximum}` : `可用范围：${actualMinimum} – ${maximum}`}</span></label><div class="quick-bets"><button data-quick="half" type="button">1/2池</button><button data-quick="pot" type="button">1倍池</button><button data-quick="all" type="button">全押</button></div><button id="raiseButton" type="button">${maximum < minimum ? "全押" : "确认"}</button>` : ""}`;
+  $("foldButton").onclick = () => submit({ type: "fold" });
+  if ($("checkButton")) $("checkButton").onclick = () => submit({ type: "check" });
+  if ($("callButton")) $("callButton").onclick = () => submit({ type: "call" });
+  if ($("raiseInput")) $("raiseInput").oninput = () => { raiseDraft = { key: nextKey, value: Number($("raiseInput").value) }; };
+  if ($("raiseButton")) $("raiseButton").onclick = () => submit({ type: "raise", target: Number($("raiseInput").value) });
+  E.actionArea.querySelectorAll("[data-quick]").forEach((button) => {
+    button.onclick = () => {
+      const potAfterCall = currentPot() + Math.min(owed, me.chips);
+      const base = button.dataset.quick === "all" ? maximum
+        : me.streetBet + owed + (button.dataset.quick === "pot" ? potAfterCall : Math.floor(potAfterCall / 2));
+      const value = Math.min(maximum, Math.max(minimum, base));
+      $("raiseInput").value = String(value);
+      raiseDraft = { key: nextKey, value };
+    };
+  });
+}
+
+function renderNotice() {
+  if (view.phase === "lobby") {
+    E.notice.textContent = view.roomRole === "spectator"
+      ? "你正在旁观准备阶段；有空位时可以主动进入玩家席。"
+      : view.players.length === view.capacity ? "玩家到齐，全部准备后房主可以开始锦标赛。" : `等待玩家加入：${view.players.length}/${view.capacity}`;
+  } else if (view.phase === "ended") {
+    const winners = view.winnerIds.map((id) => view.players.find((player) => player.id === id)?.name).filter(Boolean);
+    E.notice.textContent = `锦标赛结束，${winners.join("、") || "玩家"} 获得冠军！`;
+  } else if (view.phase === "handResult") {
+    E.notice.textContent = `${view.showdown ? "摊牌" : "本手"}结算完成，服务器即将推进。`;
+  } else E.notice.textContent = `第 ${view.handNumber} 手 · 盲注 ${view.blind.sb}/${view.blind.bb}`;
+}
+
+function renderLog() {
+  E.logList.innerHTML = view.logs.map((entry) => `<div class="log-item">${escapeHtml(entry.text)}</div>`).join("") || '<div class="log-item">暂无记录</div>';
+}
+
+function renderTimer() {
+  if (view.deadline && ["playing", "handResult"].includes(view.phase)) {
+    countdown.start(view.deadline, view.phase === "playing" ? view.actionDurationMs : 5000);
+  } else {
+    countdown.stop(); E.timerText.textContent = "--"; E.timerBar.style.width = "0";
+  }
+}
+
+function render() {
+  if (!view) return;
+  spectatorUi.render(view);
+  renderRoomShell();
+  renderTable();
+  renderSeats();
+  renderNotice();
+  renderActions();
+  renderLog();
+  renderTimer();
+}
+
+E.roomPlayerCountSelect.onchange = () => submit({ type: "setCapacity", capacity: Number(E.roomPlayerCountSelect.value) });
+E.startGameButton.onclick = () => submit({ type: "start" });
+E.endGameButton.onclick = () => {
+  if (confirm("确定结束当前锦标赛并返回准备阶段吗？本局筹码和成绩将被清空。")) submit({ type: "end" });
+};
+E.toggleLogButton.onclick = () => E.logList.classList.toggle("collapsed");
+
+async function init() {
+  roomEntry.bind();
+  spectatorUi.bind();
+  try {
+    spectatorUi.applyConfig(await room.checkServer());
+  } catch {
+    E.connectionStatus.textContent = "请启动 game4 权威服务";
+  }
+}
+
 init();

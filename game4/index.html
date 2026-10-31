@@ -5,8 +5,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>德州扑克</title>
+  <link rel="stylesheet" href="/shared/styles/base.css">
+  <link rel="stylesheet" href="/shared/styles/spectator.css">
+  <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="authority.css">
 </head>
 
 <body>
@@ -18,11 +22,11 @@
       </div>
       <div class="status" id="connectionStatus">准备连接</div>
     </header>
-    <section id="setupPanel">
-      <div class="mode-grid"><button class="mode active"
+    <section id="setupPanel" data-room-entry>
+      <div class="mode-grid" data-entry-modes><button class="mode active" type="button"
           id="hostModeButton"><b>创建牌桌</b><span>担任房主与裁判</span></button><button class="mode"
-          id="guestModeButton"><b>加入牌桌</b><span>输入好友的房间号</span></button></div>
-      <div class="panel setup" id="hostSetup">
+          id="guestModeButton" type="button"><b>加入牌桌</b><span>输入好友的房间号</span></button></div>
+      <div class="panel setup" id="hostSetup" data-entry-form="host">
         <div>
           <p class="eyebrow">HOST</p>
           <h2>建立单桌锦标赛</h2>
@@ -35,12 +39,18 @@
             <option>6</option>
           </select></label><button class="primary" id="createRoomButton">创建房间</button>
       </div>
-      <div class="panel setup hidden" id="guestSetup">
+      <div class="panel setup hidden" id="guestSetup" data-entry-form="guest">
         <div>
           <p class="eyebrow">JOIN</p>
           <h2>加入好友牌桌</h2>
         </div><label>昵称<input id="guestNameInput" maxlength="12" value="玩家"></label><label>房间号<input id="roomCodeInput"
-            maxlength="4" placeholder="例如 A7K2"></label><button class="primary" id="joinRoomButton">加入房间</button>
+            maxlength="4" placeholder="例如 A7K2"></label>
+        <fieldset id="joinIntentField" class="join-intent hidden">
+          <legend>加入身份</legend>
+          <label><input type="radio" name="joinIntent" value="play" checked><span><b>作为玩家加入</b><small>有空位时进入牌桌；满员或已开局时自动旁观</small></span></label>
+          <label><input type="radio" name="joinIntent" value="spectate"><span><b>作为旁观者加入</b><small>只能看到公开牌面，不能下注</small></span></label>
+        </fieldset>
+        <button class="primary" id="joinRoomButton">加入房间</button>
       </div>
     </section>
     <section class="game-layout hidden" id="roomPanel">
@@ -54,8 +64,9 @@
                 <option>4</option>
                 <option>5</option>
                 <option>6</option>
-              </select></label><button class="primary wide" id="startGameButton">开始锦标赛</button><button
+              </select></label><button id="spectatorSettingButton" class="wide hidden" type="button" aria-pressed="true">旁观：开放</button><button class="primary wide" id="startGameButton">开始锦标赛</button><button
               class="danger wide hidden" id="endGameButton">结束当前游戏</button></div>
+          <button id="seatActionButton" type="button" class="wide hidden"></button>
         </div>
         <div class="panel">
           <div class="head">
@@ -71,6 +82,10 @@
           <p class="eyebrow">规则</p>
           <p>初始筹码 1,000<br>每 5 手提高盲注<br>行动限时 60 秒<br>超时自动过牌或弃牌<br>皇家同花顺（Royal Flush）：同一花色的A、K、Q、J、10<br>同花顺（Straight Flush）：五张连续点数且花色相同的牌<br>四条（Four of a Kind）：四张相同点数的牌加一张单牌<br>葫芦（Full House）：三张相同点数加一对<br>同花（Flush）：五张花色相同但点数不连续的牌<br>顺子（Straight）：五张点数连续但花色不同的牌<br>三条（Three of a Kind）：三张相同点数的牌加两张单牌<br>两对（Two Pairs）：两组对子加一张单牌<br>一对（Pair）：两张相同点数的牌加三张单牌<br>高牌（High Card）：不符合以上任何牌型时，以最大牌点数决定胜负</p>
         </div>
+        <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+          <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+          <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
+        </details>
       </aside>
       <section class="main">
         <div class="notice" id="notice">等待玩家加入。</div>
@@ -99,7 +114,7 @@
       </section>
     </section>
   </main>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 
 </html>

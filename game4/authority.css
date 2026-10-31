@@ -1,0 +1,92 @@
+:root {
+  --player-admin-bg: var(--panel);
+  --player-admin-text: var(--ink);
+  --player-admin-accent: var(--gold);
+  --player-admin-danger-bg: var(--red);
+  --player-admin-danger-border: #8f302b;
+}
+
+.join-intent {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.join-intent legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.join-intent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.join-intent input {
+  flex: 0 0 auto;
+  width: 16px;
+  min-height: 16px;
+  margin-top: 2px;
+}
+
+.join-intent b,
+.join-intent small {
+  display: block;
+}
+
+.join-intent small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.spectator-panel summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.spectator-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.muted,
+.player-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.seat.offline {
+  border-style: dashed;
+}
+
+.seat > [data-kick-player] {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  min-height: 24px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+@media (max-width: 850px) {
+  .join-intent {
+    grid-template-columns: 1fr;
+  }
+}
