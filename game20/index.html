@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="salon-shell.css?v=20261031">
 </head>
 <body data-theme="insider-question-salon">
 <main class="shell">
@@ -53,7 +54,7 @@
   <section id="roomPanel" class="room-layout salon-layout hidden">
     <section class="game-area salon-stage">
       <div id="notice" class="notice salon-ribbon">等待玩家加入。</div>
-      <section class="discussion-table question-salon" data-ui-role="core-table">
+      <section id="salonTable" class="discussion-table question-salon" data-ui-role="core-table">
         <div class="salon-mark salon-mark-left" aria-hidden="true">?</div>
         <div class="salon-mark salon-mark-right" aria-hidden="true">!</div>
         <div class="table-title"><p class="eyebrow">THE QUESTION CIRCLE</p><h2 id="phaseTitle">等待讨论开始</h2><span>第 <b id="roundNumber">0</b> 轮</span></div>
@@ -72,19 +73,20 @@
           </svg>
           <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
         </div>
-      </section>
 
-      <section id="controlDock" class="panel control-dock salon-console" data-role="player">
-        <div class="action-zone">
-          <div class="action-head"><div><p class="eyebrow">YOUR TURN TO SPEAK</p><h2 id="actionTitle">等待开始</h2></div><div class="timer" aria-label="当前阶段剩余时间"><b id="timerText">--</b><i id="timerBar"></i></div></div>
-          <p id="actionHint" class="action-hint"></p>
-          <div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <section id="secretPanel" class="secret-panel private-zone hidden"><span id="roleLabel">你的密封身份</span><strong id="secretRole">—</strong><p id="secretWord"></p></section>
+        <section id="controlDock" class="panel control-dock salon-console" data-role="player">
+          <div class="action-zone">
+            <div class="action-head"><div><p class="eyebrow">YOUR TURN TO SPEAK</p><h2 id="actionTitle">等待开始</h2></div><div class="timer" aria-label="当前阶段剩余时间"><b id="timerText">--</b><i id="timerBar"></i></div></div>
+            <p id="actionHint" class="action-hint"></p>
+            <div id="actionButtons" class="action-buttons"></div>
+          </div>
+          <section id="secretPanel" class="secret-panel private-zone hidden"><span id="roleLabel">你的密封身份</span><strong id="secretRole">—</strong><p id="secretWord"></p></section>
+        </section>
       </section>
     </section>
 
     <aside class="sidebar salon-archive" aria-label="沙龙档案带">
+      <header class="archive-heading"><p class="eyebrow">THE INVESTIGATION FOLIO</p><h2>调查手册</h2><span>记录真相如何被发现</span></header>
       <section class="panel stats-card salon-score">
         <p class="eyebrow">SALON TALLY</p><h2>本房间的推理战绩</h2>
         <div class="stats"><span>众人识破<b id="commonWins">0</b></span><span>局内人潜藏<b id="insiderWins">0</b></span><span>谜底未明<b id="failedRounds">0</b></span></div>

@@ -5,7 +5,7 @@ import {
   createSpectatorUi, escapeHtml, renderConnectionStatus, renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame20PartitionRenderer, createGame20RenderModel } from "./render-partitions.mjs";
-import { compassSeatSlots } from "/shared/client/stable-seat-layout.js";
+import { buildSalonSeatPlan, playerNameLabel } from "./player-layout.mjs";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_MS = { secretReveal: 30000, questioning: 300000, firstVote: 30000, secondVote: 30000, tieBreak: 20000 };
@@ -17,7 +17,7 @@ const E = Object.fromEntries([
   "hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay",
   "hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","startGameButton","nextRoundButton","endGameButton",
-  "notice","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","answerEchoes","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons",
+  "notice","salonTable","phaseTitle","roundNumber","players","focusLabel","focusText","focusHint","answerEchoes","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText","controlDock","actionTitle","actionHint","actionButtons",
   "timerText","timerBar","secretPanel","roleLabel","secretRole","secretWord","commonWins","insiderWins","failedRounds","toggleLogButton","logList",
   "spectatorPanel","spectatorCountBadge","spectatorList"
 ].map((id) => [id, $(id)]));
@@ -103,6 +103,7 @@ function playPresentationObject(event) {
     const from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
     token = document.createElement("span");
     token.className = "presentation-token";
+    token.dataset.presentationKind = event.kind;
     token.textContent = ({ "master-answer": ANSWER_LABEL[event.answer], "correct-guess": "✓", "discussion-ready": "举手", "vote-sealed": "封", "first-vote-start": "?", "first-vote-result": event.accused ? "!" : "✓", "tie-break-start": "衡", "round-result": "揭" })[event.kind] || "·";
     token.style.setProperty("--from-x", `${from.left + from.width / 2 - stage.left}px`);
     token.style.setProperty("--from-y", `${from.top + from.height / 2 - stage.top}px`);
@@ -175,17 +176,15 @@ function choosePlayer(kind, playerId) {
 }
 
 function renderPlayers() {
-  const selfIndex = view.players.findIndex((item) => item.id === view.selfId);
-  const ordered = selfIndex < 0 ? view.players : [...view.players.slice(selfIndex), ...view.players.slice(0, selfIndex)];
+  const plan = buildSalonSeatPlan(view.players, view.selfId);
+  const ordered = plan.map(({ player: item }) => item);
   const kind = targetMode();
   const targets = eligibleTargetIds(kind);
-  const hasSelfSeat = ordered.some((item) => item.id === view.selfId);
-  const slots = compassSeatSlots(ordered.length, { hasSelf: hasSelfSeat });
   E.players.dataset.count = String(ordered.length);
   const existing = new Map([...E.players.querySelectorAll(":scope > [data-player-anchor]")]
     .map((seat) => [seat.dataset.playerAnchor, seat]));
   ordered.forEach((item, index) => {
-    const slot = slots[index];
+    const slot = plan[index].slot;
     const targetable = targets.has(item.id);
     const badges = [
       item.isMaster ? '<span class="badge master">主持人</span>' : "",
@@ -203,7 +202,7 @@ function renderPlayers() {
       seat.dataset.renderKey = renderKey;
       seat.dataset.seatSlot = slot;
       if (presentationFocus) seat.classList.add("presentation-focus");
-      seat.innerHTML = `<div class="seat-head"><div><b>${escapeHtml(item.name)}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"}</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div><div class="seat-badges">${badges || '<span class="badge">身份隐藏</span>'}</div>`;
+      seat.innerHTML = `<div class="seat-head"><div><b title="${escapeHtml(item.name)}">${escapeHtml(playerNameLabel(item.name))}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"}</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div><div class="seat-badges">${badges || '<span class="badge">身份隐藏</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]");
       if (kick) kick.onclick = (event) => { event.stopPropagation(); kickPlayer(kick.dataset.kick); };
       if (targetable) {
@@ -358,6 +357,8 @@ function renderRoom() {
 }
 
 function renderStatus(model) {
+  E.salonTable.dataset.phase = view.phase;
+  E.salonTable.dataset.memberRole = model.memberRole;
   E.phaseTitle.textContent = PHASE_LABEL[view.phase] || "服务器结算中";
   E.roundNumber.textContent = String(view.round);
   E.commonWins.textContent = String(view.stats.commonWins);

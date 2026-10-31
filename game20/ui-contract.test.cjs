@@ -7,7 +7,7 @@ const test = require("node:test");
 const read = (name) => fs.readFileSync(path.join(__dirname, name), "utf8");
 
 test("局内人使用独立问答沙龙外壳，同时保留完整信息责任", () => {
-  const html = read("index.html"), script = read("app.js"), css = read("styles.css");
+  const html = read("index.html"), script = read("app.js"), css = `${read("styles.css")}\n${read("salon-shell.css")}`;
   const headerEnd = html.indexOf("</header>");
   assert.ok(html.indexOf('id="roomHeaderTools"') > 0 && html.indexOf('id="roomHeaderTools"') < headerEnd);
   assert.match(html, /data-theme="insider-question-salon"/);
@@ -29,13 +29,14 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
 
   assert.match(script, /setAttribute\("data-target-id", item\.id\)/);
   assert.match(script, /seat\.dataset\.playerAnchor = item\.id/);
-  assert.match(script, /import \{ compassSeatSlots \}/);
+  assert.match(script, /import \{ buildSalonSeatPlan, playerNameLabel \}/);
   assert.match(script, /seat\.dataset\.seatSlot = slot/);
   assert.doesNotMatch(script, /Math\.cos|Math\.sin|--seat-x|--seat-y|seat\.className\s*=/);
   assert.match(script, /view\.answerHistory/);
   assert.match(script, /type: "markCorrectGuesser"/);
   assert.match(script, /type: "submitSecondVote"/);
   assert.match(script, /createPresentationTimeline/);
+  assert.match(script, /token\.dataset\.presentationKind = event\.kind/);
   assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
   assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);
   assert.match(script, /catchUpThreshold: 2/);
@@ -50,6 +51,11 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
   assert.match(css, /\.salon-archive \{ display: grid; grid-template-columns:/);
   assert.match(css, /\.public-focus[\s\S]*?border-radius: 50%/);
   assert.match(css, /player-seat\[data-seat-slot="south"\]/);
+  assert.match(css, /grid-template-columns: minmax\(0,1fr\) 286px/);
+  assert.match(css, /url\("assets\/question-salon-board\.png"\)/);
+  assert.match(css, /\.archive-heading/);
+  assert.match(css, /\.discussion-table \.control-dock/);
+  assert.match(script, /E\.salonTable\.dataset\.phase = view\.phase/);
   assert.match(css, /\.presentation-effects/);
   assert.match(css, /\.presentation-trail\.active/);
   assert.match(css, /\.presentation-token/);
