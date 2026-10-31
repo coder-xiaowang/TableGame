@@ -58,6 +58,8 @@ test("牌桌采用本地矩形四边槽位排座并提供权威摊牌演出", ()
   assert.match(seatLayout, /EDGE_DISTRIBUTIONS/);
   assert.match(seatLayout, /5: Object\.freeze\(\{ left: 2, top: 1, right: 2 \}\)/);
   assert.match(script, /const hasSelfSeat = orderedPlayers\.some/);
+  assert.match(script, /data-seat-self>你<\/i>/);
+  assert.doesNotMatch(script, /player\.id === view\.selfId \? '<i class="blind-tag">你/);
   assert.match(script, /import \{ edgeSeatSlots \} from "\.\/seat-layout\.mjs"/);
   assert.match(script, /rail\.insertBefore\(seat, currentAtIndex \|\| null\)/);
   assert.doesNotMatch(script, /seat\.className\s*=/);
@@ -71,6 +73,8 @@ test("牌桌采用本地矩形四边槽位排座并提供权威摊牌演出", ()
   assert.match(css, /max-width: 5\.5em/);
   assert.match(css, /\.showdown-winner/);
   assert.match(css, /\.table-action-dock/);
+  assert.match(css, /inset: 88px var\(--seat-side-gutter\) 118px/);
+  assert.match(css, /\.table-action-dock[\s\S]*left: 18px;[\s\S]*right: 18px;/);
   assert.match(css, /border-radius: 0/);
   assert.match(css, /grid-template-columns: repeat\(2,minmax\(0,1fr\)\)/);
   assert.doesNotMatch(script, /Math\.cos|Math\.sin/);

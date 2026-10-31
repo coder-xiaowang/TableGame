@@ -178,7 +178,7 @@ function renderSeats() {
       seat = document.createElement("article");
       seat.dataset.playerId = id;
       seat.innerHTML = `
-        <div class="seat-top"><span class="seat-name" data-seat-name></span><span class="chips" data-seat-chips></span></div>
+        <div class="seat-top"><span class="seat-identity"><span class="seat-name" data-seat-name></span><i class="self-tag hidden" data-seat-self>你</i></span><span class="chips" data-seat-chips></span></div>
         <div class="seat-meta" data-seat-meta></div><div class="hole" data-seat-hole></div>
         <span class="seat-bet" data-seat-bet></span><span class="showdown-rank" data-showdown-rank></span>
         <span class="seat-admin-proxy" data-kick-player aria-hidden="true"></span>`;
@@ -198,9 +198,9 @@ function renderSeats() {
     const name = seat.querySelector("[data-seat-name]");
     name.textContent = playerNameLabel(player.name);
     name.title = player.name;
+    setHidden(seat.querySelector("[data-seat-self]"), player.id !== view.selfId);
     seat.querySelector("[data-seat-chips]").textContent = `筹码 ${player.chips}`;
     const badges = [
-      player.id === view.selfId ? '<i class="blind-tag">你</i>' : "",
       index === view.dealerIndex ? '<i class="dealer">D</i>' : "",
       index === view.smallBlindIndex ? '<i class="blind-tag">SB</i>' : "",
       index === view.bigBlindIndex ? '<i class="blind-tag">BB</i>' : "",
