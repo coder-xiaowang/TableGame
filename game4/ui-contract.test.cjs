@@ -38,22 +38,29 @@ test("无关广播不会重建正在输入加注金额的决策区", () => {
   assert.doesNotMatch(script, /deadline: view\.deadline/);
 });
 
-test("牌桌采用本地明确边界排座并提供权威摊牌演出", () => {
+test("牌桌采用本地矩形四边槽位排座并提供权威摊牌演出", () => {
   const html = read("index.html");
   const script = read("app.js");
   const css = read("layout.css");
+  const seatLayout = read("seat-layout.mjs");
   assert.match(html, /id="seatBoundary"/);
   assert.match(html, /class="hand-rank-guide"/);
   assert.match(html, /id="showdownOverlay"/);
   assert.match(html, /class="action-panel table-action-dock"/);
   assert.match(script, /function playersFromViewerSeat/);
-  assert.match(script, /Math\.PI \/ 2/);
+  assert.match(seatLayout, /function distributeEdgeCounts/);
+  assert.match(seatLayout, /top: base \+ \(remainder >= 1/);
+  assert.match(seatLayout, /left: base \+ \(remainder >= 2/);
+  assert.match(script, /import \{ edgeSeatSlots \} from "\.\/seat-layout\.mjs"/);
   assert.match(script, /--seat-x/);
   assert.match(script, /new ResizeObserver\(scheduleSeatLayout\)/);
   assert.match(script, /renderShowdown\(\)/);
   assert.match(css, /\.seat-boundary/);
   assert.match(css, /\.showdown-winner/);
   assert.match(css, /\.table-action-dock/);
+  assert.match(css, /border-radius: 0/);
+  assert.match(css, /grid-template-columns: repeat\(2,minmax\(0,1fr\)\)/);
+  assert.doesNotMatch(script, /Math\.cos|Math\.sin/);
   assert.doesNotMatch(script, /shared.*round|create.*RoundTable/i);
 });
 

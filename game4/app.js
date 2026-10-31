@@ -11,6 +11,7 @@ import {
   renderCountdown,
   setHidden
 } from "/shared/client/index.js";
+import { edgeSeatSlots } from "./seat-layout.mjs";
 
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 60;
@@ -145,7 +146,8 @@ function renderTable() {
 
 function playersFromViewerSeat() {
   const players = [...view.players];
-  const anchorId = view.selfId || players.find((player) => player.isHost)?.id;
+  if (!view.selfId) return players;
+  const anchorId = view.selfId;
   const anchorIndex = players.findIndex((player) => player.id === anchorId);
   if (anchorIndex <= 0) return players;
   return players.slice(anchorIndex).concat(players.slice(0, anchorIndex));
@@ -160,13 +162,20 @@ function layoutSeats() {
   if (boundary.width <= 0 || boundary.height <= 0) return;
   const maximumWidth = Math.max(...seats.map((seat) => seat.offsetWidth || 108));
   const maximumHeight = Math.max(...seats.map((seat) => seat.offsetHeight || 58));
-  const radiusX = Math.max(0, (boundary.width - maximumWidth) / 2 - 3);
-  const radiusY = Math.max(0, (boundary.height - maximumHeight) / 2 - 3);
+  const left = maximumWidth / 2 + 4;
+  const right = Math.max(left, boundary.width - maximumWidth / 2 - 4);
+  const top = maximumHeight / 2 + 4;
+  const bottom = Math.max(top, boundary.height - maximumHeight / 2 - 4);
+  const slots = edgeSeatSlots(seats.length, Boolean(view.selfId));
   seats.forEach((seat, index) => {
-    const angle = Math.PI / 2 + (Math.PI * 2 * index) / seats.length;
-    seat.style.setProperty("--seat-x", `${boundary.width / 2 + radiusX * Math.cos(angle)}px`);
-    seat.style.setProperty("--seat-y", `${boundary.height / 2 + radiusY * Math.sin(angle)}px`);
-    seat.dataset.layoutAngle = angle.toFixed(4);
+    const slot = slots[index] || { edge: "top", progress: 0.5 };
+    const horizontal = left + (right - left) * slot.progress;
+    const vertical = top + (bottom - top) * slot.progress;
+    const x = slot.edge === "left" ? left : slot.edge === "right" ? right : horizontal;
+    const y = slot.edge === "top" ? top : slot.edge === "bottom" ? bottom : vertical;
+    seat.style.setProperty("--seat-x", `${x}px`);
+    seat.style.setProperty("--seat-y", `${y}px`);
+    seat.dataset.seatEdge = slot.edge;
   });
   E.seats.dataset.count = String(seats.length);
 }
