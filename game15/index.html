@@ -8,10 +8,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-<main class="shell">
-  <header id="hero" class="hero">
+<body data-play-layout="game15">
+<main class="shell" data-play-shell>
+  <header id="hero" class="hero" data-play-header>
     <div class="hero-title"><p class="eyebrow">SERVER AUTHORITATIVE · RUMMIKUB</p><h1>拉密</h1><p>组合、拆分、重排——把最后一张牌送上桌面。</p></div>
     <div class="hero-meta">
       <div id="connectionStatus" class="connection-status">准备连接</div>
@@ -51,8 +53,37 @@
     </div>
   </section>
 
-  <section id="roomPanel" class="room-layout hidden">
-    <aside class="sidebar">
+  <section id="roomPanel" class="room-layout hidden" data-play-room>
+<section data-play-workspace>
+<div id="notice" class="notice" data-play-status>等待玩家加入。</div>
+<div class="meld-workspace" data-play-board><section class="panel table-panel">
+        <div class="table-head">
+          <div><p class="eyebrow">PUBLIC TABLE</p><h2>公共牌桌</h2></div>
+          <div class="table-meta"><span>第 <b id="gameNumber">0</b>/<b id="totalGames">0</b> 局</span><span>牌池 <b id="poolCount">0</b></span></div>
+        </div>
+        <div id="changeNotice" class="change-notice hidden"></div>
+        <div id="table" class="meld-board"></div>
+        <div id="newMeldActions" class="new-meld-actions hidden">
+          <button type="button" data-new-kind="group">把所选牌放入新数字组</button>
+          <button type="button" data-new-kind="run">把所选牌放入新顺子</button>
+        </div>
+      </section><section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">GAME RESULT</p><h2 id="resultTitle"></h2><div id="resultScores"></div></section></div>
+<section id="controlDock" class="panel control-dock" data-expanded="false" data-role="player" data-play-controls>
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div class="hand-zone" id="handZone">
+          <div class="hand-head"><div><p class="eyebrow">YOUR RACK</p><h2>我的牌架</h2></div><span id="handHint">开局获得14张牌</span></div>
+          <div id="hand" class="hand drop-hand" data-drop-hand="true"></div>
+        </div>
+      </section>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
       <div class="panel score-card">
         <p class="eyebrow">MATCH SCORE</p><h2>比赛积分</h2><div id="scoreboard" class="scoreboard"></div>
       </div>
@@ -85,41 +116,8 @@
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
     </aside>
-
-    <section class="game-area">
-      <div id="notice" class="notice">等待玩家加入。</div>
-
-      <section id="controlDock" class="panel control-dock" data-expanded="false" data-role="player">
-        <div class="action-zone">
-          <div class="section-head">
-            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-          </div>
-          <p id="actionHint" class="action-hint"></p>
-          <div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <div class="hand-zone" id="handZone">
-          <div class="hand-head"><div><p class="eyebrow">YOUR RACK</p><h2>我的牌架</h2></div><span id="handHint">开局获得14张牌</span></div>
-          <div id="hand" class="hand drop-hand" data-drop-hand="true"></div>
-        </div>
-      </section>
-
-      <section class="panel table-panel">
-        <div class="table-head">
-          <div><p class="eyebrow">PUBLIC TABLE</p><h2>公共牌桌</h2></div>
-          <div class="table-meta"><span>第 <b id="gameNumber">0</b>/<b id="totalGames">0</b> 局</span><span>牌池 <b id="poolCount">0</b></span></div>
-        </div>
-        <div id="changeNotice" class="change-notice hidden"></div>
-        <div id="table" class="meld-board"></div>
-        <div id="newMeldActions" class="new-meld-actions hidden">
-          <button type="button" data-new-kind="group">把所选牌放入新数字组</button>
-          <button type="button" data-new-kind="run">把所选牌放入新顺子</button>
-        </div>
-      </section>
-
-      <section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">GAME RESULT</p><h2 id="resultTitle"></h2><div id="resultScores"></div></section>
-    </section>
-  </section>
+</details>
+</section>
 </main>
 <script type="module" src="app.js"></script>
 </body>

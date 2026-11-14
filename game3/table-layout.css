@@ -1,0 +1,20 @@
+[data-play-layout="game3"] .score-panel { padding: 10px; }
+[data-play-layout="game3"] .score-panel > .section-head { position: sticky; top: -10px; z-index: 2; padding: 8px 0; background: var(--paper,#fffdf5); }
+[data-play-layout="game3"] .score-summary { gap: 6px; margin-bottom: 8px; }
+[data-play-layout="game3"] .score-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+[data-play-layout="game3"] .score-row { min-height: 48px; padding: 7px; }
+[data-play-layout="game3"] .game-panel[data-play-controls] { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+[data-play-layout="game3"] .game-heading { grid-column: 1 / -1; margin: 0; }
+[data-play-layout="game3"] .dice-tray { min-height: 0; padding: 8px; gap: 6px; grid-template-columns: repeat(5,minmax(36px,65px)); }
+[data-play-layout="game3"] .die { min-height: 38px; }
+[data-play-layout="game3"] .turn-actions { margin: 0; }
+@container play (max-width:650px) {
+  [data-play-layout="game3"] .game-panel[data-play-controls] { grid-template-columns: minmax(0,1fr); gap: 5px; }
+  [data-play-layout="game3"] .dice-tray { grid-template-columns: repeat(5,minmax(0,55px)); }
+  [data-play-layout="game3"] .turn-actions > button { padding: 6px 12px; }
+}
+@media(max-width:500px) {
+  [data-play-layout="game3"] .score-help { font-size: 10px; }
+  [data-play-layout="game3"] .score-name { font-size: 12px; }
+  [data-play-layout="game3"] .score-summary { font-size: 12px; }
+}

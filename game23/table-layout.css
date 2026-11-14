@@ -1,0 +1,12 @@
+[data-play-layout="game23"] .journey-strip { padding: 6px 10px; min-height: 0; }
+[data-play-layout="game23"] .journey-strip .eyebrow { display: none; }
+[data-play-layout="game23"] .travelers { margin: 0 0 7px; scroll-padding-inline: 8px; }
+[data-play-layout="game23"] .dream-stage { min-height: 300px; padding: 10px; }
+[data-play-layout="game23"] #actionDock .action-copy { padding: 0; }
+[data-play-layout="game23"] #actionDock #handPanel { padding: 0; min-width: 0; }
+[data-play-layout="game23"] #actionDock .hand { min-width: 0; overflow-x: auto; padding: 5px; }
+[data-play-layout="game23"] #actionDock .dream-card { flex: 0 0 85px; width: 85px; }
+[data-play-layout="game23"] #actionDock textarea { min-height: 48px; }
+@container play (max-width: 650px) {
+  [data-play-layout="game23"] .gallery { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+}

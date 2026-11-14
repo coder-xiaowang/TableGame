@@ -8,10 +8,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-<main class="shell">
-  <header id="hero" class="hero">
+<body data-play-layout="game16">
+<main class="shell" data-play-shell>
+  <header id="hero" class="hero" data-play-header>
     <div class="hero-title"><p class="eyebrow">SERVER AUTHORITATIVE · COUP</p><h1>政变</h1><p>隐藏你的影响力，质疑每一句谎言，成为最后的幸存者。</p></div>
     <div class="hero-meta">
       <div id="connectionStatus" class="connection-status">准备连接</div>
@@ -74,8 +76,54 @@
     </section>
   </section>
 
-  <section id="roomPanel" class="room-layout hidden">
-    <aside class="sidebar">
+  <section id="roomPanel" class="room-layout hidden" data-play-room>
+<section data-play-workspace>
+<div id="notice" class="notice" data-play-status>等待玩家加入。</div>
+<section id="courtPanel" class="court-panel" data-play-board>
+
+        <div id="courtEffects" class="court-effects" aria-live="polite" aria-atomic="true">
+          <svg class="moment-trail-layer" aria-hidden="true">
+            <defs>
+              <marker id="momentArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <path id="momentTrail" class="moment-trail" marker-end="url(#momentArrow)"></path>
+          </svg>
+          <div id="momentAnnouncement" class="moment-announcement">
+            <span id="momentLabel"></span>
+            <strong id="momentText"></strong>
+          </div>
+        </div>
+        <div id="seatBoundary" class="seat-boundary" aria-label="玩家席位区域">
+          <div id="players" class="players">
+
+            <div id="galleryRail" class="court-rail gallery-rail" aria-label="上方贵族席"></div>
+            <div id="leftCourtRail" class="court-rail left-court-rail" aria-label="左侧宫廷席"></div>
+            <div id="rightCourtRail" class="court-rail right-court-rail" aria-label="右侧宫廷席"></div>
+            <div id="throneRail" class="court-rail throne-rail" aria-label="自己的王座席"></div>
+          <div id="courtCenter" class="court-center">
+          <span class="crown">♛</span><b>宫廷牌库</b><strong id="deckCount">15</strong><small>张角色牌</small>
+        </div>
+</div>
+        </div>
+      </section>
+<section id="controlDock" class="panel control-dock" data-role="player" data-play-controls>
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div id="privateZone" class="private-zone">
+          <div class="private-head"><div><p class="eyebrow">YOUR INFLUENCE</p><h2>我的影响力</h2></div><span id="coinCount">0 枚金币</span></div>
+          <div id="myInfluences" class="my-influences"></div>
+        </div>
+      </section>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
       <details class="panel rule-card">
         <summary><span><span class="eyebrow">COURT GUIDE</span><b>详细宫廷规则</b></span><span class="fold-hint">展开</span></summary>
         <div class="rule-details">
@@ -110,53 +158,8 @@
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
     </aside>
-
-    <section class="game-area">
-      <div id="notice" class="notice">等待玩家加入。</div>
-      <section id="courtPanel" class="court-panel">
-        <div id="courtCenter" class="court-center">
-          <span class="crown">♛</span><b>宫廷牌库</b><strong id="deckCount">15</strong><small>张角色牌</small>
-        </div>
-        <div id="courtEffects" class="court-effects" aria-live="polite" aria-atomic="true">
-          <svg class="moment-trail-layer" aria-hidden="true">
-            <defs>
-              <marker id="momentArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z"></path>
-              </marker>
-            </defs>
-            <path id="momentTrail" class="moment-trail" marker-end="url(#momentArrow)"></path>
-          </svg>
-          <div id="momentAnnouncement" class="moment-announcement">
-            <span id="momentLabel"></span>
-            <strong id="momentText"></strong>
-          </div>
-        </div>
-        <div id="seatBoundary" class="seat-boundary" aria-label="玩家席位区域">
-          <div id="players" class="players">
-            <div id="galleryRail" class="court-rail gallery-rail" aria-label="上方贵族席"></div>
-            <div id="leftCourtRail" class="court-rail left-court-rail" aria-label="左侧宫廷席"></div>
-            <div id="rightCourtRail" class="court-rail right-court-rail" aria-label="右侧宫廷席"></div>
-            <div id="throneRail" class="court-rail throne-rail" aria-label="自己的王座席"></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="controlDock" class="panel control-dock" data-role="player">
-        <div class="action-zone">
-          <div class="section-head">
-            <div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div>
-            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-          </div>
-          <p id="actionHint" class="action-hint"></p>
-          <div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <div id="privateZone" class="private-zone">
-          <div class="private-head"><div><p class="eyebrow">YOUR INFLUENCE</p><h2>我的影响力</h2></div><span id="coinCount">0 枚金币</span></div>
-          <div id="myInfluences" class="my-influences"></div>
-        </div>
-      </section>
-    </section>
-  </section>
+</details>
+</section>
 </main>
 <script type="module" src="app.js"></script>
 </body>

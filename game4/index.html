@@ -11,11 +11,13 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="layout.css?v=20261031-centered-seats">
   <link rel="stylesheet" href="authority.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
 
-<body>
-  <main class="shell">
-    <header>
+<body data-play-layout="game4">
+  <main class="shell" data-play-shell>
+    <header data-play-header>
       <div>
         <p class="eyebrow">NO-LIMIT HOLD'EM</p>
         <h1>德州扑克</h1>
@@ -53,9 +55,9 @@
         <button class="primary" id="joinRoomButton">加入房间</button>
       </div>
     </section>
-    <section class="game-layout hidden" id="roomPanel">
-      <aside>
-        <div class="panel">
+    <section class="game-layout hidden" id="roomPanel" data-play-room>
+<section data-play-workspace>
+<div class="panel" data-poker-tools data-play-status>
           <p class="eyebrow">ROOM</p>
           <div class="room-code" id="roomCodeDisplay">----</div>
           <div id="hostTools" class="hidden"><label>牌桌人数<select id="roomPlayerCountSelect">
@@ -68,6 +70,49 @@
               class="danger wide hidden" id="endGameButton">结束当前游戏</button></div>
           <button id="seatActionButton" type="button" class="wide hidden"></button>
         </div>
+<div class="poker-table panel" data-play-board>
+          <div class="table-status-row">
+            <div class="notice" id="notice">等待玩家加入。</div>
+            <div class="board-head"><span id="streetName">等待开局</span><span>底池 <b id="potValue">0</b></span></div>
+          </div>
+
+
+
+
+
+          <div id="showdownOverlay" class="showdown-overlay hidden" aria-live="polite" aria-atomic="true">
+            <p id="showdownKicker">SHOWDOWN</p>
+            <h2 id="showdownTitle">摊牌结算</h2>
+            <div id="showdownResults" class="showdown-results"></div>
+          </div>
+
+          <div id="seatBoundary" class="seat-boundary" aria-label="牌桌玩家席边界">
+            <div class="seats" id="seats">
+
+              <div id="seatTopRail" class="seat-rail seat-rail-top" aria-label="上方玩家席"></div>
+              <div id="seatLeftRail" class="seat-rail seat-rail-left" aria-label="左侧玩家席"></div>
+              <div id="seatRightRail" class="seat-rail seat-rail-right" aria-label="右侧玩家席"></div>
+              <div id="seatBottomRail" class="seat-rail seat-rail-bottom" aria-label="自己的玩家席"></div>
+            <section class="table-center" aria-label="公共牌与底池">
+            <div class="board" id="board"></div>
+            <div class="pot-list" id="potList"></div>
+          </section>
+</div>
+          </div>
+
+
+        </div>
+<section class="action-panel table-action-dock" data-play-controls>
+            <div class="head">
+              <div><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+              <div class="timer"><span id="timerText">--</span><i id="timerBar"></i></div>
+            </div>
+            <div id="actionArea" class="actions"></div>
+            <div id="myHoleCards" class="poker-private-hand hidden" aria-label="我的底牌"></div>
+          </section>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<div><aside>
+
         <div class="panel">
           <div class="head">
             <h2>比赛信息</h2><span id="blindBadge">10 / 20</span>
@@ -92,15 +137,7 @@
           </div>
           <div class="log collapsed" id="logList"></div>
         </div>
-      </aside>
-      <section class="main">
-        <div class="poker-table panel">
-          <div class="table-status-row">
-            <div class="notice" id="notice">等待玩家加入。</div>
-            <div class="board-head"><span id="streetName">等待开局</span><span>底池 <b id="potValue">0</b></span></div>
-          </div>
-
-          <aside class="hand-rank-guide" aria-label="德州扑克牌型大小">
+      </aside><details class="panel"><summary>牌型大小</summary><aside class="hand-rank-guide" aria-label="德州扑克牌型大小">
             <p class="eyebrow">HAND RANKS</p>
             <ol>
               <li data-rank-name="皇家同花顺"><b>皇家同花顺</b><span class="mini-hand red">10♥ J♥ Q♥ K♥ A♥</span></li>
@@ -114,38 +151,9 @@
               <li data-rank-name="一对"><b>一对</b><span class="mini-hand">K♠ K♥ 8♦ 5♣ 2♠</span></li>
               <li data-rank-name="高牌"><b>高牌</b><span class="mini-hand red">A♠ J♥ 9♦ 6♣ 3♥</span></li>
             </ol>
-          </aside>
-
-          <section class="table-center" aria-label="公共牌与底池">
-            <div class="board" id="board"></div>
-            <div class="pot-list" id="potList"></div>
-          </section>
-
-          <div id="showdownOverlay" class="showdown-overlay hidden" aria-live="polite" aria-atomic="true">
-            <p id="showdownKicker">SHOWDOWN</p>
-            <h2 id="showdownTitle">摊牌结算</h2>
-            <div id="showdownResults" class="showdown-results"></div>
-          </div>
-
-          <div id="seatBoundary" class="seat-boundary" aria-label="牌桌玩家席边界">
-            <div class="seats" id="seats">
-              <div id="seatTopRail" class="seat-rail seat-rail-top" aria-label="上方玩家席"></div>
-              <div id="seatLeftRail" class="seat-rail seat-rail-left" aria-label="左侧玩家席"></div>
-              <div id="seatRightRail" class="seat-rail seat-rail-right" aria-label="右侧玩家席"></div>
-              <div id="seatBottomRail" class="seat-rail seat-rail-bottom" aria-label="自己的玩家席"></div>
-            </div>
-          </div>
-
-          <section class="action-panel table-action-dock">
-            <div class="head">
-              <div><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-              <div class="timer"><span id="timerText">--</span><i id="timerBar"></i></div>
-            </div>
-            <div id="actionArea" class="actions"></div>
-          </section>
-        </div>
-      </section>
-    </section>
+          </aside></details></div>
+</details>
+</section>
   </main>
   <script type="module" src="app.js"></script>
 </body>

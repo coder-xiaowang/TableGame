@@ -318,7 +318,7 @@ async function init() {
     if (action === "describe") submit({type:"describe",text:$("descriptionInput").value});
     if (action === "guess") submit({type:"guess",text:$("guessInput").value});
   });
-  selectMode("host");
+  roomEntry.selectMode("host");
   try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* create/join shows the detailed error */ }
 }
 

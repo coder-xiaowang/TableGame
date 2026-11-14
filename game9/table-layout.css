@@ -1,0 +1,12 @@
+/* This game already keeps the decision next to the public card. */
+.game-grid > *, .player-item, .my-area > * { min-width: 0; }
+.player-item .public-card-runs { max-height: 140px; overflow: auto; }
+@media(max-width:720px) {
+  .game-grid .table-panel { min-height: 0; padding: 12px; }
+  .game-grid .table-center { min-height: 160px; margin-block: 8px; }
+  .game-grid .action-area { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .game-grid .players-panel .player-list { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .game-grid .player-item .player-stats { flex-wrap: wrap; font-size: 11px; }
+  .game-grid .player-item b { overflow-wrap: anywhere; }
+  .game-grid .public-card-runs { max-height: 140px; overflow: auto; }
+}

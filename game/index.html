@@ -7,10 +7,12 @@
     <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
     <link rel="stylesheet" href="styles.css">
-  </head>
-  <body data-theme="mechanical-cipher-room">
-    <main class="app-shell">
-      <header class="topbar" id="siteHeader">
+    <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
+</head>
+  <body data-theme="mechanical-cipher-room" data-play-layout="game">
+    <main class="app-shell" data-play-shell>
+      <header class="topbar" id="siteHeader" data-play-header>
         <div class="header-title">
           <p class="brand-kicker">MECHANICAL CIPHER BUREAU · 速译局</p>
           <h1>速速破译</h1>
@@ -122,11 +124,10 @@
         </div>
       </section>
 
-      <section class="room-panel decoder-room hidden" id="roomPanel">
-        <section class="table-area decoder-stage">
-          <div class="notice transmission-status" id="gameNotice">等待房主开始游戏。</div>
-
-          <section class="cipher-machine" aria-label="机械译码室主操作台">
+      <section class="room-panel decoder-room hidden" id="roomPanel" data-play-room>
+<section data-play-workspace>
+<div class="notice transmission-status" id="gameNotice" data-play-status>等待房主开始游戏。</div>
+<section class="cipher-machine" aria-label="机械译码室主操作台" data-play-board>
             <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
               <svg class="presentation-trail-layer" aria-hidden="true">
                 <defs><marker id="decoderTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
@@ -154,7 +155,9 @@
             </div>
             <div class="word-board operator-wall" id="wordBoard"></div>
 
-            <div class="turn-panel decoder-console panel">
+
+          </section>
+<div class="turn-panel decoder-console panel" data-play-controls>
               <div class="turn-header">
                 <div>
                   <p class="eyebrow">CURRENT TRANSMISSION · 当前译码</p>
@@ -165,10 +168,8 @@
 
               <div class="action-area" id="actionArea"></div>
             </div>
-          </section>
-        </section>
-
-        <section class="archive-strip" aria-label="译码室档案区">
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<section class="archive-strip" aria-label="译码室档案区">
           <details class="panel rules-card archive-drawer">
             <summary><span>详细规则</span><b>展开查看</b></summary>
             <div class="rule-details">
@@ -203,7 +204,8 @@
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
         </section>
-      </section>
+</details>
+</section>
     </main>
 
     <script type="module" src="app.js"></script>

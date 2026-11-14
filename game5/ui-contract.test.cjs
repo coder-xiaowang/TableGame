@@ -43,12 +43,13 @@ test("game5 places history before spectators in the auxiliary column",()=>{
   assert.doesNotMatch(main,/id="logList"/);
 });
 
-test("game5 prioritizes the main table on phones and preserves core controls",()=>{
-  assert.ok(html.indexOf("<aside>")<html.indexOf('<section class="main"'));
-  assert.match(styles,/@media\(max-width:720px\)[\s\S]*?\.layout \{ display: flex; flex-direction: column; \}/);
-  assert.match(styles,/\.layout > \.main \{ order: 1; \}/);
-  assert.match(styles,/\.layout > aside \{ order: 2;/);
-  for(const id of["players","drawPile","discardPile","actionArea","timerText","handPanel","unoButton","colorModal"])assert.match(html,new RegExp(`id="${id}"`));
+test("game5 reserves separate board and control regions before optional references", () => {
+  assert.match(html, /href="\/shared\/styles\/play-layout\.css"/);
+  const workspaceAt = html.indexOf('data-play-workspace');
+  const controlsAt = html.indexOf('data-play-controls');
+  const referenceAt = html.indexOf('data-play-reference');
+  assert.ok(workspaceAt >= 0 && controlsAt > workspaceAt && referenceAt > controlsAt);
+  assert.match(html, /data-play-board/);
 });
 
 test("game5 consumes the shared server-authored presentation timeline",()=>{

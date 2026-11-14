@@ -34,11 +34,13 @@ test("game3 replaces the short note with folded detailed rules",() => {
   assert.match(html,/本版本没有回合倒计时/);
 });
 
-test("game3 prioritizes dice and score sheet on narrow screens",() => {
-  assert.ok(html.indexOf('<aside class="sidebar">') < html.indexOf('<section class="table-area">'));
-  assert.match(styles,/@media \(max-width: 850px\)[\s\S]*?\.room-layout \{ display: flex; flex-direction: column; \}/);
-  assert.match(styles,/\.room-layout > \.table-area \{ order: 1; \}/);
-  assert.match(styles,/\.room-layout > \.sidebar \{ order: 2;/);
+test("game3 reserves separate board and control regions before optional references", () => {
+  assert.match(html, /href="\/shared\/styles\/play-layout\.css"/);
+  const workspaceAt = html.indexOf('data-play-workspace');
+  const controlsAt = html.indexOf('data-play-controls');
+  const referenceAt = html.indexOf('data-play-reference');
+  assert.ok(workspaceAt >= 0 && controlsAt > workspaceAt && referenceAt > controlsAt);
+  assert.match(html, /data-play-board/);
 });
 
 test("game3 preserves dice controls and public score inspection",() => {

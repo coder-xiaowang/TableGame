@@ -21,7 +21,7 @@ const E = Object.fromEntries([
   "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput",
   "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton",
   "startGameButton", "endGameButton", "blindBadge", "handNumber", "blindLevel", "aliveCount", "notice", "streetName",
-  "potValue", "potList", "board", "seats", "actionTitle", "timerText", "timerBar", "actionArea", "logList",
+  "potValue", "potList", "board", "seats", "actionTitle", "timerText", "timerBar", "actionArea", "myHoleCards", "logList",
   "toggleLogButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "seatBoundary",
   "showdownOverlay", "showdownKicker", "showdownTitle", "showdownResults",
   "seatTopRail", "seatLeftRail", "seatRightRail", "seatBottomRail"
@@ -159,6 +159,13 @@ function playerNameLabel(value, limit = 5) {
 }
 
 function renderSeats() {
+  const self = view.players.find((player) => player.id === view.selfId);
+  setHidden(E.myHoleCards, !self || !self.hole.length);
+  const privateKey = JSON.stringify(self?.hole || []);
+  if (E.myHoleCards.dataset.key !== privateKey) {
+    E.myHoleCards.dataset.key = privateKey;
+    E.myHoleCards.innerHTML = self?.hole.length ? `<span>我的底牌</span>${self.hole.map(cardHtml).join("")}` : "";
+  }
   const existing = new Map([...E.seats.querySelectorAll("[data-player-id]")].map((element) => [element.dataset.playerId, element]));
   const retained = new Set();
   const results = new Map((view.showdownResults || []).map((result) => [String(result.playerId), result]));
@@ -195,8 +202,9 @@ function renderSeats() {
     seat.classList.toggle("showdown-winner", Boolean(showdownActive && result && winningIds.has(id)));
     seat.classList.toggle("showdown-loser", Boolean(showdownActive && result && !winningIds.has(id)));
     seat.dataset.seatOrder = String(orderIndex);
+    seat.style.setProperty("--seat-order", String(orderIndex));
     const name = seat.querySelector("[data-seat-name]");
-    name.textContent = playerNameLabel(player.name);
+    name.textContent = `${index + 1}. ${playerNameLabel(player.name)}`;
     name.title = player.name;
     setHidden(seat.querySelector("[data-seat-self]"), player.id !== view.selfId);
     seat.querySelector("[data-seat-chips]").textContent = `筹码 ${player.chips}`;

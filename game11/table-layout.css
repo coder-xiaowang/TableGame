@@ -1,0 +1,14 @@
+/* Keep both teams and the current message legible; history remains expandable. */
+#gameArea > * { min-width: 0; }
+.history-panel > summary { cursor: pointer; font-weight: 700; }
+@media(max-width:760px) {
+  #gameArea { display: flex; flex-direction: column; gap: 8px; }
+  #gameArea > * { width: 100%; }
+  #gameArea .intel-panel { order: 0; padding: 10px; }
+  #gameArea .operation-panel { order: 1; padding: 10px; }
+  #gameArea .scoreboard { order: 2; padding: 8px; }
+  #gameArea .history-panel { order: 3; padding: 10px; }
+  #gameArea .keyword-rack { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+  #gameArea .keyword-rack > * { min-width: 0; padding: 7px 4px; overflow-wrap: anywhere; }
+  #gameArea .history-list { max-height: 45dvh; overflow: auto; }
+}

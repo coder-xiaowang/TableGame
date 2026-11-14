@@ -1,0 +1,10 @@
+{
+  "name": "tablegame-workspace",
+  "private": true,
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test:layout": "node scripts/check-table-layout.cjs",
+    "test:layout:remaining": "node scripts/check-play-layout.cjs",
+    "test:shared": "node --test shared/test/*.test.js"
+  }
+}

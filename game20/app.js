@@ -99,7 +99,7 @@ function playPresentationObject(event) {
   if (["correct-guess", "first-vote-result", "tie-break-start", "round-result"].includes(event.kind)) document.querySelector(".public-focus")?.classList.add("presentation-reveal");
   let token = null;
   if (source && target && source !== target) {
-    const stage = document.querySelector(".discussion-table").getBoundingClientRect();
+    const stage = E.presentationEffects.getBoundingClientRect();
     const from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
     token = document.createElement("span");
     token.className = "presentation-token";
@@ -201,6 +201,7 @@ function renderPlayers() {
       const presentationFocus = seat.classList.contains("presentation-focus");
       seat.dataset.renderKey = renderKey;
       seat.dataset.seatSlot = slot;
+      seat.style.setProperty("--seat-order", String(index));
       if (presentationFocus) seat.classList.add("presentation-focus");
       seat.innerHTML = `<div class="seat-head"><div><b title="${escapeHtml(item.name)}">${escapeHtml(playerNameLabel(item.name))}${item.id === view.selfId ? " · 你" : ""}</b><small>${item.isHost ? "房主 · " : ""}${item.connected ? "在线" : "离线"}</small></div>${view.permissions.canManage && view.phase === "lobby" && !item.isHost ? `<button class="small" data-kick="${escapeHtml(item.id)}" type="button">移出</button>` : ""}</div><div class="seat-badges">${badges || '<span class="badge">身份隐藏</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]");
@@ -412,7 +413,7 @@ async function init() {
 }
 
 presentation = createPresentationTimeline({
-  container: document.querySelector(".discussion-table"),
+  container: E.presentationEffects,
   trailPath: E.presentationTrail,
   announcement: E.presentationAnnouncement,
   labelElement: E.presentationLabel,

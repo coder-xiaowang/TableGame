@@ -1,0 +1,12 @@
+[data-play-layout="game14"] .farm-table { min-height: 0; padding: 10px; }
+[data-play-layout="game14"] .farm-table .players { margin-top: 8px; gap: 10px; }
+[data-play-layout="game14"] .player-farm { padding: 9px; }
+[data-play-layout="game14"] #controlDock .action-zone { border: 0; padding: 0; }
+[data-play-layout="game14"] #controlDock .hand { margin: 5px 0 0; min-height: 0; }
+[data-play-layout="game14"] #controlDock .action-card { flex: 0 0 90px; min-height: 108px; padding: 5px; }
+[data-play-layout="game14"] .farm-targets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+[data-play-layout="game14"] .farm-targets button { padding: 4px 7px; min-height: 30px; font-size: 12px; }
+[data-play-layout="game14"] .player-farm:has(.pig.targetable) { border-color: #876014; }
+@media (max-height: 540px) {
+  [data-play-layout="game14"] #controlDock .action-card { min-height: 80px; }
+}

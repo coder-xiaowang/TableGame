@@ -17,6 +17,24 @@ function element(rect = { left: 0, top: 0, width: 100, height: 100 }) {
   };
 }
 
+test("滚动和桌框不会改变飞牌在桌面内容中的起止位置", async () => {
+  const stage = element({ left: 10, top: 20, width: 400, height: 300 });
+  Object.assign(stage, { scrollLeft: 30, scrollTop: 90, clientLeft: 8, clientTop: 8 });
+  const source = element({ left: 30, top: 50, width: 40, height: 40 });
+  const target = element({ left: 300, top: 180, width: 50, height: 50 });
+  const trail = element();
+  const timeline = createPresentationTimeline({
+    container: stage, trailPath: trail,
+    resolveSource: () => source, resolveTarget: () => target,
+    wait: () => Promise.resolve()
+  });
+  timeline.sync([]);
+  timeline.sync([{ sequence: 1, kind: "transfer" }]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(trail.attributes.d, /^M 62 132 Q /);
+  assert.match(trail.attributes.d, / 337 267$/);
+});
+
 test("首次同步只建立游标，后续服务器事件按sequence播放且绘制方向", async () => {
   const stage = element({ left: 10, top: 20, width: 400, height: 300 });
   const source = element({ left: 30, top: 50, width: 40, height: 40 });

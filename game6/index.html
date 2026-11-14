@@ -7,10 +7,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-  <main class="shell">
-    <header class="topbar" id="siteHeader">
+<body data-play-layout="game6">
+  <main class="shell" data-play-shell>
+    <header class="topbar" id="siteHeader" data-play-header>
       <div class="header-title">
         <p class="eyebrow">6 NIMMT! · ONLINE</p>
         <h1>牛头王</h1>
@@ -76,8 +78,26 @@
       </div>
     </section>
 
-    <section class="game-layout hidden" id="roomPanel">
-      <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+    <section class="game-layout hidden" id="roomPanel" data-play-room>
+<section data-play-workspace>
+<div class="notice" id="notice" data-play-status>等待玩家加入。</div>
+<div class="rows-workspace" data-play-board><div class="panel player-panel">
+          <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
+          <div class="player-list" id="playerList"></div>
+        </div><div class="panel reveal-panel hidden" id="revealPanel">
+          <div class="section-head">
+            <div><p class="eyebrow">REVEALED PLAYS</p><h2>本轮公开出牌</h2></div>
+            <span class="reveal-progress" id="revealProgress"></span>
+          </div>
+          <div class="revealed-plays" id="revealedPlays"></div>
+        </div><div class="panel board-panel" id="boardPanel">
+          <div class="section-head">
+            <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
+            <div class="badges"><span id="roundBadge">第 0 局</span><span id="turnBadge">第 0 / 10 回合</span></div>
+          </div>
+
+          <div class="rows" id="rows"></div>
+        </div><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
         <svg class="presentation-trail-layer" aria-hidden="true">
           <defs><marker id="bullheadsTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
           <path id="presentationTrail" class="presentation-trail" marker-end="url(#bullheadsTrailArrow)"></path>
@@ -85,12 +105,24 @@
         <div id="presentationAnnouncement" class="presentation-announcement">
           <span id="presentationLabel"></span><b id="presentationText"></b>
         </div>
-      </div>
-      <aside class="sidebar">
-        <div class="panel player-panel">
-          <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
-          <div class="player-list" id="playerList"></div>
-        </div>
+      </div></div>
+<div class="turn-console" id="turnConsole" data-hand-expanded="false" data-play-controls>
+            <div class="board-action-panel">
+              <div class="board-action-title"><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+              <div class="actions" id="actionArea"></div>
+              <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+            </div>
+            <div class="turn-hand-panel" id="turnHandPanel">
+              <div class="turn-hand-head">
+                <div><p class="eyebrow">YOUR HAND</p><h2>我的手牌 <span id="handCount">0</span></h2></div>
+                <span class="selection-state" id="selectionState"></span>
+              </div>
+              <div class="hand" id="hand"></div>
+            </div>
+          </div>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
+
 
         <details class="panel rules-card">
           <summary><span>详细规则</span><b>展开查看</b></summary>
@@ -121,41 +153,8 @@
           <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
         </details>
       </aside>
-
-      <section class="table-area">
-        <div class="notice" id="notice">等待玩家加入。</div>
-
-        <div class="panel reveal-panel hidden" id="revealPanel">
-          <div class="section-head">
-            <div><p class="eyebrow">REVEALED PLAYS</p><h2>本轮公开出牌</h2></div>
-            <span class="reveal-progress" id="revealProgress"></span>
-          </div>
-          <div class="revealed-plays" id="revealedPlays"></div>
-        </div>
-
-        <div class="panel board-panel" id="boardPanel">
-          <div class="section-head">
-            <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
-            <div class="badges"><span id="roundBadge">第 0 局</span><span id="turnBadge">第 0 / 10 回合</span></div>
-          </div>
-          <div class="turn-console" id="turnConsole" data-hand-expanded="false">
-            <div class="board-action-panel">
-              <div class="board-action-title"><p class="eyebrow">ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-              <div class="actions" id="actionArea"></div>
-              <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-            </div>
-            <div class="turn-hand-panel" id="turnHandPanel">
-              <div class="turn-hand-head">
-                <div><p class="eyebrow">YOUR HAND</p><h2>我的手牌 <span id="handCount">0</span></h2></div>
-                <span class="selection-state" id="selectionState"></span>
-              </div>
-              <div class="hand" id="hand"></div>
-            </div>
-          </div>
-          <div class="rows" id="rows"></div>
-        </div>
-      </section>
-    </section>
+</details>
+</section>
   </main>
   <script type="module" src="app.js"></script>
 </body>

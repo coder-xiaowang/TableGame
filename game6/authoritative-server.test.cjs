@@ -38,7 +38,8 @@ test("game6 server owns the deck and sends a different secret view to each playe
   const page = await fetch(baseUrl).then((response) => response.text());
   assert.match(page,/id="turnConsole"/);
   assert.match(page,/class="turn-hand-panel"/);
-  assert.ok(page.indexOf('id="turnConsole"') < page.indexOf('id="rows"'));
+  assert.match(page, /id="turnConsole"[^>]*data-play-controls/);
+  assert.ok(page.indexOf('id="rows"') < page.indexOf('id="turnConsole"'));
   const config = await fetch(`${baseUrl}/api/config`).then((response) => response.json());
   assert.equal(config.authorityMode,"server"); assert.equal(config.protocolVersion,3); assert.equal(config.actionSeconds,15);
 

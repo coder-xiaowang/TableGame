@@ -1,0 +1,13 @@
+[data-play-layout="game7"] .room-card[data-play-status] { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 5px 8px; }
+[data-play-layout="game7"] .room-card > .eyebrow { display: none; }
+[data-play-layout="game7"] .room-card .room-code { width: auto; padding: 4px 7px; margin: 0; font-size: 18px; }
+[data-play-layout="game7"] .room-card .host-tools { display: flex; flex-wrap: wrap; gap: 5px; }
+[data-play-layout="game7"] .room-card .host-tools :is(label,button) { width: auto; margin: 0; font-size: 12px; }
+[data-play-layout="game7"] .room-card label:has(select:disabled) { display: none; }
+[data-play-layout="game7"] #harborViewport { height: 100%; min-height: 270px; border-radius: 14px; }
+[data-play-layout="game7"] .harbor-controls > .action-panel { position: static; max-height: none; margin: 0; padding: 6px; overflow: visible; }
+[data-play-layout="game7"] #walletPanel { padding: 6px; }
+[data-play-layout="game7"] .harbor-controls .action-area { display: flex; flex-wrap: wrap; gap: 5px; }
+[data-play-layout="game7"] .harbor-controls .action-area > * { width: auto; flex: 0 1 auto; }
+[data-play-layout="game7"] .harbor-controls .money { font-size: 20px; }
+[data-play-layout="game7"] .harbor-controls .shares { max-height: 90px; overflow: auto; }

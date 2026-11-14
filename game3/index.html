@@ -7,10 +7,12 @@
     <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
     <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <main class="app-shell">
-      <header class="topbar" id="siteHeader">
+    <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
+</head>
+  <body data-play-layout="game3">
+    <main class="app-shell" data-play-shell>
+      <header class="topbar" id="siteHeader" data-play-header>
         <div class="header-title">
           <p class="eyebrow">YACHT DICE · ONLINE</p>
           <h1>快艇骰子</h1>
@@ -96,8 +98,27 @@
         </section>
       </section>
 
-      <section class="room-layout hidden" id="roomPanel">
-        <aside class="sidebar">
+      <section class="room-layout hidden" id="roomPanel" data-play-room>
+<section data-play-workspace>
+<div class="notice" id="gameNotice" data-play-status>等待创建房间。</div>
+<div class="panel score-panel" data-play-board>
+            <div class="section-head">
+              <div><p class="eyebrow">SCORE SHEET</p><h2>计分表</h2></div>
+              <select class="score-view-select" id="scorePlayerSelect" aria-label="查看玩家计分表"></select>
+            </div>
+            <div class="score-summary" id="scoreSummary"></div>
+            <div class="score-grid" id="scoreGrid"></div>
+          </div>
+<div class="panel game-panel" data-play-controls>
+            <div class="section-head game-heading">
+              <div><p class="eyebrow">CURRENT TURN</p><h2 id="turnTitle">等待开始</h2></div>
+              <div class="badges"><span id="roundBadge">第 0 / 13 轮</span><span id="rollBadge">投掷 0 / 3</span></div>
+            </div>
+            <div class="dice-tray" id="diceTray"></div>
+            <div class="turn-actions" id="turnActions"></div>
+          </div>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
           <div class="panel player-panel">
             <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
             <div class="player-list" id="playerList"></div>
@@ -124,28 +145,8 @@
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
         </aside>
-
-        <section class="table-area">
-          <div class="notice" id="gameNotice">等待创建房间。</div>
-          <div class="panel game-panel">
-            <div class="section-head game-heading">
-              <div><p class="eyebrow">CURRENT TURN</p><h2 id="turnTitle">等待开始</h2></div>
-              <div class="badges"><span id="roundBadge">第 0 / 13 轮</span><span id="rollBadge">投掷 0 / 3</span></div>
-            </div>
-            <div class="dice-tray" id="diceTray"></div>
-            <div class="turn-actions" id="turnActions"></div>
-          </div>
-
-          <div class="panel score-panel">
-            <div class="section-head">
-              <div><p class="eyebrow">SCORE SHEET</p><h2>计分表</h2></div>
-              <select class="score-view-select" id="scorePlayerSelect" aria-label="查看玩家计分表"></select>
-            </div>
-            <div class="score-summary" id="scoreSummary"></div>
-            <div class="score-grid" id="scoreGrid"></div>
-          </div>
-        </section>
-      </section>
+</details>
+</section>
     </main>
     <script type="module" src="app.js"></script>
   </body>

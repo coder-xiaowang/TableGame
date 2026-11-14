@@ -8,8 +8,9 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/table-layout.css">
 </head>
-<body>
+<body class="table-session">
 <main class="shell">
   <header id="hero" class="hero">
     <div class="hero-title"><p class="eyebrow">DANCING CRIMINAL · SERVER AUTHORITY</p><h1>犯人在跳舞</h1><p>交换手中的线索，追踪那张不断移动的犯人牌。</p></div>
@@ -53,6 +54,7 @@
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
+    <details class="table-reference"><summary>规则 · 对局记录 · 旁观席</summary>
     <aside class="sidebar">
       <details class="panel rule-card">
         <summary><span><span class="eyebrow">CASE NOTES</span><b>详细调查手册</b></span><span class="fold-hint">展开</span></summary>
@@ -91,10 +93,11 @@
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
     </aside>
+    </details>
 
-    <section class="game-area">
+    <section class="game-area table-workspace">
       <div id="notice" class="notice">等待玩家加入。</div>
-      <section class="case-board" id="caseBoard">
+      <section class="case-board table-board" id="caseBoard">
         <div class="case-heading" id="caseHeading">
           <div><p class="eyebrow">CURRENT CASE</p><h2 id="caseText">尚未发生案件</h2></div>
           <div class="round-badge">第 <b id="roundNumber">0</b> 轮 · 目标 <b id="targetScoreLabel">5</b> 分</div>
@@ -110,13 +113,18 @@
           </div>
         </div>
 
-        <div id="players" class="players">
-          <div id="leftPlayerRail" class="player-rail player-rail-left" aria-label="左侧玩家席"></div>
-          <div class="case-safe-zone" aria-hidden="true"></div>
-          <div id="rightPlayerRail" class="player-rail player-rail-right" aria-label="右侧玩家席"></div>
+        <div id="players" class="players table-seats">
+          <div id="leftPlayerRail" class="player-rail player-rail-left table-rail" aria-label="左侧玩家席，座次由下向上"></div>
+          <div id="rightPlayerRail" class="player-rail player-rail-right table-rail" aria-label="右侧玩家席，座次由上向下"></div>
+          <div id="discardArea" class="discard-area table-centerpiece">
+            <div class="section-head"><div><p class="eyebrow">EVIDENCE TRAIL</p><h2>公开牌迹</h2></div><span id="discardCount">0张</span></div>
+            <div id="discardPile" class="discard-pile"><p class="muted">开局后显示公开打出的牌</p></div>
+          </div>
         </div>
+      </section>
 
-        <section id="controlDock" class="center-action" data-role="player">
+      <div class="panel table-dock">
+        <section id="controlDock" class="center-action table-decision" data-role="player">
           <div class="action-head">
             <div><p class="eyebrow">CURRENT DECISION</p><h2 id="actionTitle">等待开始</h2></div>
             <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
@@ -125,16 +133,11 @@
           <div id="actionButtons" class="action-buttons"></div>
         </section>
 
-        <div id="discardArea" class="discard-area">
-          <div class="section-head"><div><p class="eyebrow">EVIDENCE TRAIL</p><h2>公开牌迹</h2></div><span id="discardCount">0张</span></div>
-          <div id="discardPile" class="discard-pile"><p class="muted">开局后显示公开打出的牌</p></div>
-        </div>
-      </section>
-
-      <section id="privateZone" class="panel hand-strip">
-        <div class="hand-strip-label"><span>MY HAND</span><b>我的手牌</b></div>
-        <div id="myHand" class="my-hand"></div>
-      </section>
+        <section id="privateZone" class="panel hand-strip table-private">
+          <div class="hand-strip-label"><span>MY HAND</span><b>我的手牌</b></div>
+          <div id="myHand" class="my-hand"></div>
+        </section>
+      </div>
 
     </section>
   </section>

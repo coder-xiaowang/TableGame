@@ -1,0 +1,14 @@
+[data-play-layout="game"] :is(.decoder-stage, .cipher-machine, .operator-registry, .operator-wall) { min-width: 0; }
+[data-play-layout="game"] .cipher-machine[data-play-board] { padding: 12px; }
+[data-play-layout="game"] .operator-registry { max-width: 100%; }
+[data-play-layout="game"] .decoder-console[data-play-controls] { display: block; }
+[data-play-layout="game"] .decoder-console .turn-header { margin-bottom: 5px; }
+[data-play-layout="game"] .decoder-console .action-area { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 8px; }
+[data-play-layout="game"] .archive-strip { order: initial; }
+@container play (max-width: 650px) {
+  [data-play-layout="game"] .machine-header { padding: 0 0 8px; }
+  [data-play-layout="game"] .machine-header h2 { font-size: 17px; }
+  [data-play-layout="game"] .cipher-wall-heading { display: none; }
+  [data-play-layout="game"] .operator-wall { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  [data-play-layout="game"] .operator-card { min-height: 110px; }
+}

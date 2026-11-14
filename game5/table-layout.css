@@ -1,0 +1,15 @@
+[data-play-layout="game5"] .players-panel { padding: 8px; margin-bottom: 8px; }
+[data-play-layout="game5"] #players { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+[data-play-layout="game5"] .player { min-width: 0; padding: 7px; }
+[data-play-layout="game5"] .player-name { flex-wrap: wrap; font-size: 12px; }
+[data-play-layout="game5"] .mini-cards { max-height: 24px; overflow: hidden; }
+[data-play-layout="game5"] .table { min-height: 0; padding: 10px; }
+[data-play-layout="game5"] .table-stage { min-height: 180px; }
+[data-play-layout="game5"] .table-console .hand-panel { min-height: 0; }
+[data-play-layout="game5"] .table-console > :is(.action-panel,.hand-panel) { padding: 5px; }
+[data-play-layout="game5"] .table-console .hand { flex-wrap: nowrap; min-height: 100px; overflow-x: auto; padding: 8px 5px; gap: 8px; scroll-padding-inline: 8px; }
+[data-play-layout="game5"] .hand .uno-card { flex: 0 0 64px; width: 64px; height: 90px; transform: none; margin: 0; }
+[data-play-layout="game5"] .hand button.uno-card:hover:not(:disabled) { transform: translateY(-3px); }
+@container play (max-width:600px) {
+  [data-play-layout="game5"] #players { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}

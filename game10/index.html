@@ -8,9 +8,14 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-  <header id="siteHeader" class="site-header">
+<body data-play-layout="game10">
+
+
+  <main data-play-shell>
+<header id="siteHeader" class="site-header" data-play-header>
     <div class="header-title"><p class="eyebrow">PUSH YOUR LUCK</p><h1>CAN'T <span>STOP</span></h1></div>
     <div class="header-meta">
       <div id="connectionStatus" class="connection-pill" data-status="idle">尚未连接</div>
@@ -26,8 +31,6 @@
       </section>
     </div>
   </header>
-
-  <main>
     <section id="setupPanel" class="setup-shell" data-room-entry>
       <article class="intro-card">
         <div class="mountain-mark">▲</div>
@@ -55,9 +58,18 @@
       </article>
     </section>
 
-    <section id="roomPanel" class="room-shell hidden">
-      <div class="game-layout">
-        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+    <section id="roomPanel" class="room-shell hidden" data-play-room>
+<section data-play-workspace>
+
+<div class="mountain-workspace" data-play-board><section class="board-panel panel">
+          <div class="round-meta"><span id="phaseBadge" class="phase-badge">准备阶段</span><span id="turnLabel">等待开始</span></div>
+          <p id="notice" class="notice">等待玩家加入房间</p>
+          <div class="board-stage">
+            <div id="board" class="mountain-board"></div>
+            <canvas id="diceCanvas" class="dice-canvas" aria-label="三维物理骰子投掷区域"></canvas>
+          </div>
+          <div class="timer-box"><div><span>行动时间</span><b id="timerText">--</b></div><div class="shared-timer-track"><div id="timerBar" class="shared-timer-bar"></div></div></div>
+        </section><section id="resultPanel" class="result-panel panel hidden"><p class="eyebrow">SUMMIT REACHED</p><h2 id="winnerText">本局结束</h2><div id="resultList"></div><div id="resultActions" class="result-actions hidden"><button id="playAgainButton" class="primary" type="button">再来一局</button></div></section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
           <svg class="presentation-trail-layer" aria-hidden="true">
             <defs><marker id="cantStopTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
             <path id="presentationTrail" class="presentation-trail" marker-end="url(#cantStopTrailArrow)"></path>
@@ -65,8 +77,14 @@
           <div id="presentationAnnouncement" class="presentation-announcement">
             <span id="presentationLabel"></span><b id="presentationText"></b>
           </div>
-        </div>
-        <aside class="side-panel panel">
+        </div></div>
+<aside class="action-panel panel" data-play-controls>
+          <div class="dice-title"><span>四颗骰子</span><b id="diceTotal"></b></div>
+          <div id="diceArea" class="dice-area"><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span></div>
+          <div id="actionArea" class="action-area"></div>
+        </aside>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="side-panel panel">
           <div class="panel-title"><span>登山队</span><b id="playerCountBadge">0 / 3</b></div>
           <div id="playerList" class="player-list"></div>
           <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>本回合</span></div>
@@ -95,27 +113,10 @@
             <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
           </details>
         </aside>
+</details>
+</section>
 
-        <section class="board-panel panel">
-          <div class="round-meta"><span id="phaseBadge" class="phase-badge">准备阶段</span><span id="turnLabel">等待开始</span></div>
-          <p id="notice" class="notice">等待玩家加入房间</p>
-          <div class="board-stage">
-            <div id="board" class="mountain-board"></div>
-            <canvas id="diceCanvas" class="dice-canvas" aria-label="三维物理骰子投掷区域"></canvas>
-          </div>
-          <div class="timer-box"><div><span>行动时间</span><b id="timerText">--</b></div><div class="shared-timer-track"><div id="timerBar" class="shared-timer-bar"></div></div></div>
-        </section>
-
-        <aside class="action-panel panel">
-          <div class="dice-title"><span>四颗骰子</span><b id="diceTotal"></b></div>
-          <div id="diceArea" class="dice-area"><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span></div>
-          <div id="actionArea" class="action-area"></div>
-        </aside>
-      </div>
-
-      <section id="resultPanel" class="result-panel panel hidden"><p class="eyebrow">SUMMIT REACHED</p><h2 id="winnerText">本局结束</h2><div id="resultList"></div><div id="resultActions" class="result-actions hidden"><button id="playAgainButton" class="primary" type="button">再来一局</button></div></section>
-    </section>
-  </main>
+</main>
   <script type="module" src="app.js"></script>
 </body>
 </html>

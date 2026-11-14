@@ -172,6 +172,7 @@ function renderPlayers() {
       element.innerHTML = `<header><div><b title="${escapeHtml(player.name)}">${escapeHtml(playerNameLabel(player.name))}</b><small>${player.id === view.selfId ? "你 · " : ""}${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div></header><div class="wealth"><span>● ${player.coins} 金币</span><span>${player.eliminated ? "已出局" : `${active} 点影响力`}</span></div><div class="seat-cards">${player.influences.map((card, index) => roleCard(card, { slotIndex: index })).join("") || '<p class="waiting">等待开局</p>'}</div><span class="seat-admin-proxy" data-kick="${escapeHtml(player.id)}" aria-hidden="true"></span>`;
     }
     element.dataset.courtRail = slot.rail;
+    element.style.setProperty("--seat-order", String(seatIndex));
     element.classList.add("player-seat");
     element.classList.toggle("self", player.id === view.selfId);
     element.classList.toggle("current", player.id === view.currentPlayerId && view.phase !== "lobby");

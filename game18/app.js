@@ -176,7 +176,7 @@ function renderPlayers() {
     if (seat.dataset.renderKey !== renderKey) {
       seat.dataset.renderKey = renderKey;
       seat.setAttribute("data-seat-side", side);
-      seat.innerHTML = `<header><div><b>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"}</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header><div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div><div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>`;
+      seat.innerHTML = `<header><div><b><span class="seat-number">${view.players.findIndex((item) => item.id === player.id) + 1}</span>${escapeHtml(player.name)}${player.id === view.selfId ? " · 你" : ""}</b><small>${player.isHost ? "房主 · " : ""}${player.connected ? "在线" : "离线"} · ${player.handCount}张手牌</small></div>${view.permissions.canKick && !player.isHost ? `<button class="kick" data-kick="${escapeHtml(player.id)}">移出</button>` : ""}</header><div class="score-line"><strong>${player.score}</strong><span>/ ${view.targetScore} 分</span>${player.accomplice ? '<em>已公开共犯</em>' : ""}</div><div class="seat-hand">${player.hand.map((card) => cardMarkup(card, { compact: true })).join("") || '<span class="empty-hand">暂无手牌</span>'}</div>`;
       const kick = seat.querySelector("[data-kick]"); if (kick) kick.onclick = () => kickPlayer(kick.dataset.kick);
       if (targetable) {
         seat.setAttribute("data-target-player-id", player.id); seat.setAttribute("role", "button"); seat.tabIndex = 0; seat.setAttribute("aria-label", `选择 ${player.name} 作为目标`);
@@ -188,6 +188,8 @@ function renderPlayers() {
       }
     }
     seat.classList.add("player-seat");
+    seat.style.setProperty("--seat-order", String(index));
+    seat.title = `${view.players.findIndex((item) => item.id === player.id) + 1}号 · ${player.name}`;
     seat.classList.toggle("self", player.id === view.selfId);
     seat.classList.toggle("current", player.id === view.currentPlayerId && !["lobby", "roundReview", "ended"].includes(view.phase));
     seat.classList.toggle("offline", !player.connected);
@@ -283,8 +285,8 @@ function renderTargetAction() {
   const kind = view.pending.kind;
   E.actionTitle.textContent = `${meta(kind).label}：选择目标`;
   E.actionHint.textContent = kind === "detective"
-    ? "直接点击桌面左右两侧发光的玩家卡片进行指认；不在场证明可能让指认失败。"
-    : "直接点击桌面左右两侧发光的玩家卡片作为目标。";
+    ? "直接点击发光的玩家卡片进行指认；不在场证明可能让指认失败。"
+    : "直接点击发光的玩家卡片作为目标。";
 }
 
 function renderSecretSelection(kind) {

@@ -8,11 +8,13 @@
     <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
     <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
 
-<body>
-    <main class="shell">
-        <header id="siteHeader">
+<body data-play-layout="game5">
+    <main class="shell" data-play-shell>
+        <header id="siteHeader" data-play-header>
             <div class="header-title">
                 <p class="eyebrow">ONLINE CARD GAME</p>
                 <h1><i>U</i><i>N</i><i>O</i></h1>
@@ -84,8 +86,55 @@
                 <p class="checkin-footnote">每个人只会看见自己的手牌；牌堆、罚牌链与胜负均由服务器判定。</p>
             </section>
         </section>
-        <section class="layout hidden" id="roomPanel">
-            <aside>
+        <section class="layout hidden" id="roomPanel" data-play-room>
+<section id="unoStage" class="main" data-play-workspace>
+<div class="notice" id="notice" data-play-status>等待玩家加入。</div>
+<div class="uno-workspace" data-play-board><div class="panel players-panel">
+                    <div class="players" id="players"></div>
+                </div><div class="table panel">
+                    <div class="table-head"><span id="directionText">顺时针 ↻</span><span>摸牌堆 <b
+                                id="deckCount">0</b></span></div>
+                    <div class="table-stage" id="tableStage">
+                        <div class="center"><button class="draw-pile" id="drawPile"
+                                disabled><span>UNO</span><small>摸牌</small></button>
+                            <div class="discard" id="discardPile"></div>
+                        </div>
+                        <div class="current-color" id="currentColor">当前颜色：—</div>
+                        <div class="penalty hidden" id="penaltyBanner"></div>
+                    </div>
+
+                </div><div id="presentationEffects" class="presentation-effects" aria-live="polite">
+                    <svg class="presentation-trail-layer" aria-hidden="true">
+                        <defs><marker id="unoTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+                        <path id="presentationTrail" class="presentation-trail" marker-end="url(#unoTrailArrow)"></path>
+                    </svg>
+                    <div id="presentationAnnouncement" class="presentation-announcement">
+                        <span id="presentationLabel"></span><b id="presentationText"></b>
+                    </div>
+                </div></div>
+<div class="table-console" data-play-controls>
+                        <section class="action-panel">
+                            <div class="action-head">
+                                <div>
+                                    <p class="eyebrow">YOUR TURN</p>
+                                    <h2 id="actionTitle">等待开始</h2>
+                                </div>
+                                <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+                            </div>
+                            <div class="actions" id="actionArea"></div>
+                        </section>
+                        <section class="hand-panel" id="handPanel">
+                            <div class="action-head">
+                                <div>
+                                    <p class="eyebrow">YOUR HAND</p>
+                                    <h2>我的手牌 <span id="handCount">0</span></h2>
+                                </div><button class="uno-button" id="unoButton" disabled>喊 UNO！</button>
+                            </div>
+                            <div class="hand" id="hand"></div>
+                        </section>
+                    </div>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside>
                 <details class="panel rules-card" id="rulesCard">
                     <summary><span>详细规则</span><b>展开查看</b></summary>
                     <div class="rule-details">
@@ -114,55 +163,8 @@
                     <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
                 </details>
             </aside>
-            <section class="main" id="unoStage">
-                <div id="presentationEffects" class="presentation-effects" aria-live="polite">
-                    <svg class="presentation-trail-layer" aria-hidden="true">
-                        <defs><marker id="unoTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
-                        <path id="presentationTrail" class="presentation-trail" marker-end="url(#unoTrailArrow)"></path>
-                    </svg>
-                    <div id="presentationAnnouncement" class="presentation-announcement">
-                        <span id="presentationLabel"></span><b id="presentationText"></b>
-                    </div>
-                </div>
-                <div class="notice" id="notice">等待玩家加入。</div>
-                <div class="panel players-panel">
-                    <div class="players" id="players"></div>
-                </div>
-                <div class="table panel">
-                    <div class="table-head"><span id="directionText">顺时针 ↻</span><span>摸牌堆 <b
-                                id="deckCount">0</b></span></div>
-                    <div class="table-stage" id="tableStage">
-                        <div class="center"><button class="draw-pile" id="drawPile"
-                                disabled><span>UNO</span><small>摸牌</small></button>
-                            <div class="discard" id="discardPile"></div>
-                        </div>
-                        <div class="current-color" id="currentColor">当前颜色：—</div>
-                        <div class="penalty hidden" id="penaltyBanner"></div>
-                    </div>
-                    <div class="table-console">
-                        <section class="action-panel">
-                            <div class="action-head">
-                                <div>
-                                    <p class="eyebrow">YOUR TURN</p>
-                                    <h2 id="actionTitle">等待开始</h2>
-                                </div>
-                                <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-                            </div>
-                            <div class="actions" id="actionArea"></div>
-                        </section>
-                        <section class="hand-panel" id="handPanel">
-                            <div class="action-head">
-                                <div>
-                                    <p class="eyebrow">YOUR HAND</p>
-                                    <h2>我的手牌 <span id="handCount">0</span></h2>
-                                </div><button class="uno-button" id="unoButton" disabled>喊 UNO！</button>
-                            </div>
-                            <div class="hand" id="hand"></div>
-                        </section>
-                    </div>
-                </div>
-            </section>
-        </section>
+</details>
+</section>
         <div class="modal hidden" id="colorModal">
             <div class="panel modal-card">
                 <h2>选择接下来的颜色</h2>

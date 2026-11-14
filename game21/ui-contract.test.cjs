@@ -27,7 +27,6 @@ test("间谍危机使用地点档案库与分布式情报网络外壳", () => {
   const supportAt = html.indexOf('class="support-console"');
   assert.ok(locationsAt >= 0 && tableAt > locationsAt && dockAt > tableAt && supportAt > dockAt);
 
-  assert.match(script, /const NODE_COORDS = Object\.freeze/);
   assert.match(script, /import \{ compassSeatSlots \}/);
   assert.match(script, /class="network-wire/);
   assert.match(script, /seat\.dataset\.nodeIndex = String\(index\)/);

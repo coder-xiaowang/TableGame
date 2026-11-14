@@ -1,0 +1,231 @@
+/* Opt-in tabletop geometry. Game styles own colors, materials and card artwork. */
+.table-session:has(#roomPanel:not(.hidden)) .shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  max-width: 1680px;
+  padding: 10px;
+  overflow: hidden;
+}
+.table-session .hero.in-room {
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.table-session .hero.in-room h1 { font-size: clamp(22px, 3vw, 34px); }
+.table-session .hero.in-room .hero-title { display: block; }
+.table-session .hero.in-room .eyebrow,
+.table-session .hero.in-room .hero-title > p { display: none; }
+.table-session .hero-meta,
+.table-session .room-header-tools,
+.table-session .host-tools { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.table-session .host-tools { flex: 0 1 auto; }
+.table-session .host-tools button { width: auto; }
+.table-session .room-header-tools { border-radius: 12px; }
+.table-session .host-tools button,
+.table-session .host-tools label { flex: 0 0 auto; }
+.table-session .host-tools button { padding: 6px 9px; font-size: 12px; }
+.table-session .room-layout {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 0;
+}
+.table-session .table-reference { grid-row: 2; min-width: 0; }
+.table-session .table-reference > summary { padding: 6px 12px; border-radius: 10px; background: var(--paper, #fff8e5); color: var(--ink, #222); cursor: pointer; font-size: 12px; }
+.table-session .sidebar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; min-height: 0; max-height: 24dvh; overflow: auto; margin: 6px 0 0; }
+.table-session .sidebar > * { margin: 0; }
+.table-session .sidebar h2 { font-size: 14px; }
+.table-workspace {
+  container: tabletop / size;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+}
+.table-workspace > .notice { margin: 0; padding: 6px 10px; font-size: 13px; }
+.table-workspace .table-board {
+  position: relative;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-radius: 22px;
+}
+.table-workspace .table-seats {
+  position: relative;
+  inset: auto;
+  display: grid;
+  grid-template-columns: minmax(145px, 1fr) minmax(190px, 1.25fr) minmax(145px, 1fr);
+  gap: 12px;
+  min-width: 0;
+  min-height: 100%;
+  padding: 4px;
+  pointer-events: none;
+}
+.table-workspace .table-rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  grid-row: 1;
+}
+.table-workspace .player-rail-left { grid-column: 1; flex-direction: column-reverse; }
+.table-workspace .player-rail-right { grid-column: 3; }
+.table-workspace .table-centerpiece {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  place-self: center;
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  margin: 0;
+  padding: 12px;
+  transform: none;
+  pointer-events: auto;
+}
+.table-workspace .table-seats .player-seat:nth-child(n) {
+  position: relative;
+  inset: auto;
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 88px;
+  max-height: none;
+  margin: 0;
+  padding: 8px;
+  overflow: visible;
+  transform: none;
+  scale: 1;
+  pointer-events: auto;
+}
+.table-workspace .seat-head > div:first-child { min-width: 0; }
+.table-workspace .seat-head b { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-workspace .seat-number { font: 700 11px system-ui; opacity: .7; margin-right: 4px; }
+/* Public badges take real space; no hidden bottom reservation on these cards. */
+.table-workspace .table-seats .shared-player-presence-anchor { padding-bottom: 8px !important; }
+.table-workspace .table-seats .shared-player-presence-rail {
+  position: static !important;
+  height: auto !important;
+  margin-top: 4px !important;
+}
+.table-workspace .table-seats .shared-player-presence-rail:empty { display: none !important; }
+.table-workspace .table-dock {
+  position: relative;
+  inset: auto;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(38dvh, 300px);
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  transform: none;
+}
+.table-workspace .table-dock > * { min-width: 0; }
+.table-workspace .table-decision {
+  position: static;
+  order: 0;
+  width: auto;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.table-workspace .table-dock h2 { font-size: 17px; overflow-wrap: anywhere; }
+.table-workspace .table-dock .eyebrow { font-size: 9px; }
+.table-workspace .table-dock .action-hint,
+.table-workspace .table-dock #actionHint { margin: 5px 0; font-size: 12px; }
+.table-workspace .table-private {
+  position: static;
+  order: 1;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 0 10px;
+  border: 0;
+  border-left: 1px solid var(--line, #aaa6);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.table-workspace .table-private .hand-strip-label { border: 0; padding: 0; }
+.table-workspace .table-private .hand-strip-label span { display: none; }
+.table-workspace .table-private .my-hand { width: 100%; padding-top: 7px; }
+.table-workspace .table-dock:has(.table-private.hidden) { grid-template-columns: 1fr; }
+@container tabletop (max-width: 640px) {
+  .table-workspace .table-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-height: 0;
+  }
+  .table-workspace .table-rail { display: contents; }
+  .table-workspace .table-centerpiece {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    order: -1;
+    padding: 8px;
+  }
+  .table-workspace .table-seats .player-seat:nth-child(n) { order: var(--seat-order); padding: 7px; }
+  .table-workspace .table-centerpiece h2 { margin: 3px 0; font-size: 16px; }
+  .table-workspace .table-centerpiece .piles { gap: 10px; }
+  .table-workspace .table-centerpiece .pile { width: 58px; height: 54px; }
+  .table-workspace .table-dock { grid-template-columns: 1fr; gap: 7px; padding: 8px; }
+  .table-workspace .table-private { padding: 6px 0 0; border-left: 0; border-top: 1px solid var(--line, #aaa6); }
+  .table-workspace .table-private .card { flex-basis: 76px; min-height: 90px; }
+  .table-workspace .table-private .game-card:not(.compact) { flex-basis: 76px; width: 76px; min-height: 94px; }
+}
+@container tabletop (min-width: 641px) and (max-height: 650px) {
+  .table-workspace .table-seats { grid-template-columns: repeat(4,minmax(0,1fr)); min-height: 0; gap: 8px; }
+  .table-workspace .table-rail { display: contents; }
+  .table-workspace .table-seats .player-seat:nth-child(n) { order: var(--seat-order); min-height: 0; }
+  .table-workspace .table-centerpiece { grid-column: 1 / -1; grid-row: auto; order: -1; padding: 7px; }
+  .table-workspace .table-centerpiece > .eyebrow { display: none; }
+  .table-workspace .table-centerpiece h2 { font-size: 15px; margin: 0 0 4px; }
+  .table-workspace .table-centerpiece .pile { width: 70px; height: 38px; }
+  .table-workspace .table-centerpiece .pile b { font-size: 16px; }
+}
+@media (max-width: 600px), (max-height: 540px) {
+  .table-session:has(#roomPanel:not(.hidden)) .shell { padding: 5px; }
+  .table-session .hero.in-room { flex-wrap: wrap; padding: 5px 7px; }
+  .table-session .hero.in-room > div:first-child { display: none; }
+  .table-session .hero-meta { width: 100%; justify-content: space-between; }
+  .table-session .room-header-tools { padding: 3px 5px; }
+  .table-session .room-identity { font-size: 11px; }
+  .table-session .host-tools label:has(select:disabled) { display: none; }
+  .table-session .host-tools button { font-size: 11px; }
+  .table-session .sidebar { grid-template-columns: minmax(0,1fr); }
+  .table-workspace .table-board { padding: 5px; border-width: 3px; border-radius: 14px; }
+  .table-workspace .table-dock { max-height: 40dvh; }
+}
+
+@media (max-height: 540px) {
+  .table-workspace .table-dock { max-height: 30dvh; padding: 6px; }
+  .table-workspace .table-dock h2 { font-size: 14px; }
+  .table-workspace .table-dock .card,
+  .table-workspace .table-private .game-card:not(.compact) { min-height: 76px; font-size: 12px; }
+}

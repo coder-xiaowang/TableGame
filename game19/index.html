@@ -9,8 +9,9 @@
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="seat-layout.css">
+  <link rel="stylesheet" href="/shared/styles/table-layout.css">
 </head>
-<body>
+<body class="table-session">
 <main class="shell">
   <header id="hero" class="hero">
     <div><p class="eyebrow">WILD WEST · SERVER AUTHORITY</p><h1>BANG!</h1><p>身份、枪火与最后一个活着的人</p></div>
@@ -52,6 +53,7 @@
   </section>
 
   <section id="roomPanel" class="room-layout hidden">
+    <details class="table-reference"><summary>规则 · 对局记录 · 旁观席</summary>
     <aside class="sidebar">
       <details class="panel rule-card">
         <summary><span><span class="eyebrow">RULE BOOK</span><b>详细规则</b></span><span>展开</span></summary>
@@ -68,18 +70,18 @@
       <section class="panel log-card"><div class="section-head"><div><p class="eyebrow">CHRONICLE</p><h2>枪战记录</h2></div><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
       <details id="spectatorPanel" class="panel spectator-panel hidden" open><summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary><div id="spectatorList" class="spectator-list"></div></details>
     </aside>
+    </details>
 
-    <section class="game-area">
+    <section class="game-area table-workspace">
       <div id="notice" class="notice">等待玩家加入</div>
-      <section id="westernTable" class="western-table">
-        <div id="players" class="players">
-          <div id="leftPlayerRail" class="player-rail player-rail-left" aria-label="左侧枪手席"></div>
-          <div class="saloon-safe-zone" aria-hidden="true"></div>
-          <div id="rightPlayerRail" class="player-rail player-rail-right" aria-label="右侧枪手席"></div>
-        </div>
-        <div id="tableCenter" class="table-center">
-          <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
-          <div class="piles"><div id="deckPile" class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
+      <section id="westernTable" class="western-table table-board">
+        <div id="players" class="players table-seats">
+          <div id="leftPlayerRail" class="player-rail player-rail-left table-rail" aria-label="左侧枪手席，座次由下向上"></div>
+          <div id="rightPlayerRail" class="player-rail player-rail-right table-rail" aria-label="右侧枪手席，座次由上向下"></div>
+          <div id="tableCenter" class="table-center table-centerpiece">
+            <p class="eyebrow">CURRENT MOMENT</p><h2 id="centerMoment">酒馆尚未响起枪声</h2>
+            <div class="piles"><div id="deckPile" class="pile deck"><b id="deckCount">0</b><span>牌库</span></div><div id="discardTop" class="pile discard"><b>—</b><span>弃牌堆</span></div></div>
+          </div>
         </div>
         <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
           <svg class="presentation-trail-layer" aria-hidden="true">
@@ -89,13 +91,13 @@
           <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
         </div>
       </section>
-      <section id="controlDock" class="panel control-dock" data-role="player">
-        <div class="action-zone">
+      <section id="controlDock" class="panel control-dock table-dock" data-role="player">
+        <div class="action-zone table-decision">
           <div class="action-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div></div>
           <p id="actionHint" class="muted"></p>
           <div id="actionButtons" class="action-buttons"></div>
         </div>
-        <section id="privateZone" class="private-zone">
+        <section id="privateZone" class="private-zone table-private">
           <div class="private-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><div id="selfSummary"></div></div>
           <div id="myHand" class="hand"></div>
         </section>

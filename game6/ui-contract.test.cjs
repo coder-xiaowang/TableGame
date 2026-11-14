@@ -35,14 +35,13 @@ test("game6 folds detailed rules and orders the log before spectators",() => {
   assert.match(html,/15 秒内秘密选择/);
 });
 
-test("game6 keeps table and sticky turn console ahead of auxiliary panels on mobile",() => {
-  assert.ok(html.indexOf('<aside class="sidebar">') < html.indexOf('<section class="table-area">'));
-  assert.match(styles,/@media \(max-width: 900px\)[^{]*\{[\s\S]*?\.game-layout \{ display: flex; flex-direction: column; \}/);
-  assert.match(styles,/\.game-layout > \.table-area \{ order: 1; \}/);
-  assert.match(styles,/\.game-layout > \.sidebar \{ order: 2;/);
-  assert.match(styles,/@media \(max-width: 720px\)[\s\S]*?\.turn-console \{[\s\S]*?position: sticky;/);
-  assert.match(html,/id="turnConsole"/);
-  assert.match(html,/id="turnHandPanel"/);
+test("game6 reserves separate board and control regions before optional references", () => {
+  assert.match(html, /href="\/shared\/styles\/play-layout\.css"/);
+  const workspaceAt = html.indexOf('data-play-workspace');
+  const controlsAt = html.indexOf('data-play-controls');
+  const referenceAt = html.indexOf('data-play-reference');
+  assert.ok(workspaceAt >= 0 && controlsAt > workspaceAt && referenceAt > controlsAt);
+  assert.match(html, /data-play-board/);
 });
 
 test("game6 preserves reveal timeline, board rows and countdown controls",() => {

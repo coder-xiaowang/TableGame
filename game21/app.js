@@ -13,10 +13,6 @@ const PHASE_LABEL = {
   lobby: "等待行动组集结", secretReveal: "秘密身份确认", questioning: "限时问答",
   accusationVote: "临时指认表决", timeoutNomination: "超时顺序提名", timeoutVote: "最终全票表决", roundEnd: "本轮结算"
 };
-const NODE_COORDS = Object.freeze({
-  northwest: [18, 20], north: [50, 17], northeast: [82, 20], east: [82, 50],
-  southeast: [82, 80], south: [50, 83], southwest: [18, 80], west: [18, 50]
-});
 const $ = (id) => document.getElementById(id);
 const E = Object.fromEntries([
   "hero","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup",
@@ -215,17 +211,27 @@ function orderedPlayers() {
   return selfIndex < 0 ? view.players : [...view.players.slice(selfIndex), ...view.players.slice(0, selfIndex)];
 }
 
+let wireFrame = 0;
 function renderNetworkWires() {
-  const ordered = orderedPlayers();
-  const hasSelfSeat = ordered.some((item) => item.id === view.selfId);
-  const slots = compassSeatSlots(ordered.length, { hasSelf: hasSelfSeat });
-  E.networkWires.innerHTML = ordered.map((item, index) => {
-    const [x, y] = NODE_COORDS[slots[index]];
-    const active = [view.questionerId, view.questionTargetId, view.currentNominatorId].includes(item.id);
-    const bendX = 50 + (x - 50) * .18;
-    const bendY = 50 + (y - 50) * .18;
-    return `<path class="network-wire ${active ? "active" : ""}" d="M ${x} ${y} Q ${bendX.toFixed(1)} ${bendY.toFixed(1)} 50 50"></path>`;
-  }).join("");
+  cancelAnimationFrame(wireFrame);
+  wireFrame = requestAnimationFrame(() => {
+    if (!view) return;
+    const base = E.networkWires.getBoundingClientRect();
+    if (!base.width || !base.height) return;
+    const point = (element) => {
+      const rect = element.getBoundingClientRect();
+      return [(rect.left + rect.width / 2 - base.left) * 100 / base.width,
+        (rect.top + rect.height / 2 - base.top) * 100 / base.height];
+    };
+    const [cx, cy] = point(E.intelligenceTable.querySelector(".public-focus"));
+    E.networkWires.innerHTML = orderedPlayers().map((item) => {
+      const seat = seatFor(item.id);
+      if (!seat) return "";
+      const [x, y] = point(seat);
+      const active = [view.questionerId, view.questionTargetId, view.currentNominatorId].includes(item.id);
+      return `<path class="network-wire ${active ? "active" : ""}" d="M ${x} ${y} Q ${cx + (x - cx) * .18} ${cy + (y - cy) * .18} ${cx} ${cy}"></path>`;
+    }).join("");
+  });
 }
 
 function renderPlayers() {
@@ -276,6 +282,7 @@ function renderPlayers() {
     existing.delete(item.id);
   });
   existing.forEach((seat) => seat.remove());
+  renderNetworkWires();
 }
 
 function addButton(text, handler, className = "", disabled = false) {
@@ -519,6 +526,7 @@ function selectMode(nextMode) {
 }
 
 async function init() {
+  new ResizeObserver(renderNetworkWires).observe(E.intelligenceTable);
   roomEntry.bind();
   E.roomPlayerCountSelect.onchange = () => submit({ type: "setCapacity", capacity: Number(E.roomPlayerCountSelect.value) });
   E.startGameButton.onclick = () => submit({ type: "start" });

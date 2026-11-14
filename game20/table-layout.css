@@ -1,0 +1,24 @@
+[data-play-layout="game20"] #salonTable { display: grid; grid-template-columns: minmax(135px,1fr) minmax(180px,1.2fr) minmax(135px,1fr); grid-template-rows: auto auto minmax(150px,1fr) auto; gap: 10px; padding: 10px; border-radius: 20px; }
+[data-play-layout="game20"] .table-title { position: static; grid-area: 1 / 1 / 2 / -1; width: auto; transform: none; }
+[data-play-layout="game20"] #players { display: contents; }
+[data-play-layout="game20"] #players .player-seat { position: relative; inset: auto; width: 100%; height: auto; min-height: 78px; max-width: none; margin: 0; padding: 8px; transform: none; }
+[data-play-layout="game20"] #players [data-seat-slot="northwest"] { grid-area: 2 / 1; }
+[data-play-layout="game20"] #players [data-seat-slot="north"] { grid-area: 2 / 2; }
+[data-play-layout="game20"] #players [data-seat-slot="northeast"] { grid-area: 2 / 3; }
+[data-play-layout="game20"] #players [data-seat-slot="west"] { grid-area: 3 / 1; }
+[data-play-layout="game20"] #players [data-seat-slot="east"] { grid-area: 3 / 3; }
+[data-play-layout="game20"] #players [data-seat-slot="southwest"] { grid-area: 4 / 1; }
+[data-play-layout="game20"] #players [data-seat-slot="south"] { grid-area: 4 / 2; }
+[data-play-layout="game20"] #players [data-seat-slot="southeast"] { grid-area: 4 / 3; }
+[data-play-layout="game20"] .public-focus { position: relative; inset: auto; grid-area: 3 / 2; place-self: center; width: 100%; min-height: 150px; max-width: none; aspect-ratio: auto; padding: 12px; transform: none; }
+[data-play-layout="game20"] #salonTable::after { display: none; }
+[data-play-layout="game20"] #controlDock .action-zone { padding: 0; border: 0; }
+[data-play-layout="game20"] #controlDock .secret-panel { position: static; margin: 0; }
+@container play (max-width: 720px) {
+  [data-play-layout="game20"] #salonTable { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: auto; gap: 7px; padding: 7px; }
+  [data-play-layout="game20"] .table-title { grid-row: auto; grid-column: 1 / -1; order: -2; }
+  [data-play-layout="game20"] .public-focus { grid-row: auto; grid-column: 1 / -1; order: -1; min-height: 100px; padding: 8px; border-radius: 14px; }
+  [data-play-layout="game20"] #players .player-seat { grid-area: auto; order: var(--seat-order); min-height: 75px; }
+  [data-play-layout="game20"] .seat-head { display: block; }
+  [data-play-layout="game20"] .seat-head b { max-width: 100%; }
+}

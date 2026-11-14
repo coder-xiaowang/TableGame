@@ -1,0 +1,12 @@
+[data-play-layout="game17"] .market-board { min-height: 0; }
+[data-play-layout="game17"] .players-panel { margin-top: 8px; }
+[data-play-layout="game17"] #controlDock .action-zone { padding: 0; }
+[data-play-layout="game17"] .portfolio-details { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 5px; }
+[data-play-layout="game17"] .portfolio-details summary { cursor: pointer; font-size: 13px; }
+[data-play-layout="game17"] .stockpiles { grid-template-columns: repeat(3,minmax(0,1fr)); }
+@container play (max-width: 650px) {
+  [data-play-layout="game17"] .stockpiles { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  [data-play-layout="game17"] .stockpile { display: block; }
+  [data-play-layout="game17"] .pile-cards { display: flex; overflow-x: auto; }
+  [data-play-layout="game17"] .pile-cards > * { flex: 0 0 100px; }
+}

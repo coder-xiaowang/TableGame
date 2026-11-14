@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./spectator.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
 <body>
   <main class="shell">
@@ -101,7 +102,7 @@
         </div>
 
         <div class="panel scoreboard"><div id="whiteScore"></div><div class="versus">VS</div><div id="blackScore"></div></div>
-        <div class="panel history-panel"><div class="section-title"><div><p class="eyebrow">INTERCEPT LOG</p><h2>公开推理记录</h2></div></div><div id="historyList" class="history-list"></div></div>
+        <details class="panel history-panel"><summary>查看往轮提示与猜测</summary><div class="section-title"><div><p class="eyebrow">INTERCEPT LOG</p><h2>公开推理记录</h2></div></div><div id="historyList" class="history-list"></div></details>
       </section>
 
       <section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">OPERATION COMPLETE</p><h2 id="winnerText"></h2><div id="finalKeywords" class="final-keywords"></div><div id="finalRecords"></div></section>

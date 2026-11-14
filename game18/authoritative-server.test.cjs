@@ -48,7 +48,7 @@ test("权威服务支持3人开局、满房自动旁观和秘密手牌裁剪", a
 
   const page = await fetch(base).then((response) => response.text());
   assert.match(page, /犯人在跳舞/);
-  assert.match(page, /id="controlDock" class="center-action"/);
+  assert.match(page, /id="controlDock" class="center-action table-decision"/);
   assert.equal((await fetch(`${base}/api/health`)).status, 200);
   assert.equal((await fetch(`${base}/api/ready`)).status, 200);
   const config = await fetch(`${base}/api/config`).then((response) => response.json());

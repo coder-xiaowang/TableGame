@@ -1,0 +1,10 @@
+[data-play-layout="game10"] .board-panel { min-width: 0; padding: 8px; overflow: visible; }
+[data-play-layout="game10"] .mountain-board { min-height: 460px; }
+[data-play-layout="game10"] .action-panel[data-play-controls] { grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); padding: 8px; }
+[data-play-layout="game10"] .dice-title { grid-column: 1 / -1; margin-bottom: 4px; }
+[data-play-layout="game10"] .dice-area { margin: 0; }
+[data-play-layout="game10"] .action-area { margin: 0; }
+@container play (max-width:650px) {
+  [data-play-layout="game10"] .action-panel[data-play-controls] { grid-template-columns: 1fr; }
+  [data-play-layout="game10"] .mountain-board { min-height: 410px; }
+}

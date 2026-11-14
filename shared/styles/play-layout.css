@@ -1,0 +1,180 @@
+/* Opt-in viewport shell. Boards scroll independently; controls reserve real space.
+   Game-specific styles retain the tabletop, card and map geometry. */
+body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-shell] {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 8px;
+  overflow: hidden;
+}
+body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-header] {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 0;
+  height: auto;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+}
+[data-play-header] :is(.header-meta, .hero-meta, .room-header-tools, .room-tools, .host-tools) {
+  min-width: 0;
+}
+body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-header] h1 { font-size: 24px; margin: 0; }
+body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-header] > :first-child > p { display: none; }
+body[data-play-layout] #roomPanel[data-play-room] {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+body[data-play-layout] [data-play-workspace] {
+  container: play / inline-size;
+  position: relative;
+  display: grid;
+  grid-template: "status" auto "board" minmax(0, 1fr) "controls" auto / minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  align-self: stretch;
+  height: 100%;
+  max-height: 100%;
+}
+body[data-play-layout] [data-play-status] { grid-area: status; min-width: 0; margin: 0; }
+body[data-play-layout] [data-play-status].notice { padding: 6px 10px; min-height: 0; font-size: 13px; }
+body[data-play-layout] [data-play-board] {
+  grid-area: board;
+  position: relative;
+  inset: auto;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  width: auto;
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding: 10px;
+}
+body[data-play-layout] [data-play-controls] {
+  grid-area: controls;
+  position: relative;
+  inset: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+  max-height: min(36dvh, 290px);
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  transform: none;
+}
+body[data-play-layout] [data-play-controls] > * { min-width: 0; }
+body[data-play-layout] [data-play-controls]:not(:has(> :nth-child(2):not(.hidden))) { grid-template-columns: minmax(0, 1fr); }
+body[data-play-layout] [data-play-controls] :is(.action-buttons, .actions, .action-area) {
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  flex-wrap: wrap;
+}
+body[data-play-layout] [data-play-controls] :is(h2, .idiom-value) { font-size: 18px; overflow-wrap: anywhere; }
+body[data-play-layout] [data-play-controls] :is(.action-hint, #actionHint) { margin: 4px 0; font-size: 12px; }
+body[data-play-layout] [data-play-controls] .eyebrow { font-size: 9px; }
+body[data-play-layout] [data-play-controls] :is(.section-head, .section-header, .private-head) { margin-bottom: 5px; }
+body[data-play-layout] [data-play-controls] :is(.private-zone, .hand-zone, .secret-panel) {
+  min-width: 0;
+  width: auto;
+  padding: 0 0 0 10px;
+  border-left: 1px solid var(--line, #8886);
+}
+body[data-play-layout] [data-play-reference] { min-width: 0; min-height: 0; }
+body[data-play-layout] [data-play-reference] > summary {
+  padding: 5px 10px;
+  border: 1px solid var(--line, #8886);
+  border-radius: 8px;
+  color: #243029;
+  background: #fff8e5;
+  font-size: 12px;
+  cursor: pointer;
+}
+body[data-play-layout] [data-play-reference] > :not(summary) {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 8px;
+  min-height: 0;
+  max-height: 25dvh;
+  margin: 5px 0 0;
+  overflow: auto;
+}
+body[data-play-layout] [data-play-reference] :is(.rules, .compact-log-panel, .hand-rank-guide) {
+  display: block;
+  position: static;
+  inset: auto;
+  width: auto;
+  max-height: none;
+  margin: 0;
+  transform: none;
+}
+/* Presence chips must contribute to card height rather than cover card content. */
+[data-play-board] .shared-player-presence-anchor { padding-bottom: 8px !important; }
+[data-play-board] .shared-player-presence-rail { position: static !important; height: auto !important; margin-top: 4px !important; }
+[data-play-board] .shared-player-presence-rail:empty { display: none !important; }
+@media (max-width: 700px), (max-height: 540px) {
+  body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-shell] { padding: 4px; }
+  body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-header] { padding: 4px 6px; }
+  body[data-play-layout]:has(#roomPanel:not(.hidden)) [data-play-header] > :first-child:not(#connectionStatus) { display: none; }
+  body[data-play-layout] [data-play-header] :is(.header-meta, .hero-meta, .room-header-tools, .room-tools, .host-tools) {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 5px; width: auto; padding: 3px; margin: 0;
+  }
+  body[data-play-layout] [data-play-header] :is(.header-meta, .hero-meta) { flex: 1; justify-content: space-between; }
+  body[data-play-layout] [data-play-header] :is(button, select) { min-height: 30px; width: auto; padding: 4px 7px; font-size: 11px; }
+  body[data-play-layout] [data-play-header] .host-tools { flex: 0 1 auto; }
+  body[data-play-layout] [data-play-header] label { margin: 0; font-size: 11px; }
+  body[data-play-layout] [data-play-header] label:has(select:disabled) { display: none; }
+  body[data-play-layout] [data-play-controls] { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 7px; max-height: 36dvh; }
+  body[data-play-layout] [data-play-controls] :is(.private-zone, .hand-zone, .secret-panel) { padding: 5px 0 0; border-left: 0; border-top: 1px solid var(--line, #8886); }
+}
+@media (max-height: 540px) {
+  body[data-play-layout] [data-play-controls] { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 30dvh; }
+  body[data-play-layout] [data-play-controls] :is(h2, .idiom-value) { font-size: 14px; }
+  body[data-play-layout] [data-play-reference] > :not(summary) { max-height: 20dvh; }
+}
+/* A short landscape screen has more useful width than height. Keep the decision
+   beside the board so expanding reference material cannot consume the board. */
+@media (max-height: 540px) and (min-width: 650px) {
+  body[data-play-layout] [data-play-workspace] {
+    grid-template: "status controls" auto "board controls" minmax(0,1fr) / minmax(0,1fr) minmax(240px,34%);
+  }
+  body[data-play-layout] [data-play-workspace] > [data-play-controls] {
+    grid-template-columns: minmax(0,1fr);
+    height: 100%;
+    max-height: 100%;
+  }
+}

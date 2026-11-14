@@ -598,50 +598,6 @@ button.card { color: #373432; }
   .player-seat.targetable { animation: none; }
 }
 
-/* Stable desktop seating: normal-flow side rails share the same board reference box. */
-@media (min-width: 761px) {
-  .case-board { min-height: max(780px,calc(100vh - 120px)); }
-  .players {
-    position: absolute;
-    inset: 92px 18px 118px;
-    display: grid;
-    grid-template-columns: clamp(142px,18%,188px) minmax(250px,1fr) clamp(142px,18%,188px);
-    gap: 14px;
-    pointer-events: none;
-  }
-  .player-rail { display: grid; align-content: space-evenly; gap: 8px; min-width: 0; min-height: 0; pointer-events: none; }
-  .player-rail-left { grid-column: 1; }
-  .case-safe-zone { grid-column: 2; }
-  .player-rail-right { grid-column: 3; }
-  .player-seat {
-    position: relative;
-    inset: auto;
-    width: 100%;
-    min-height: 0;
-    max-height: 128px;
-    padding: 8px;
-    overflow: hidden;
-    transform: none;
-    pointer-events: auto;
-  }
-  .seat-hand { flex-wrap: nowrap; overflow: hidden; }
-  .discard-zone, .discard-area { top: 43%; bottom: auto; width: min(31%,310px); transform: translate(-50%,-50%); }
-  .center-action { top: 68%; width: clamp(280px,30%,360px); max-height: min(215px,29vh); padding: 11px 13px; border-radius: 15px; }
-}
-
-@media (min-width: 761px) and (max-width: 980px) {
-  .players { grid-template-columns: 138px minmax(220px,1fr) 138px; inset-inline: 10px; }
-  .player-seat { max-height: 120px; padding: 6px; }
-}
-
-@media (max-width: 760px) {
-  .players { position: relative; inset: auto; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding-top: 62px; pointer-events: auto; }
-  .player-rail, .case-safe-zone { display: contents; }
-  .player-seat { position: relative; inset: auto; width: auto; min-height: 94px; transform: none; }
-}
-
-@media (max-width: 460px) { .players { grid-template-columns: 1fr; } }
-
 /* Server-authored case presentation: direction, material movement and a short-lived center headline. */
 .case-board { position: relative; isolation: isolate; }
 .presentation-effects {
@@ -732,4 +688,34 @@ button.card { color: #373432; }
   .presentation-announcement.active { animation-duration: .75s; }
   .presentation-token { animation-duration: .75s; }
   .player-seat.presentation-target { animation: none; box-shadow: 0 0 0 4px rgba(176,78,73,.5); }
+}
+
+/* Table geometry is shared; these rules size the case-specific content. */
+.table-workspace .case-board.table-board { display: grid; grid-template-rows: auto minmax(min-content,1fr); gap: 8px; }
+.table-workspace .case-board .case-heading { position: relative; inset: auto; width: 100%; margin: 32px 0 4px; transform: none; }
+.table-workspace .case-board .case-heading h2 { overflow-wrap: anywhere; }
+.table-workspace .case-board .table-seats { min-height: 0; }
+.table-workspace .seat-hand { flex-wrap: wrap; min-height: 0; overflow: visible; }
+.table-workspace .seat-hand .game-card.compact { flex: 0 0 25px; width: 25px; min-height: 32px; }
+.table-workspace .discard-pile { max-height: 190px; overflow: auto; }
+.table-workspace .player-seat.targetable::after { position: static; display: block; margin-top: 4px; text-align: center; }
+.table-workspace .player-seat.targetable:hover { scale: 1; }
+@container tabletop (max-width:640px) {
+  .table-workspace .case-board::before { display: none; }
+  .table-workspace .case-board .case-heading { margin-top: 0; }
+  .table-workspace .case-board .case-heading .eyebrow { display: none; }
+  .table-workspace .case-board .round-badge { display: none; }
+  .table-workspace .table-centerpiece .eyebrow { display: none; }
+  .table-workspace .discard-pile > p { margin: 0; font-size: 12px; }
+  .table-workspace .table-seats .player-seat:nth-child(n) { min-height: 68px; }
+  /* Counts stay in the header; your full cards remain in the private hand. */
+  .table-workspace .player-seat.self .seat-hand,
+  .table-workspace .seat-hand .game-card.card-back { display: none; }
+  .table-workspace .discard-pile { max-height: 65px; }
+  .table-workspace .table-centerpiece .section-head h2 { font-size: 14px; }
+}
+@media (max-height:540px) {
+  .table-workspace .case-board::before { display: none; }
+  .table-workspace .case-board .case-heading { margin: 0; }
+  .table-workspace .case-heading .eyebrow { display: none; }
 }

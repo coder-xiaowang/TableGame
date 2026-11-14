@@ -60,13 +60,13 @@ test("game8 keeps detailed rules folded and places spectators after the log", ()
   assert.match(html, /暗取牌堆顶的牌面只对持有者可见/);
 });
 
-test("game8 shows the play table before auxiliary panels on narrow screens", () => {
-  assert.ok(html.indexOf("<aside>") < html.indexOf('class="table-area"'), "desktop DOM keeps the sidebar first");
-  assert.match(styles, /@media\(max-width:1050px\)[^{]*\{[^}]*\.game\{display:flex;flex-direction:column\}/);
-  assert.match(styles, /\.game>\.table-area\{order:1\}/);
-  assert.match(styles, /\.game>aside\{order:2/);
-  assert.match(styles, /@media\(max-width:760px\)/);
-  assert.match(styles, /\.observer-panels\{grid-template-columns:1fr\}/);
+test("game8 reserves separate board and control regions before optional references", () => {
+  assert.match(html, /href="\/shared\/styles\/play-layout\.css"/);
+  const workspaceAt = html.indexOf('data-play-workspace');
+  const controlsAt = html.indexOf('data-play-controls');
+  const referenceAt = html.indexOf('data-play-reference');
+  assert.ok(workspaceAt >= 0 && controlsAt > workspaceAt && referenceAt > controlsAt);
+  assert.match(html, /data-play-board/);
 });
 
 test("game8 preserves trainer inspection, compact collections and sticky desktop actions", () => {

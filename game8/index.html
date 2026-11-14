@@ -8,10 +8,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-  <div class="shell">
-    <header id="siteHeader" class="site-header">
+<body data-play-layout="game8">
+  <div class="shell" data-play-shell>
+    <header id="siteHeader" class="site-header" data-play-header>
       <div class="header-title"><p class="eyebrow">POKÉMON SPLENDOR</p><h1>璀璨宝石 <span>宝可梦版</span></h1></div>
       <div class="header-meta">
         <div id="connectionStatus" class="status">正在检测联机服务</div>
@@ -77,15 +79,34 @@
       </section>
     </main>
 
-    <main id="roomPanel" class="game hidden">
-      <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+    <main id="roomPanel" class="game hidden" data-play-room>
+<section data-play-workspace>
+<section class="notice" id="notice" data-play-status>等待其他训练家加入</section>
+<div class="market-workspace" data-play-board><section class="panel supply">
+          <div class="section-head"><div><p class="eyebrow">POKÉ BALL SUPPLY</p><h2>精灵球供应</h2></div><span class="hint">实体球上限 10</span></div>
+          <div id="tokens" class="tokens"></div>
+        </section><section class="special-row">
+          <div class="market-group rare"><div class="special-deck"><b>稀有</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
+          <div class="market-group legendary"><div class="special-deck"><b>传说／幻之</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
+        </section><section id="markets" class="markets"></section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
         <svg class="presentation-trail-layer" aria-hidden="true">
           <defs><marker id="pokemonTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
           <path id="presentationTrail" class="presentation-trail" marker-end="url(#pokemonTrailArrow)"></path>
         </svg>
         <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><b id="presentationText"></b></div>
-      </div>
-      <aside>
+      </div></div>
+<div class="trainer-controls" data-play-controls><section class="panel action-panel">
+            <div class="section-head"><div><p class="eyebrow">YOUR TURN</p><h2 id="actionTitle">等待开始</h2></div><span id="phaseBadge" class="badge">准备阶段</span></div>
+            <div id="selectionSummary" class="selection"></div>
+            <div id="actionArea" class="actions"></div>
+          </section><section id="trainerBoard" class="panel trainer-board">
+            <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
+            <div id="myResources" class="resource-strip"></div>
+            <details class="trainer-collection"><summary>已捕捉的宝可梦</summary><div id="myPokemon" class="owned-pokemon-list"></div></details>
+            <details class="trainer-collection"><summary>保留区 <span id="reserveCount">0 / 3</span></summary><div id="myReserved" class="reserved-pokemon-list"></div></details>
+          </section></div>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside>
         <div class="observer-panels">
           <section class="panel player-panel">
             <div class="section-head"><h2>训练家</h2><span id="playerBadge" class="badge">0 / 0</span></div>
@@ -116,33 +137,8 @@
           </details>
         </div>
       </aside>
-
-      <div class="table-area">
-        <section class="notice" id="notice">等待其他训练家加入</section>
-        <section class="panel supply">
-          <div class="section-head"><div><p class="eyebrow">POKÉ BALL SUPPLY</p><h2>精灵球供应</h2></div><span class="hint">实体球上限 10</span></div>
-          <div id="tokens" class="tokens"></div>
-        </section>
-        <section class="special-row">
-          <div class="market-group rare"><div class="special-deck"><b>稀有</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
-          <div class="market-group legendary"><div class="special-deck"><b>传说／幻之</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
-        </section>
-        <section id="markets" class="markets"></section>
-        <div class="trainer-column">
-          <section class="panel action-panel">
-            <div class="section-head"><div><p class="eyebrow">YOUR TURN</p><h2 id="actionTitle">等待开始</h2></div><span id="phaseBadge" class="badge">准备阶段</span></div>
-            <div id="selectionSummary" class="selection"></div>
-            <div id="actionArea" class="actions"></div>
-          </section>
-          <section id="trainerBoard" class="panel trainer-board">
-            <div class="section-head"><div><p class="eyebrow">TRAINER BOARD</p><h2>我的训练家板块</h2></div><div id="myScore" class="score">0 <small>奖杯</small></div></div>
-            <div id="myResources" class="resource-strip"></div>
-            <h3>已捕捉的宝可梦</h3><div id="myPokemon" class="owned-pokemon-list"></div>
-            <h3>保留区 <span id="reserveCount">0 / 3</span></h3><div id="myReserved" class="reserved-pokemon-list"></div>
-          </section>
-        </div>
-      </div>
-    </main>
+</details>
+</main>
   </div>
 
   <div id="trainerInspector" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="trainerInspectorTitle">

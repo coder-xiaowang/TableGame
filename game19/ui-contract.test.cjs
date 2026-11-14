@@ -13,7 +13,7 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   assert.ok(html.indexOf('id="roomHeaderTools"') < html.indexOf("</header>"));
   assert.match(html, /<details class="panel rule-card">/); assert.doesNotMatch(html, /<details class="panel rule-card" open>/);
   assert.ok(html.indexOf('class="panel log-card"') < html.indexOf('id="spectatorPanel"'));
-  const tableAt = html.indexOf('class="western-table"'), tableEnd = html.indexOf("</section>", tableAt), dockAt = html.indexOf('id="controlDock"'), privateAt = html.indexOf('id="privateZone"');
+  const tableAt = html.indexOf('class="western-table table-board"'), tableEnd = html.indexOf("</section>", tableAt), dockAt = html.indexOf('id="controlDock"'), privateAt = html.indexOf('id="privateZone"');
   assert.ok(tableAt >= 0 && tableEnd > tableAt && dockAt > tableEnd, "操作区应位于独立主桌面之后");
   assert.ok(privateAt > dockAt, "行动和私人手牌必须合并在同一个操作区");
   assert.match(html, /<h3>距离、武器与装备<\/h3>/);
@@ -37,7 +37,6 @@ test("页面遵守统一标题、侧栏、独立桌面、合并操作区与手�
   assert.match(styles, /\.player-seat\.responding/);
   assert.match(script, /E\.controlDock\.dataset\.role=model\.memberRole/);
   assert.match(styles, /@media\(max-width:850px\)[\s\S]*?\.game-area\{order:1\}[\s\S]*?\.sidebar\{order:2/);
-  assert.match(styles, /\.control-dock\{position:sticky/);
   assert.match(styles, /\.private-zone\{position:static/);
   assert.match(styles, /\.control-dock\[data-role="spectator"\]\{position:relative/);
 });

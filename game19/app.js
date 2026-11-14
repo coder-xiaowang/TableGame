@@ -46,7 +46,7 @@ function playPresentationObject(event){
   const highlighted=[source,target].filter(Boolean);highlighted.forEach((element)=>element.classList.add("presentation-focus"));
   if(["attack","duel","group-attack","damage","dying","elimination"].includes(event.kind))E.westernTable.classList.add("danger-moment");
   let token=null;
-  if(source&&target&&source!==target){const stage=E.westernTable.getBoundingClientRect(),from=source.getBoundingClientRect(),to=target.getBoundingClientRect();token=document.createElement("span");token.className="presentation-token";token.textContent=event.cardType?cardName(event.cardType):event.kind==="rescue"?"♥":"★";token.style.setProperty("--from-x",`${from.left+from.width/2-stage.left}px`);token.style.setProperty("--from-y",`${from.top+from.height/2-stage.top}px`);token.style.setProperty("--to-x",`${to.left+to.width/2-stage.left}px`);token.style.setProperty("--to-y",`${to.top+to.height/2-stage.top}px`);E.presentationEffects.append(token);}
+  if(source&&target&&source!==target){const stage=E.presentationEffects.getBoundingClientRect(),from=source.getBoundingClientRect(),to=target.getBoundingClientRect();token=document.createElement("span");token.className="presentation-token";token.textContent=event.cardType?cardName(event.cardType):event.kind==="rescue"?"♥":"★";token.style.setProperty("--from-x",`${from.left+from.width/2-stage.left}px`);token.style.setProperty("--from-y",`${from.top+from.height/2-stage.top}px`);token.style.setProperty("--to-x",`${to.left+to.width/2-stage.left}px`);token.style.setProperty("--to-y",`${to.top+to.height/2-stage.top}px`);E.presentationEffects.append(token);}
   return()=>{highlighted.forEach((element)=>element.classList.remove("presentation-focus"));E.westernTable.classList.remove("danger-moment");token?.remove();};
 }
 function submit(action){const bound=view?.pending?.id?{...action,effectId:view.pending.id}:action;return Promise.resolve(room.submitAction(bound)).catch((error)=>{alert(error.message);});}
@@ -76,10 +76,12 @@ function renderPlayers(){
       const presentationFocus=seat.classList.contains("presentation-focus");
       seat.dataset.renderKey=renderKey;seat.setAttribute("data-side",side);
       if(presentationFocus)seat.classList.add("presentation-focus");
-      seat.innerHTML=`<div class="seat-head"><div><b>${escapeHtml(p.name)}${p.id===view.selfId?" · 你":""}</b><small>${p.connected?"在线":"离线"} · ${p.handCount}张手牌${p.distance?` · 距离${p.distance}`:""}</small></div><div class="seat-tools"><span class="role">${escapeHtml(p.role?ROLE[p.role]:"身份隐藏")}</span>${view.permissions.canManage&&view.phase==="lobby"&&!p.isHost?`<button class="kick small" data-kick="${escapeHtml(p.id)}">移出</button>`:""}</div></div><div class="character">${escapeHtml(p.characterName||"等待角色")} <span class="life">${p.alive?"♥".repeat(Math.max(0,p.life)):"已出局"}${p.maxLife?` / ${p.maxLife}`:""}</span></div><div class="equipment">${p.equipment.map((card)=>`<span class="equip">${escapeHtml(cardName(card.type))}</span>`).join("")||"<small>无装备</small>"}</div>`;
+      seat.innerHTML=`<div class="seat-head"><div><b><span class="seat-number">${view.players.findIndex((item)=>item.id===p.id)+1}</span>${escapeHtml(p.name)}${p.id===view.selfId?" · 你":""}</b><small>${p.connected?"在线":"离线"} · ${p.handCount}张手牌${p.distance?` · 距离${p.distance}`:""}</small></div><div class="seat-tools"><span class="role">${escapeHtml(p.role?ROLE[p.role]:"身份隐藏")}</span>${view.permissions.canManage&&view.phase==="lobby"&&!p.isHost?`<button class="kick small" data-kick="${escapeHtml(p.id)}">移出</button>`:""}</div></div><div class="character">${escapeHtml(p.characterName||"等待角色")} <span class="life">${p.alive?"♥".repeat(Math.max(0,p.life)):"已出局"}${p.maxLife?` / ${p.maxLife}`:""}</span></div><div class="equipment">${p.equipment.map((card)=>`<span class="equip">${escapeHtml(cardName(card.type))}</span>`).join("")||"<small>无装备</small>"}</div>`;
       const kick=seat.querySelector("[data-kick]");if(kick)kick.onclick=()=>kickPlayer(kick.dataset.kick);
     }
     seat.classList.add("player-seat");
+    seat.style.setProperty("--seat-order",String(index));
+    seat.title=`${view.players.findIndex((item)=>item.id===p.id)+1}号 · ${p.name}`;
     seat.classList.toggle("self",p.id===view.selfId);seat.classList.toggle("current",p.id===view.currentPlayerId);
     seat.classList.toggle("responding",responding);seat.classList.toggle("action-source",source);
     seat.classList.toggle("dead",!p.alive);seat.classList.toggle("offline",!p.connected);

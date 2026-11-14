@@ -8,8 +8,8 @@ function centerOf(element, container) {
   const rect = element.getBoundingClientRect();
   const base = container.getBoundingClientRect();
   return {
-    x: rect.left + rect.width / 2 - base.left,
-    y: rect.top + rect.height / 2 - base.top
+    x: rect.left + rect.width / 2 - base.left + (container.scrollLeft || 0) - (container.clientLeft || 0),
+    y: rect.top + rect.height / 2 - base.top + (container.scrollTop || 0) - (container.clientTop || 0)
   };
 }
 

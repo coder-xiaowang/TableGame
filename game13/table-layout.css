@@ -1,0 +1,36 @@
+/* Seat geometry follows the available table width, including sidebar changes. */
+.game-area { min-width: 0; }
+.table-panel { container: cabo / inline-size; }
+.table-stage {
+  grid-template-columns: minmax(0,1fr) minmax(220px,1.1fr) minmax(0,1fr);
+  min-width: 0;
+}
+.table-stage .player { min-width: 0; max-width: 100%; }
+.table-stage .player-head b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-stage .slots {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,54px));
+  justify-content: center;
+  gap: 4px;
+  overflow: visible;
+}
+.table-stage .slots .slot-button { width: 100%; min-width: 0; height: auto; aspect-ratio: 27 / 38; }
+.table-stage .table-actions { min-width: 0; width: 100%; }
+@container cabo (max-width: 720px) {
+  .table-stage {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas: "top top" "left right" "center center" "action action" "self self";
+    min-height: 0;
+    gap: 14px 8px;
+    padding: 12px 0;
+  }
+  .table-stage .seat-top, .table-stage .seat-self { width: 100%; max-width: 100%; }
+  .table-stage .seat-left, .table-stage .seat-right { width: 100%; max-width: 100%; padding-inline: 2px; }
+  .table-stage .piles { flex-wrap: wrap; padding: 12px 4px; gap: 14px; }
+}
+@media (max-width: 1100px) {
+  .room-layout { grid-template-columns: minmax(0,1fr); }
+  .room-layout .game-area { grid-row: 1; }
+  .room-layout aside { grid-row: 2; }
+}

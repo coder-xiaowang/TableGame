@@ -1,0 +1,9 @@
+[data-play-layout="game15"] .table-panel { min-height: 100%; padding: 10px; }
+[data-play-layout="game15"] .meld-board { grid-template-columns: repeat(auto-fit,minmax(min(300px,100%),1fr)); }
+[data-play-layout="game15"] #controlDock .action-zone { padding: 0; }
+[data-play-layout="game15"] #controlDock .action-buttons { display: flex; flex-wrap: wrap; }
+[data-play-layout="game15"] #controlDock .action-buttons button { flex: 0 1 auto; }
+[data-play-layout="game15"] #controlDock .hand { min-height: 0; margin-top: 5px; }
+[data-play-layout="game15"] #controlDock .tile { flex-basis: 40px; width: 40px; height: 56px; }
+[data-play-layout="game15"] #controlDock .tile span { font-size: 22px; }
+[data-play-layout="game15"] .meld { scroll-margin: 10px; }

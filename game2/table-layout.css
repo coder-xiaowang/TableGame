@@ -1,0 +1,27 @@
+[data-play-layout="game2"] .table-area[data-play-board] { display: grid; align-content: start; gap: 8px; }
+[data-play-layout="game2"] .table-area > .panel { padding: 10px; }
+[data-play-layout="game2"] .section-header { margin-bottom: 6px; }
+[data-play-layout="game2"] .section-header h2 { font-size: 17px; }
+[data-play-layout="game2"] .score-board { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+[data-play-layout="game2"] .score-card { padding: 8px; min-height: 0; }
+[data-play-layout="game2"] .seat-board { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 7px; }
+[data-play-layout="game2"] .seat-card { min-height: 0; padding: 10px; gap: 6px; }
+[data-play-layout="game2"] .seat-card:nth-child(4n+1),
+[data-play-layout="game2"] .seat-card:nth-child(4n+2) { background: #e8f5f1; }
+[data-play-layout="game2"] .play-grid[data-play-controls] { padding: 0; }
+[data-play-layout="game2"] .play-grid > .panel { padding: 10px; }
+[data-play-layout="game2"] .play-grid .word-panel { min-height: 0; }
+[data-play-layout="game2"] .section-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 5px; }
+[data-play-layout="game2"] .section-header .round-badge { padding: 5px; font-size: 11px; }
+[data-play-layout="game2"] .score-card { flex-direction: column; align-items: center; gap: 3px; }
+[data-play-layout="game2"] .score-card > :first-child { font-size: 12px; white-space: nowrap; }
+[data-play-layout="game2"] .turn-panel textarea { min-height: 64px; height: 64px; }
+[data-play-layout="game2"] .turn-panel label { margin-bottom: 5px; }
+[data-play-layout="game2"] .word-panel .idiom-value { margin: 5px 0; min-height: 0; }
+@container play (max-width: 700px) {
+  [data-play-layout="game2"] .seat-board { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  [data-play-layout="game2"] .seat-card :is(.seat-name, .seat-head strong) { font-size: 13px; overflow-wrap: anywhere; }
+  [data-play-layout="game2"] .seat-card .seat-head { flex-wrap: wrap; gap: 4px; }
+  [data-play-layout="game2"] .score-card { font-size: 12px; }
+  [data-play-layout="game2"] .score-card strong { font-size: 20px; }
+}

@@ -138,7 +138,7 @@ function playPresentationObject(event){
   return()=>{source?.classList.remove("presentation-source");target?.classList.remove("presentation-target");E.unoStage?.classList.remove("presentation-reverse");token.remove();};
 }
 presentation=createPresentationTimeline({
-  container:E.unoStage,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,
+  container:E.presentationEffects,trailPath:E.presentationTrail,announcement:E.presentationAnnouncement,
   labelElement:E.presentationLabel,textElement:E.presentationText,effectsElement:E.presentationEffects,
   resolveSource:presentationSource,resolveTarget:presentationTarget,labelFor:(event)=>presentationLabel(event.kind),
   textFor:composePresentationText,beforePlay:playPresentationObject,durationMs:1000,reducedDurationMs:450,maxQueue:18,

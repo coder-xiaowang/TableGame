@@ -31,11 +31,13 @@ test("game2 folds detailed rules and puts public history before spectators",()=>
   assert.match(html,/本版本没有行动倒计时/);
 });
 
-test("game2 prioritizes score, seats and active turn on small screens",()=>{
-  assert.ok(html.indexOf('<aside class="sidebar">')<html.indexOf('<section class="table-area">'));
-  assert.match(styles,/@media \(max-width: 900px\)[\s\S]*?\.room-panel \{ display: flex; flex-direction: column; \}/);
-  assert.match(styles,/\.room-panel > \.table-area \{ order: 1; \}/);
-  assert.match(styles,/\.room-panel > \.sidebar \{[\s\S]*?order: 2;/);
+test("game2 reserves separate board and control regions before optional references", () => {
+  assert.match(html, /href="\/shared\/styles\/play-layout\.css"/);
+  const workspaceAt = html.indexOf('data-play-workspace');
+  const controlsAt = html.indexOf('data-play-controls');
+  const referenceAt = html.indexOf('data-play-reference');
+  assert.ok(workspaceAt >= 0 && controlsAt > workspaceAt && referenceAt > controlsAt);
+  assert.match(html, /data-play-board/);
 });
 
 test("game2 preserves team seats, private idiom and text action surfaces",()=>{

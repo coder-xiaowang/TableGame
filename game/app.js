@@ -559,7 +559,7 @@ function playPresentationObject(event) {
 
   let token = null;
   if (source && target) {
-    const stage = document.querySelector(".cipher-machine").getBoundingClientRect();
+    const stage = elements.presentationEffects.getBoundingClientRect();
     const from = source.getBoundingClientRect();
     const to = target.getBoundingClientRect();
     token = document.createElement("span");
@@ -605,7 +605,7 @@ async function init() {
     if (button) kickPlayer(button.dataset.kickPlayer);
   });
   syncPlayerWordSettings();
-  selectMode("host");
+  roomEntry.selectMode("host");
   try {
     spectatorUi.applyConfig(await room.checkServer());
   } catch {
@@ -614,7 +614,7 @@ async function init() {
 }
 
 presentation = createPresentationTimeline({
-  container:document.querySelector(".cipher-machine"),
+  container:elements.presentationEffects,
   trailPath:elements.presentationTrail,
   announcement:elements.presentationAnnouncement,
   labelElement:elements.presentationLabel,

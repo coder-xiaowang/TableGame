@@ -19,8 +19,8 @@ test("game1 merges room management into the compact title bar",()=>{
 });
 
 test("game1 turns its room into a distinct mechanical cipher workstation",()=>{
-  assert.match(html,/<body data-theme="mechanical-cipher-room">/);
-  const stage=html.slice(html.indexOf('<section class="table-area decoder-stage">'),html.indexOf('<section class="archive-strip"'));
+  assert.match(html,/<body data-theme="mechanical-cipher-room"[^>]*>/);
+  const stage=html.slice(html.indexOf('<section data-play-workspace>'),html.indexOf('<section class="archive-strip"'));
   for(const marker of["cipher-machine","operator-registry","operator-wall","decoder-console"])assert.match(stage,new RegExp(marker));
   assert.match(styles,/Experience shell: a warm, mechanical cipher room/);
   assert.match(styles,/\.cipher-machine\s*\{/);
@@ -38,7 +38,7 @@ test("game1 gives its create and join flow a compact cipher-bureau arrival shell
 });
 
 test("game1 keeps rules and public records in ordered archive drawers",()=>{
-  const archive=html.slice(html.indexOf('<section class="archive-strip"'),html.indexOf("</section>\n      </section>")+10);
+  const archive=html.slice(html.indexOf('<section class="archive-strip"'),html.indexOf("</main>"));
   const rulesAt=archive.indexOf('class="panel rules-card archive-drawer"');
   const logAt=archive.indexOf('class="panel log-panel archive-drawer"');
   const spectatorsAt=archive.indexOf('id="spectatorPanel"');

@@ -5,12 +5,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 
-test("页面满足稳定双侧玩家席、中央行动区、旁观与移动端紧凑列表契约", () => {
+test("页面保留双侧玩家席、独立操作区、旁观与手牌区域", () => {
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
-  const boardStart = html.indexOf('class="case-board"');
-  const boardEnd = html.indexOf("</section>", html.indexOf('id="controlDock"'));
+  const boardStart = html.indexOf('class="case-board table-board"');
+  const boardEnd = html.indexOf("</section>", boardStart);
   const dockAt = html.indexOf('id="controlDock"');
   const heroEnd = html.indexOf("</header>");
   const roomToolsAt = html.indexOf('id="roomHeaderTools"');
@@ -24,24 +24,20 @@ test("页面满足稳定双侧玩家席、中央行动区、旁观与移动端�
   assert.match(html, /<details class="panel rule-card">/);
   assert.doesNotMatch(html, /<details class="panel rule-card" open>/);
   assert.ok(logAt >= 0 && spectatorAt > logAt, "旁观席必须位于调查记录之后");
-  assert.ok(boardStart >= 0 && dockAt > boardStart && dockAt < boardEnd, "当前行动模块必须位于圆桌内部");
-  assert.match(html, /id="privateZone" class="panel hand-strip"/);
+  assert.ok(boardStart >= 0 && dockAt > boardStart && dockAt > boardEnd, "当前行动模块必须位于桌面之后，避免覆盖座位");
+  assert.match(html, /id="privateZone" class="panel hand-strip table-private"/);
   assert.ok(html.indexOf('id="privateZone"') > html.indexOf('id="discardPile"'), "手牌长条必须位于牌桌之后");
   assert.match(script, /createSpectatorUi/);
   assert.match(script, /setHidden\(E\.privateZone, memberRole === "spectator"\)/);
   assert.match(script, /if \(!self\?\.connected\) return;/);
   assert.match(script, /if \(view\.targetScore !== targetScore\) submit\(\{ type: "setTargetScore", targetScore \}\);/);
-  assert.match(styles, /\.center-action\s*\{[\s\S]*?position: absolute;[\s\S]*?top: 50%;[\s\S]*?left: 50%/);
-  assert.match(styles, /\.hand-strip\s*\{[\s\S]*?position: sticky/);
   assert.match(styles, /@media \(max-width: 760px\)/);
-  assert.match(styles, /\.player-rail \{ display: grid; align-content: space-evenly/);
-  assert.match(styles, /\.player-seat \{[\s\S]*?position: relative;[\s\S]*?width: 100%/);
   assert.match(styles, /@media \(max-width: 520px\)/);
   assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\)[\s\S]*?width: 86px/);
   assert.match(styles, /\.hand-strip \.game-card:not\(\.compact\) small[\s\S]*?display: -webkit-box/);
   assert.match(script, /function eligibleTargetPlayers\(\)/);
   assert.match(script, /setAttribute\("data-target-player-id", player\.id\)/);
-  assert.match(script, /直接点击桌面左右两侧发光的玩家卡片/);
+  assert.match(script, /直接点击发光的玩家卡片/);
   assert.match(styles, /\.player-seat\.targetable/);
   assert.doesNotMatch(script, /privateInsight\.cardTypes[\s\S]{0,180}compact: true/);
   assert.match(script, /import \{ sideColumnSlots \}/);
@@ -49,7 +45,6 @@ test("页面满足稳定双侧玩家席、中央行动区、旁观与移动端�
   assert.match(script, /setAttribute\("data-seat-side", side\)/);
   assert.match(html, /id="leftPlayerRail"/); assert.match(html, /id="rightPlayerRail"/);
   assert.doesNotMatch(script, /--seat-y|seat\.className\s*=/);
-  assert.match(styles, /\.discard-zone, \.discard-area\s*\{[\s\S]*?top: 43%/);
   assert.match(script, /createPresentationTimeline/);
   assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
   assert.match(script, /sceneKey: \(event\) => event\.sceneId \|\| event\.id/);

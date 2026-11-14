@@ -8,10 +8,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-  <main class="shell">
-    <header id="hero" class="hero">
+<body data-play-layout="game17">
+  <main class="shell" data-play-shell>
+    <header id="hero" class="hero" data-play-header>
       <div class="hero-title"><p class="eyebrow">INSIDER TRADING · SERVER AUTHORITY</p><h1>股海纵横</h1><p>掌握内幕，构造市场，在公开竞价中隐藏真正的判断。</p></div>
       <div class="hero-meta">
         <div id="connectionStatus" class="connection-status">正在检查服务</div>
@@ -76,8 +78,24 @@
       </section>
     </section>
 
-    <section id="roomPanel" class="room-layout hidden">
-      <aside class="sidebar">
+    <section id="roomPanel" class="room-layout hidden" data-play-room>
+<section data-play-workspace>
+<div id="notice" class="notice" data-play-status>等待玩家加入</div>
+<div class="market-workspace" data-play-board><section class="market-board">
+          <div class="market-head"><div><p class="eyebrow">LIVE MARKET</p><h2>实时行情</h2></div><div class="round-chip">第 <b id="roundNumber">0</b>/<span id="roundTotal">0</span> 轮 · 牌库 <b id="deckCount">0</b></div></div>
+          <div id="stockTicker" class="stock-ticker"></div>
+          <div id="informationPanel" class="information-panel"></div>
+          <div id="stockpiles" class="stockpiles"></div>
+        </section><section class="panel players-panel"><div class="section-head"><h2>投资人</h2><span class="muted">现金与持股牌数为公开信息</span></div><div id="players" class="players"></div></section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+          <svg class="presentation-trail-layer" aria-hidden="true"><defs><marker id="marketTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><path id="presentationTrail" class="presentation-trail" marker-end="url(#marketTrailArrow)"></path></svg>
+          <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
+        </div></div>
+<section id="controlDock" class="panel control-dock" data-play-controls>
+          <div class="action-zone"><div class="section-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开局</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div><p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div></div>
+          <div id="privateZone" class="private-zone"><div class="private-head"><div><p class="eyebrow">MY PORTFOLIO</p><h2>我的投资组合</h2></div><strong id="myCash">$0K</strong></div><details class="portfolio-details"><summary>查看内幕与持仓明细</summary><div id="myInformation" class="my-information"></div><div id="myPortfolio" class="my-portfolio"></div></details></div>
+        </section>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
         <details class="panel rules-card">
           <summary><span><span class="eyebrow">MARKET GUIDE</span><b>详细交易规则</b></span><span class="fold-hint">展开</span></summary>
           <div class="rule-details">
@@ -109,27 +127,8 @@
         <section class="panel log-card"><div class="section-head"><h2>交易记录</h2><button id="toggleLogButton" class="small">收起</button></div><div id="logList" class="log"></div></section>
         <details id="spectatorPanel" class="panel spectator-panel"><summary>旁观者 <span id="spectatorCountBadge">0</span></summary><div id="spectatorList"></div></details>
       </aside>
-
-      <section class="game-area">
-        <div id="notice" class="notice">等待玩家加入</div>
-        <section class="market-board">
-          <div class="market-head"><div><p class="eyebrow">LIVE MARKET</p><h2>实时行情</h2></div><div class="round-chip">第 <b id="roundNumber">0</b>/<span id="roundTotal">0</span> 轮 · 牌库 <b id="deckCount">0</b></div></div>
-          <div id="stockTicker" class="stock-ticker"></div>
-          <div id="informationPanel" class="information-panel"></div>
-          <div id="stockpiles" class="stockpiles"></div>
-        </section>
-        <section class="panel players-panel"><div class="section-head"><h2>投资人</h2><span class="muted">现金与持股牌数为公开信息</span></div><div id="players" class="players"></div></section>
-
-        <section id="controlDock" class="panel control-dock">
-          <div class="action-zone"><div class="section-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开局</h2></div><div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div></div><p id="actionHint" class="action-hint"></p><div id="actionButtons" class="action-buttons"></div></div>
-          <div id="privateZone" class="private-zone"><div class="private-head"><div><p class="eyebrow">MY PORTFOLIO</p><h2>我的投资组合</h2></div><strong id="myCash">$0K</strong></div><div id="myInformation" class="my-information"></div><div id="myPortfolio" class="my-portfolio"></div></div>
-        </section>
-        <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
-          <svg class="presentation-trail-layer" aria-hidden="true"><defs><marker id="marketTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><path id="presentationTrail" class="presentation-trail" marker-end="url(#marketTrailArrow)"></path></svg>
-          <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
-        </div>
-      </section>
-    </section>
+</details>
+</section>
   </main>
   <script type="module" src="app.js"></script>
 </body>

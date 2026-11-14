@@ -1,0 +1,16 @@
+[data-play-layout="game22"] .quest-banner { padding: 7px 10px; gap: 6px; }
+[data-play-layout="game22"] .quest-banner .eyebrow { display: none; }
+[data-play-layout="game22"] .quest-banner h2 { margin: 0; font-size: 17px; }
+[data-play-layout="game22"] .knights-roster { margin: 0 0 8px; padding: 6px; }
+[data-play-layout="game22"] .roster-heading { margin-bottom: 5px; }
+[data-play-layout="game22"] .roster-heading .eyebrow { display: none; }
+[data-play-layout="game22"] .knights-roster .players { scroll-padding-inline: 8px; }
+[data-play-layout="game22"] .round-table { min-height: 260px; height: clamp(260px,48dvh,560px); margin: 0; }
+[data-play-layout="game22"] #controlDock .decision { min-width: 0; }
+[data-play-layout="game22"] #secretPanel { min-width: 0; padding: 8px; }
+[data-play-layout="game22"] #secretPanel > summary { cursor: pointer; font-size: 13px; }
+[data-play-layout="game22"] #secretPanel p { margin: 5px 0; font-size: 12px; }
+[data-play-layout="game22"] .team-selection-summary { padding: 5px 8px; border: 1px solid var(--gold); font-size: 13px; }
+@media (max-height: 540px) {
+  [data-play-layout="game22"] .quest-banner { display: flex; align-items: center; }
+}

@@ -7,14 +7,17 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-  <header class="topbar">
+<body data-play-layout="game7">
+
+
+  <main data-play-shell>
+<header class="topbar" data-play-header>
     <div><p class="eyebrow">MANILA · 1821</p><h1>马尼拉港口大亨</h1></div>
     <div id="connectionStatus" class="status">正在检查联机服务…</div>
   </header>
-
-  <main>
     <section id="setupPanel" class="setup harbor-gate" data-room-entry data-entry-layout="split">
       <div class="arrival-copy" data-entry-story>
         <p class="eyebrow">MANILA BAY · 1821</p>
@@ -56,13 +59,9 @@
       </div>
     </section>
 
-    <section id="roomPanel" class="game-layout hidden">
-      <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
-        <svg class="presentation-trail-layer" aria-hidden="true"><defs><marker id="harborTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><path id="presentationTrail" class="presentation-trail" marker-end="url(#harborTrailArrow)"></path></svg>
-        <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
-      </div>
-      <aside class="sidebar">
-        <div class="panel room-card">
+    <section id="roomPanel" class="game-layout hidden" data-play-room>
+<section data-play-workspace>
+<div class="panel room-card" data-play-status>
           <p class="eyebrow">TRADING ROOM</p>
           <div class="room-code" id="roomCodeDisplay">----</div>
           <p id="phaseText">等待玩家加入</p>
@@ -74,28 +73,7 @@
           </div>
           <button id="seatActionButton" class="small hidden" type="button"></button>
         </div>
-        <div id="walletPanel" class="panel wallet">
-          <p class="eyebrow">MY LEDGER</p>
-          <div class="money">₱ <b id="myCash">30</b></div>
-          <div id="myShares" class="shares"></div>
-          <div class="loan-actions">
-            <button id="mortgageButton" class="small">抵押股票 +12</button>
-            <button id="redeemButton" class="small">赎回股票 -15</button>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="section-head"><h2>商人</h2><span id="playerCountBadge">0 / 4</span></div>
-          <div id="playerList" class="player-list"></div>
-        </div>
-        <details id="spectatorPanel" class="panel spectator-panel hidden" open>
-          <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
-          <div id="spectatorList" class="spectator-list"></div>
-        </details>
-      </aside>
-
-      <section class="board-column">
-        <div class="play-stage">
-          <section id="harborViewport" class="harbor-viewport" aria-label="可缩放的马尼拉港湾版图">
+<div class="harbor-workspace" data-play-board><section id="harborViewport" class="harbor-viewport" aria-label="可缩放的马尼拉港湾版图">
             <div id="harborWorld" class="harbor-world">
               <div class="harbor-atmosphere" aria-hidden="true"></div>
               <div id="portSlots" class="world-layer destination-layer port-layer" aria-label="成功港口"></div>
@@ -125,22 +103,43 @@
               <button id="mapZoomInButton" type="button" aria-label="放大地图">＋</button>
             </nav>
             <p class="map-gesture-hint">双指缩放 · 放大后拖动 · 双击聚焦</p>
-          </section>
-
-          <div class="panel action-panel">
+          </section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
+        <svg class="presentation-trail-layer" aria-hidden="true"><defs><marker id="harborTrailArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><path id="presentationTrail" class="presentation-trail" marker-end="url(#harborTrailArrow)"></path></svg>
+        <div id="presentationAnnouncement" class="presentation-announcement"><span id="presentationLabel"></span><strong id="presentationText"></strong></div>
+      </div></div>
+<div class="harbor-controls" data-play-controls><div class="panel action-panel">
             <div class="section-head"><div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div><div class="timer"><b id="timerText">--</b><i><span id="timerBar"></span></i></div></div>
             <p id="notice">玩家到齐后由房主开始游戏。</p>
             <div id="actionArea" class="action-area"></div>
+          </div><div id="walletPanel" class="panel wallet">
+          <p class="eyebrow">MY LEDGER</p>
+          <div class="money">₱ <b id="myCash">30</b></div>
+          <div id="myShares" class="shares"></div>
+          <div class="loan-actions">
+            <button id="mortgageButton" class="small">抵押股票 +12</button>
+            <button id="redeemButton" class="small">赎回股票 -15</button>
           </div>
-        </div>
+        </div></div>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<div><aside class="sidebar">
 
-        <div class="panel log-panel">
+
+        <div class="panel">
+          <div class="section-head"><h2>商人</h2><span id="playerCountBadge">0 / 4</span></div>
+          <div id="playerList" class="player-list"></div>
+        </div>
+        <details id="spectatorPanel" class="panel spectator-panel hidden" open>
+          <summary><span>旁观席</span><b id="spectatorCountBadge">0 / 10</b></summary>
+          <div id="spectatorList" class="spectator-list"></div>
+        </details>
+      </aside><div class="panel log-panel">
           <div class="section-head"><h2>航海日志</h2><button id="toggleLogButton" class="small">展开 / 收起</button></div>
           <div id="logList" class="log-list"></div>
-        </div>
-      </section>
-    </section>
-  </main>
+        </div></div>
+</details>
+</section>
+
+</main>
   <script type="module" src="app.js"></script>
 </body>
 </html>

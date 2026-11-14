@@ -8,10 +8,12 @@
   <link rel="stylesheet" href="/shared/styles/spectator.css">
   <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/shared/styles/play-layout.css">
+  <link rel="stylesheet" href="table-layout.css">
 </head>
-<body>
-<main class="shell">
-  <header id="hero" class="hero">
+<body data-play-layout="game14">
+<main class="shell" data-play-shell>
+  <header id="hero" class="hero" data-play-header>
     <div class="hero-title">
       <p class="eyebrow">SERVER AUTHORITATIVE · DIRTY PIG</p>
       <h1>脏小猪</h1>
@@ -59,8 +61,41 @@
     </div>
   </section>
 
-  <section id="roomPanel" class="room-layout hidden">
-    <aside class="sidebar">
+  <section id="roomPanel" class="room-layout hidden" data-play-room>
+<section data-play-workspace>
+<div id="notice" class="notice" data-play-status>等待玩家加入。</div>
+<div class="farm-workspace" data-play-board><div id="exchangeReveal" class="exchange-reveal hidden" role="status" aria-live="polite"></div><div class="panel farm-table" id="farmTable">
+        <div id="presentationEffects" class="presentation-effects" aria-live="polite">
+          <svg class="presentation-trail-layer" aria-hidden="true">
+            <defs><marker id="farmTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
+            <path id="presentationTrail" class="presentation-trail" marker-end="url(#farmTrailArrow)"></path>
+          </svg>
+          <div id="presentationAnnouncement" class="presentation-announcement">
+            <span id="presentationLabel"></span><b id="presentationText"></b>
+          </div>
+        </div>
+        <div class="table-head">
+          <span>牌库 <b id="deckCount">0</b></span>
+          <span>弃牌 <b id="discardCount">0</b> · <b id="discardTop">空</b></span>
+        </div>
+        <div id="players" class="players"></div>
+      </div></div>
+<section class="panel control-dock" id="controlDock" data-role="player" data-play-controls>
+        <div class="action-zone">
+          <div class="section-head">
+            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
+            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
+          </div>
+          <p id="actionHint" class="action-hint"></p>
+          <div id="actionButtons" class="action-buttons"></div>
+        </div>
+        <div class="hand-zone" id="handZone">
+          <div class="hand-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
+          <div id="hand" class="hand"></div>
+        </div>
+      </section>
+</section><details data-play-reference><summary>玩家资料、规则与记录</summary>
+<aside class="sidebar">
       <details class="panel rule-card">
         <summary><span><span class="eyebrow">FARM GUIDE</span><b>详细脏小猪规则</b></span><span class="fold-hint">展开</span></summary>
         <div class="rule-details">
@@ -98,44 +133,8 @@
         <div id="spectatorList" class="spectator-list"><p class="muted">暂无旁观者</p></div>
       </details>
     </aside>
-
-    <section class="game-area">
-      <div id="notice" class="notice">等待玩家加入。</div>
-      <div id="exchangeReveal" class="exchange-reveal hidden" role="status" aria-live="polite"></div>
-
-      <section class="panel control-dock" id="controlDock" data-role="player">
-        <div class="action-zone">
-          <div class="section-head">
-            <div><p class="eyebrow">CURRENT ACTION</p><h2 id="actionTitle">等待开始</h2></div>
-            <div class="timer"><b id="timerText">--</b><i id="timerBar"></i></div>
-          </div>
-          <p id="actionHint" class="action-hint"></p>
-          <div id="actionButtons" class="action-buttons"></div>
-        </div>
-        <div class="hand-zone" id="handZone">
-          <div class="hand-head"><div><p class="eyebrow">YOUR HAND</p><h2>我的手牌</h2></div><span id="handHint">游戏开始后获得3张牌</span></div>
-          <div id="hand" class="hand"></div>
-        </div>
-      </section>
-
-      <div class="panel farm-table" id="farmTable">
-        <div id="presentationEffects" class="presentation-effects" aria-live="polite">
-          <svg class="presentation-trail-layer" aria-hidden="true">
-            <defs><marker id="farmTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
-            <path id="presentationTrail" class="presentation-trail" marker-end="url(#farmTrailArrow)"></path>
-          </svg>
-          <div id="presentationAnnouncement" class="presentation-announcement">
-            <span id="presentationLabel"></span><b id="presentationText"></b>
-          </div>
-        </div>
-        <div class="table-head">
-          <span>牌库 <b id="deckCount">0</b></span>
-          <span>弃牌 <b id="discardCount">0</b> · <b id="discardTop">空</b></span>
-        </div>
-        <div id="players" class="players"></div>
-      </div>
-    </section>
-  </section>
+</details>
+</section>
 </main>
 <script type="module" src="app.js"></script>
 </body>

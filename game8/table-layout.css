@@ -1,0 +1,30 @@
+[data-play-layout="game8"] .market-workspace { padding: 3px; }
+[data-play-layout="game8"] .supply { padding: 8px; margin-bottom: 8px; }
+[data-play-layout="game8"] .supply .section-head { margin-bottom: 5px; }
+[data-play-layout="game8"] .tokens { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 5px; }
+[data-play-layout="game8"] .token { min-width: 0; padding: 5px; }
+[data-play-layout="game8"] .token img { width: 42px; height: 42px; }
+[data-play-layout="game8"] .special-row { margin-bottom: 8px; }
+[data-play-layout="game8"] .market-row { grid-template-columns: 76px minmax(0,1fr); }
+[data-play-layout="game8"] .market-group { grid-template-columns: 76px minmax(0,1fr); }
+[data-play-layout="game8"] .cards { display: grid; grid-template-columns: repeat(4,minmax(120px,1fr)); overflow-x: auto; padding: 4px; scroll-snap-type: x proximity; }
+[data-play-layout="game8"] .cards.single { grid-template-columns: minmax(120px,1fr); max-width: 210px; }
+[data-play-layout="game8"] .poke-card { scroll-snap-align: start; }
+[data-play-layout="game8"] .trainer-controls > .action-panel { grid-area: auto; padding: 4px; }
+[data-play-layout="game8"] #trainerBoard { position: static; grid-area: auto; min-width: 0; max-height: none; padding: 4px; overflow: visible; }
+[data-play-layout="game8"] #trainerBoard .resource-strip { gap: 4px; margin-bottom: 5px; }
+[data-play-layout="game8"] .trainer-collection { margin-top: 5px; padding: 5px; border-top: 1px solid #ccd6e5; }
+[data-play-layout="game8"] .trainer-collection summary { cursor: pointer; font-size: 13px; }
+[data-play-layout="game8"] [data-play-reference] .observer-panels { position: static; display: contents; }
+@container play (max-width: 650px) {
+  [data-play-layout="game8"] .supply .section-head { display: none; }
+  [data-play-layout="game8"] .token img { width: 32px; height: 32px; }
+  [data-play-layout="game8"] .token { font-size: 10px; }
+  [data-play-layout="game8"] .market-row { grid-template-columns: 52px minmax(0,1fr); gap: 5px; }
+  [data-play-layout="game8"] .market-group { grid-template-columns: 42px minmax(0,1fr); gap: 4px; }
+  [data-play-layout="game8"] .special-deck { padding: 3px; }
+  [data-play-layout="game8"] .special-deck b { font-size: 12px; }
+  [data-play-layout="game8"] .cards { grid-template-columns: repeat(4,126px); gap: 7px; }
+  [data-play-layout="game8"] .cards.single { grid-template-columns: minmax(0,1fr); }
+  [data-play-layout="game8"] .poke-card .art { height: 75px; }
+}

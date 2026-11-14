@@ -1,0 +1,13 @@
+[data-play-layout="game6"] .player-panel { padding: 7px; margin-bottom: 7px; }
+[data-play-layout="game6"] .player-panel .section-head { margin-bottom: 5px; }
+[data-play-layout="game6"] #playerList { display: flex; gap: 6px; overflow-x: auto; }
+[data-play-layout="game6"] #playerList > * { flex: 0 0 140px; min-width: 0; }
+[data-play-layout="game6"] .board-panel { padding: 8px; }
+[data-play-layout="game6"] #turnConsole .turn-hand-panel { min-width: 0; }
+[data-play-layout="game6"] #turnConsole .hand { min-height: 0; margin: 0; padding-top: 8px; }
+[data-play-layout="game6"] .card-row { scroll-padding-inline: 8px; }
+[data-play-layout="game6"] .revealed-plays { overflow-x: auto; }
+@container play (max-width:650px) {
+  [data-play-layout="game6"] #turnConsole .board-action-panel { grid-template-columns: minmax(0,1fr) 90px; }
+  [data-play-layout="game6"] #turnConsole .board-action-panel .timer { width: 90px; }
+}

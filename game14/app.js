@@ -268,6 +268,13 @@ function renderActions(memberRole) {
       submit({ type: "discardCard", cardId: card.id });
     }, "discard-action");
     addAction("取消选择", () => { selectedCardId = null; render(); });
+    const targetPlayers = new Set((card.legalTargets || []).map((target) => target.key.split(":")[0]));
+    for (const player of view.players.filter((item) => targetPlayers.has(item.id))) {
+      addAction(`查看 ${player.name} 的可选小猪`, () => {
+        const farm = [...E.players.querySelectorAll(".player-farm")].find((node) => node.dataset.playerId === player.id);
+        farm?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      }, "target-shortcut");
+    }
   }
   if (view.permissions.canExchange) {
     addAction("公开三张无法使用的牌并全部更换", () => {
