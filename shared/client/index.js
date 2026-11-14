@@ -10,6 +10,7 @@ export * from "./room-client.js";
 export * from "./room-entry-controller.js";
 export * from "./server-clock.js";
 export * from "./session-store.js";
+export * from "./scoped-draft-store.js";
 export * from "./sse-channel.js";
 export * from "./spectator-ui.js";
 export * from "./table-presence-toolbar.js";

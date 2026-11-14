@@ -15,6 +15,16 @@ fs.mkdirSync(output, {recursive:true});
 async function run() {
   const browser = await openBrowser();
   const {evaluate, send, until, viewport, tap} = browser;
+  await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    const nativeFetch=window.fetch;
+    window.fetch=function(url,options){
+      if(String(url).endsWith('/api/actions')&&options?.body){
+        const type=JSON.parse(options.body).action.type;
+        if(window.__failActionType===type){window.__failActionType=null;return Promise.reject(new TypeError('simulated offline'));}
+      }
+      return nativeFetch.call(this,url,options);
+    };
+  `});
   const results = [];
   let server;
   const streams = [];
@@ -26,13 +36,16 @@ async function run() {
   async function room(name, count, fixture = () => {}) {
     await closeRoom(); browser.errors.length = 0;
     const engine = await import(`../${name}/server/game-engine.mjs`);
-    let state;
+    let state, expireNextAction=false;
     const actions = [];
+    const eventResponses = [];
     const wrapped = {...engine,
       createLobby(options) { state = engine.createLobby(options); return state; },
       applyAction(s, id, action, context) {
         const result = engine.applyAction(s,id,action,{...context,random:()=>0.314159});
         if (action.type === 'start') {fixture(s);engine.validateState?.(s);}
+        if (expireNextAction) {s.deadline=context.now+80;expireNextAction=false;}
+        if (name==='game4'&&s.phase==='handResult') s.deadline=context.now+60_000;
         state = s;
         actions.push({id,type:action.type});
         return result;
@@ -40,6 +53,10 @@ async function run() {
       buildView(s, ...args) {state=s;return engine.buildView(s,...args);}
     };
     server = start({gameRoot:path.join(root,name),engine:wrapped,defaultPort:0,spectatorsEnabled:true});
+    server.on('request',(request,response)=>{
+      const url=new URL(request.url,'http://localhost');
+      if(url.pathname==='/api/events')eventResponses.push({id:url.searchParams.get('clientId'),response});
+    });
     await once(server,'listening');
     const base = `http://127.0.0.1:${server.address().port}`;
     const post = async (route, data) => {
@@ -89,6 +106,12 @@ async function run() {
         assert.equal(m.dockOverBoard,false,`${name}/${label}: dock overlap`);
         assert.deepEqual(blocked,[],`${name}/${label}: inaccessible controls`);
         assert.deepEqual(m.clipped,[],`${name}/${label}: clipped seats`);
+        assert.deepEqual(m.overlaps,[],`${name}/${label}: overlapping seats`);
+        assert.deepEqual(m.centerOverlaps,[],`${name}/${label}: seats cover public center`);
+        if (m.play.length) {
+          assert.ok(m.documentHeight<=m.height+2,`${name}/${label}: viewport shell overflow`);
+          assert.ok(!m.dock||m.dock.bottom<=m.height+2,`${name}/${label}: dock below viewport`);
+        }
         assert.ok(m.board.h>=40,`${name}/${label}: board collapsed`);
       }
       await viewport(390,844);
@@ -96,7 +119,18 @@ async function run() {
       results.push({game:name,scenario:label,phase:state.phase});
       console.log(`${name}: ${label} (${state.phase})`);
     };
-    return {get state(){return state;},engine,actions,post,act,begin,check,sessions,code};
+    const reload = async () => {
+      await send('Page.reload');
+      await until(()=>evaluate("!!document.getElementById('guestModeButton')"),'reload setup');await delay(350);
+      await tap('#guestModeButton');
+      await evaluate(`document.getElementById('roomCodeInput').value=${JSON.stringify(code)}`);
+      await tap('#joinRoomButton');
+      await until(()=>evaluate("!document.getElementById('roomPanel').classList.contains('hidden')"),'resumed room');
+      await evaluate('window.__layoutName='+JSON.stringify(name));await delay(180);
+    };
+    return {get state(){return state;},engine,actions,post,act,begin,check,reload,sessions,code,
+      disconnectHost(){for(const event of eventResponses)if(event.id===sessions[0].clientId)event.response.destroy();},
+      async expire(index,action){expireNextAction=true;await act(index,action);}};
   }
 
   async function keyboardCheck(selector, name) {
@@ -145,6 +179,37 @@ async function run() {
       assert.ok(await evaluate(`document.querySelector(${JSON.stringify(selector)}).value.includes('触屏输入草稿')`),`${name}: background SSE preserves input`);
       if(name!=='game11')await r.check('input preserved across spectator broadcast');
     }
+    if (include('game4')) {
+      const r=await room('game4',6,s=>{
+        const stacks=[300,600,900,1200,1500,1500];
+        for(const [i,p] of s.players.entries())p.chips=stacks[i]-p.totalBet;
+        // A royal flush on the board produces split payouts in every side pot.
+        const cards=[...s.deck,...s.players.flatMap(p=>p.hole)];
+        const royal=[10,11,12,13,14].map(rank=>cards.splice(cards.findIndex(c=>c.s==='♠'&&c.r===rank),1)[0]);
+        for(const p of s.players)p.hole=cards.splice(0,2);
+        const deal=[cards.shift(),...royal.slice(0,3),cards.shift(),royal[3],cards.shift(),royal[4]];
+        s.deck=[...cards,...deal.reverse()];
+      });
+      await r.begin();await r.check('blinds and bet labels');
+      for(let guard=0;r.state.phase==='playing'&&guard<15;guard++){
+        const index=r.state.currentIndex,p=r.state.players[index],maximum=p.streetBet+p.chips;
+        await r.act(index,maximum>r.state.currentBet&&!p.acted?{type:'raise',target:maximum}:{type:'call'});
+      }
+      assert.equal(r.state.phase,'handResult');assert.equal(r.state.handWinners.length,5);
+      assert.ok(r.state.handWinners.every(p=>p.ids.length>=2));
+      assert.equal(r.state.handWinners.reduce((sum,p)=>sum+p.amount,0),6000);
+      await r.check('six-way showdown with five split pots');
+      for(const [w,h] of [[1440,900],[390,844],[844,390]]){
+        await viewport(w,h);
+        const overflow=await evaluate(`(()=>{const e=document.querySelector('[data-play-board]'),r=e.getBoundingClientRect();return {width:e.clientWidth,scrollWidth:e.scrollWidth,children:[...e.querySelectorAll('*')].filter(c=>c.checkVisibility({checkVisibilityCSS:true})&&c.getBoundingClientRect().right>r.right+2).map(c=>({tag:c.tagName,cls:c.className,width:c.getBoundingClientRect().width})).slice(0,8)};})()`);
+        assert.ok(overflow.scrollWidth<=overflow.width+2,`poker ${w}: internal overflow ${JSON.stringify(overflow)}`);
+        const layout=await evaluate(`(()=>{const visible=e=>e.checkVisibility({checkVisibilityCSS:true}),box=e=>e.getBoundingClientRect(),overlap=(a,b)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>2&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>2;const result=box(document.getElementById('showdownOverlay')),seats=[...document.querySelectorAll('.seat')];const escaped=[];for(const seat of seats)for(const badge of seat.querySelectorAll('.seat-bet,.showdown-rank'))if(visible(badge)){const a=box(seat),b=box(badge);if(b.top<a.top-1||b.bottom>a.bottom+1||b.left<a.left-1||b.right>a.right+1)escaped.push(badge.textContent);}return {pots:document.querySelectorAll('.showdown-pot').length,overlaysSeats:seats.some(s=>overlap(box(s),result)),escaped,cardRows:[...document.querySelectorAll('.best-five')].filter(visible).length};})()`);
+        assert.equal(layout.pots,5);assert.equal(layout.cardRows,5);assert.equal(layout.overlaysSeats,false);assert.deepEqual(layout.escaped,[]);
+      }
+      await r.reload();assert.equal(await evaluate("document.querySelectorAll('.showdown-pot').length"),5);
+      await viewport(390,844);await evaluate("document.getElementById('showdownOverlay').scrollIntoView({block:'start',behavior:'instant'})");
+      const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(output,'poker-split-pots.png'),Buffer.from(shot.data,'base64'));
+    }
     if (include('game5')) {
       const r=await room('game5',2,s=>{
         const cards=[...s.deck,...s.discard,...s.players.flatMap(p=>p.hand)];
@@ -177,18 +242,45 @@ async function run() {
         }
       });
       await r.begin();const ids=r.state.players[0].hand.slice(0,3).map(t=>t.id);
+      await evaluate("window.__failActionType='beginEdit'");
       await tap(`[data-tile-id="${ids[0]}"]`);await tap('[data-new-kind="group"]');
+      await until(()=>evaluate("[...document.querySelectorAll('#actionButtons button')].some(b=>b.textContent==='重试同步')"),'failed edit exposes retry');
+      assert.equal(r.state.turnEdited,false);assert.equal(await evaluate("document.querySelectorAll('#table [data-tile-id]').length"),1);
+      await tap('#actionButtons button','重试同步');await until(()=>r.state.turnEdited,'edit retry succeeds');
+      await r.check('failed beginEdit retains draft and allows retry');
       await tap(`#table [data-tile-id="${ids[0]}"]`);await tap('#actionButtons button','放回牌架');
       assert.equal(await evaluate("document.querySelectorAll('#table [data-tile-id]').length"),0);
       await tap(`[data-tile-id="${ids[0]}"]`);await tap('[data-new-kind="group"]');
       for(const id of ids.slice(1)){await tap(`#hand [data-tile-id="${id}"]`);await tap('[data-drop-meld="0"]');}
       await tap('#actionButtons button','撤销一步');assert.equal(await evaluate("document.querySelectorAll('#table [data-tile-id]').length"),2);
       await tap(`#hand [data-tile-id="${ids[2]}"]`);await tap('[data-drop-meld="0"]');
+      await r.reload();
+      assert.equal(await evaluate("document.querySelectorAll('#table [data-tile-id]').length"),3);
+      assert.equal(await evaluate("[...document.querySelectorAll('#actionButtons button')].find(b=>b.textContent==='撤销一步').disabled"),false);
+      assert.equal(r.state.turnEdited,true);
+      r.disconnectHost();
+      await until(()=>evaluate("document.getElementById('connectionStatus').textContent.includes('重连')"),'SSE disconnected');
+      await until(()=>evaluate("document.getElementById('connectionStatus').textContent.includes('已连接')"),'SSE reconnected',12000);
+      assert.equal(await evaluate("document.querySelectorAll('#table [data-tile-id]').length"),3);
+      await r.check('SSE reconnect preserves private layout');
       await r.check('touch opening draft, return and undo');
-      await tap('#actionButtons button','确认并公布牌桌');await until(()=>r.state.table.length===1,'layout committed');
+      // Rapid duplicate UI activation must produce only one authoritative commit.
+      const commits=r.actions.filter(a=>a.type==='commitLayout').length;
+      await evaluate("(()=>{const b=[...document.querySelectorAll('#actionButtons button')].find(b=>b.textContent==='确认并公布牌桌');if(b.disabled)throw Error('restored draft cannot submit');b.click();b.click();})()");
+      await until(()=>r.state.table.length===1,'layout committed');assert.equal(r.actions.filter(a=>a.type==='commitLayout').length,commits+1);
       assert.equal(r.state.players[0].opened,true);assert.equal(r.state.players[0].hand.length,11);
       await r.act(1,{type:'draw'});await until(()=>r.state.currentIndex===0,'next turn');
+      await r.reload();assert.equal(await evaluate("document.querySelectorAll('#hand [data-tile-id]').length"),11);
       await r.check('published table and next turn');
+      await tap(`#hand [data-tile-id="${r.state.players[0].hand[0].id}"]`);await tap('[data-new-kind="group"]');
+      await until(()=>r.state.turnEdited,'timeout fixture edited');
+      const expiredTurn=r.state.turnId,handCount=r.state.players[0].hand.length;
+      // Only the test wrapper accelerates the deadline; the server timer still fires.
+      await r.expire(0,{type:'beginEdit'});await until(()=>r.state.turnId!==expiredTurn,'unfinished draft timeout');
+      assert.equal(r.state.players[0].hand.length,handCount+3);
+      await r.reload();assert.equal(await evaluate("sessionStorage.getItem('tablegame:draft:rummikub')"),null);
+      assert.equal(await evaluate("document.querySelectorAll('#table .meld').length"),1);
+      await r.check('timeout discards expired draft and applies penalty');
     }
     if (include('game16')) {
       const r=await room('game16',3,s=>{
@@ -223,8 +315,18 @@ async function run() {
       const ids=r.state.players.slice(0,2).map(p=>p.id);
       for(const id of ids)await tap(`#players [data-id="${id}"]`);
       assert.ok(await evaluate("document.querySelector('.team-selection-summary').textContent.includes('2')"));
-      await r.check('team selection');await tap('#actionButtons button','确认远征队伍');
+      await r.reload();assert.equal(await evaluate("document.querySelectorAll('#players .selected').length"),2);
+      await r.check('proposal selection restored after reload');
+      await r.check('team selection');
+      await evaluate("window.__failActionType='proposeTeam'");await tap('#actionButtons button','确认远征队伍');
+      await until(()=>evaluate("[...document.querySelectorAll('#actionButtons button')].some(b=>b.textContent==='确认远征队伍'&&!b.disabled)"),'failed proposal can retry');
+      assert.equal(r.state.phase,'teamProposal');assert.equal(await evaluate("document.querySelectorAll('#players .selected').length"),2);
+      const proposals=r.actions.filter(a=>a.type==='proposeTeam').length;
+      await evaluate("(()=>{const b=[...document.querySelectorAll('#actionButtons button')].find(b=>b.textContent==='确认远征队伍');b.click();b.click();})()");
+      await until(()=>r.state.phase==='teamVote','proposal retried');assert.equal(r.actions.filter(a=>a.type==='proposeTeam').length,proposals+1);
+      await r.check('failed proposal retry and duplicate confirmation');
       await until(()=>r.state.phase==='teamVote','vote');await r.check('team vote');
+      await r.reload();assert.equal(await evaluate("sessionStorage.getItem('tablegame:draft:avalon')"),null);
       const approve=await evaluate("[...document.querySelectorAll('#actionButtons button')].find(b=>b.textContent.includes('同意提案')).textContent");
       await tap('#actionButtons button',approve);for(let i=1;i<5;i++)await r.act(i,{type:'submitTeamVote',approve:true});
       await r.check('secret quest card');

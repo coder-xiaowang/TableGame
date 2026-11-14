@@ -5,7 +5,7 @@ const key=(value)=>JSON.stringify(value);
 
 function playerNames(players){return players.map((player)=>[player.id,player.name]);}
 
-export function createGame22RenderModel(view,{memberRole="player",roomCode="",teamDraft=[]}={}){
+export function createGame22RenderModel(view,{memberRole="player",roomCode="",teamDraft=[],proposalPending=false}={}){
   if(!view)return null;
   const players=Array.isArray(view.players)?view.players:[];
   const permissions=view.permissions||{};
@@ -40,7 +40,7 @@ export function createGame22RenderModel(view,{memberRole="player",roomCode="",te
     secret:key([memberRole,view.phase,view.selfRole,view.knownEvilIds,view.percivalCandidates,view.myLadyFinding,playerNames(players)]),
     decision:key([memberRole,view.phase,view.capacity,players.length,view.leaderId,view.questIndex,view.proposalNumber,
       view.requiredTeamSize,view.requiredFails,view.proposedTeam,view.ladyHolderId,view.result,
-      decisionPermissions,decisionProgress,draft,playerNames(players)]),
+      decisionPermissions,decisionProgress,draft,playerNames(players),proposalPending]),
     ceremony:key(view.ceremony||null),
     log:key(view.logs||[]),
     countdown:key([view.phase,view.deadline||0,view.deadlineDurationSeconds||0])

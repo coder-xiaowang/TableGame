@@ -8,7 +8,7 @@ function localDraftFacts(draft){
   return [draft.turnId,draft.base,draft.table,draft.handIds,draft.undoLength];
 }
 
-export function createGame15RenderModel(view,{memberRole=view?.roomRole,roomCode="",draft=null,selectedTileId=null,handSort="color"}={}){
+export function createGame15RenderModel(view,{memberRole=view?.roomRole,roomCode="",draft=null,selectedTileId=null,handSort="color",editStatus=null}={}){
   if(!view)return null;
   const players=Array.isArray(view.players)?view.players:[];
   const permissions=view.permissions||{};
@@ -34,7 +34,7 @@ export function createGame15RenderModel(view,{memberRole=view?.roomRole,roomCode
     table:key([view.phase,permissions.canAct,self?.opened,view.table,tableLayout,view.hand,selectedOnTable,view.lastChange]),
     decision:key([memberRole,view.phase,view.gameNumber,view.capacity,players.length,view.currentPlayerId,current?.name||"",
       view.turnEdited,permissions.canAct,permissions.canDraw,permissions.canPassEmpty,self?.opened,handSort,
-      permissions.canAct?draftFacts:null,selectedTileId]),
+      permissions.canAct?draftFacts:null,selectedTileId,editStatus]),
     changeNotice:key([view.lastChange,players.map((player)=>[player.id,player.name])]),
     result:key([view.gameResult,view.gameNumber,players.map((player)=>[player.id,player.name])]),
     log:key(view.logs||[]),

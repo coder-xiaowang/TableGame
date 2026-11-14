@@ -65,7 +65,9 @@ test("game15 HTTP server owns turns, hides racks and serves the transactional ed
   assert.match(layout, /\[data-play-controls\] \{\s*grid-area: controls;\s*position: relative/);
   assert.match(css, /data-expanded="false"/);
   const app = await fetch(`${base}/app.js`).then((response) => response.text());
-  assert.match(app, /type:\s*"beginEdit"/);
+  const editSync = await fetch(`${base}/edit-sync.mjs`).then((response) => response.text());
+  assert.match(app, /createEditSynchronizer/);
+  assert.match(editSync, /"beginEdit"\s*:\s*"resetEdit"/);
   assert.match(app, /type:\s*"commitLayout"/);
   const config = await fetch(`${base}/api/config`).then((response) => response.json());
   assert.equal(config.authorityMode, "server");

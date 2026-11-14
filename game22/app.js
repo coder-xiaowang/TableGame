@@ -3,6 +3,8 @@ import { createAuthoritativeRoomClient, createCountdown, createPresentationTimel
 import { createGame22PartitionRenderer, createGame22RenderModel } from "./render-partitions.mjs";
 import { createAvalonPlayerBadges } from "./player-badges.mjs";
 import { canOpenPlayerAdminMenu } from "./player-admin-menu.mjs";
+import { createScopedDraftStore } from "/shared/client/scoped-draft-store.js";
+import { teamDraftContext, validTeamDraft } from "./team-draft.mjs";
 
 const PROTOCOL_VERSION=3;
 const ROLE_LABEL={merlin:"梅林",percival:"派西维尔",loyal:"亚瑟忠臣",assassin:"刺客",morgana:"莫甘娜",mordred:"莫德雷德",oberon:"奥伯伦",minion:"莫德雷德爪牙"};
@@ -27,6 +29,8 @@ const ids=["hero","connectionStatus","roomHeaderTools","hostTools","roomCodeDisp
 const E=Object.fromEntries(ids.map((id)=>[id,$(id)]));
 let view=null,spectatorUi=null,presentation=null;
 let teamDraft=new Set(),draftContext="",lastCountdownSeconds=0;
+let proposalPending=false;
+const teamDraftStore=createScopedDraftStore("avalon");
 const mapView={scale:1,fitScale:1,x:0,y:0,ready:false,pointers:new Map(),gesture:null};
 const sessions=createSessionStore({gameId:"avalon"});
 const countdown=createCountdown({onTick(value){lastCountdownSeconds=value.seconds;renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);const requestButton=E.actionButtons?.querySelector("[data-extension-request]");if(requestButton)requestButton.disabled=value.seconds>30||value.seconds<=0;}});
@@ -42,8 +46,20 @@ function playerInitial(id){return [...nameOf(id)][0]||"骑";}
 function badgeIcon(type){return BADGE_ICONS[type]||BADGE_ICONS.role;}
 function badgeHtml(badge){const family=badge.type.startsWith("role-")?" role-badge":"";return `<i class="player-badge badge-${escapeHtml(badge.type)}${family}" role="img" aria-label="${escapeHtml(badge.label)}" title="${escapeHtml(badge.label)}">${badgeIcon(badge.type)}</i>`;}
 function enterRoom(){setHidden(E.setupPanel,true);setHidden(E.roomPanel,false);setHidden(E.roomHeaderTools,false);E.roomCodeDisplay.textContent=room.snapshot().roomCode;E.hero.classList.add("in-room");if(!mapView.ready)requestAnimationFrame(resetMapView);}
-function contextOf(next){return `${room.snapshot().roomCode||""}:${next.matchNumber}:${next.questIndex}:${next.proposalNumber}:${next.leaderId}`;}
-function reconcileDraft(next){const key=contextOf(next);if(draftContext&&draftContext!==key)teamDraft.clear();draftContext=key;if(!next.permissions?.canPropose)teamDraft.clear();else teamDraft=new Set([...teamDraft].filter((id)=>next.players.some((p)=>p.id===id)));}
+function contextOf(next){return teamDraftContext(next,room.snapshot().roomCode);}
+function reconcileDraft(next){
+  const key=contextOf(next);
+  if(draftContext!==key){teamDraft=new Set(validTeamDraft(teamDraftStore.load(key),next));proposalPending=false;}
+  draftContext=key;
+  teamDraft=new Set(validTeamDraft([...teamDraft],next));
+  if(!key)teamDraftStore.clear();
+}
+async function proposeTeam(){
+  if(proposalPending||!view?.permissions.canPropose||teamDraft.size!==view.requiredTeamSize)return;
+  const context=draftContext,memberIds=[...teamDraft];proposalPending=true;render();
+  try{await submit({type:"proposeTeam",memberIds});}
+  finally{if(context===draftContext){proposalPending=false;render();}}
+}
 function addButton(label,onClick,className=""){const button=document.createElement("button");button.type="button";button.textContent=label;button.className=className;button.onclick=onClick;E.actionButtons.append(button);return button;}
 function customTimersFromInputs(){return {secretReveal:Number(E.paceSecretInput.value),teamProposal:Number(E.paceProposalInput.value),teamVote:Number(E.paceVoteInput.value),questAction:Number(E.paceQuestInput.value),ladyInspect:Number(E.paceLadyInput.value),assassination:Number(E.paceAssassinationInput.value)};}
 function openCustomPaceDialog(){const timers=view?.timers||DEFAULT_CUSTOM_TIMERS;E.paceSecretInput.value=timers.secretReveal;E.paceProposalInput.value=timers.teamProposal;E.paceVoteInput.value=timers.teamVote;E.paceQuestInput.value=timers.questAction;E.paceLadyInput.value=timers.ladyInspect;E.paceAssassinationInput.value=timers.assassination;E.customPaceDialog.showModal();}
@@ -61,7 +77,7 @@ function bindMapNavigation(){const stop=(event)=>event.stopPropagation(),isUi=(e
 
 
 function targetable(id){if(view.permissions.canPropose)return true;if(view.permissions.canUseLady)return view.permissions.ladyTargetIds.includes(id);if(view.permissions.canAssassinate)return id!==view.selfId;return false;}
-function choosePlayer(id){if(view.permissions.canPropose){if(teamDraft.has(id))teamDraft.delete(id);else if(teamDraft.size<view.requiredTeamSize)teamDraft.add(id);render();return;}if(view.permissions.canUseLady&&view.permissions.ladyTargetIds.includes(id)){if(confirm(`让湖中仙女查验 ${nameOf(id)} 吗？`))submit({type:"ladyInspect",targetId:id});return;}if(view.permissions.canAssassinate&&id!==view.selfId&&confirm(`刺杀 ${nameOf(id)}？选择后立即结算。`))submit({type:"assassinate",targetId:id});}
+function choosePlayer(id){if(view.permissions.canPropose){if(proposalPending)return;if(teamDraft.has(id))teamDraft.delete(id);else if(teamDraft.size<view.requiredTeamSize)teamDraft.add(id);render();return;}if(view.permissions.canUseLady&&view.permissions.ladyTargetIds.includes(id)){if(confirm(`让湖中仙女查验 ${nameOf(id)} 吗？`))submit({type:"ladyInspect",targetId:id});return;}if(view.permissions.canAssassinate&&id!==view.selfId&&confirm(`刺杀 ${nameOf(id)}？选择后立即结算。`))submit({type:"assassinate",targetId:id});}
 
 function canManagePlayer(id){return canOpenPlayerAdminMenu({phase:view?.phase,canManage:view?.permissions?.canManage,selfId:view?.selfId,targetId:id});}
 function closePlayerAdminMenu(){setHidden(E.playerAdminMenu,true);delete E.playerAdminMenu.dataset.targetId;E.players.querySelector(".admin-menu-open")?.classList.remove("admin-menu-open");}
@@ -134,7 +150,7 @@ function renderActions(role){
     E.actionTitle.textContent=view.proposalExtension.requested?"是否延长本次组队讨论？":view.permissions.canPropose?`选择${view.requiredTeamSize}名远征队员`:`等待队长 ${nameOf(view.leaderId)} 组队`;
     E.actionHint.textContent=view.proposalExtension.requested?`严格多数同意后增加60秒；已有${view.proposalExtension.yes}票同意、${view.proposalExtension.no}票反对。`:view.permissions.canPropose?`已选择${teamDraft.size}/${view.requiredTeamSize}人，点击玩家纹章增删；选择会在普通状态刷新后保留。`:`这是本任务第${view.proposalNumber}/5次提案。`;
     if(view.permissions.canVoteExtension){addButton("同意延长",()=>submit({type:"voteDiscussionExtension",approve:true}),"primary");addButton("反对延长",()=>submit({type:"voteDiscussionExtension",approve:false}));}
-    if(view.permissions.canPropose){const b=addButton("确认远征队伍",async()=>{const ids=[...teamDraft];const result=await submit({type:"proposeTeam",memberIds:ids});if(result)teamDraft.clear();},"primary");b.disabled=teamDraft.size!==view.requiredTeamSize;}
+    if(view.permissions.canPropose){const b=addButton(proposalPending?"正在提交队伍…":"确认远征队伍",proposeTeam,"primary");b.disabled=proposalPending||teamDraft.size!==view.requiredTeamSize;}
     if(view.permissions.canRequestExtension){const b=addButton("申请延长（最后30秒开放）",()=>submit({type:"requestDiscussionExtension"}));b.dataset.extensionRequest="";b.disabled=lastCountdownSeconds>30||lastCountdownSeconds<=0;b.title="仅在组队倒计时最后30秒可申请，本轮限一次";}
     return;
   }
@@ -159,7 +175,7 @@ function renderCountdownPartition(){
   if(view.deadline)countdown.start(view.deadline,Math.max(1,Number(view.deadlineDurationSeconds)||30)*1000);else{countdown.stop();lastCountdownSeconds=0;E.timerText.textContent="--";E.timerBar.style.width="0";}
 }
 const partitionRenderer=createGame22PartitionRenderer({room:renderRoom,status:renderStatus,quests:renderQuests,players:renderPlayers,focus:renderFocus,secret:(model)=>renderSecret(model.memberRole),decision:(model)=>renderActions(model.memberRole),ceremony:renderCeremony,log:renderLog,countdown:renderCountdownPartition});
-function render(){if(!view)return;const spectatorModel=spectatorUi.render(view);partitionRenderer.render(createGame22RenderModel(view,{memberRole:spectatorModel.memberRole,roomCode:room.snapshot().roomCode,teamDraft}));}
+function render(){if(!view)return;teamDraftStore.save(draftContext,[...teamDraft]);const spectatorModel=spectatorUi.render(view);partitionRenderer.render(createGame22RenderModel(view,{memberRole:spectatorModel.memberRole,roomCode:room.snapshot().roomCode,teamDraft,proposalPending}));}
 
 function seat(id){return E.players.querySelector(`[data-id="${CSS.escape(String(id))}"]`);}function labelFor(event){return ({"match-start":"密议开启","leader-turn":"队长誓约","team-proposed":"远征提案","team-vote-sealed":"蜡印封存","team-vote-result":"圆桌裁决","quest-card-sealed":"圣杯收牌","quest-result":"远征结算","lady-ready":"湖光苏醒","lady-inspect":"湖中仙女","assassination-start":"刺客现身","discussion-extension-requested":"延时动议","discussion-extension-granted":"动议通过","discussion-extension-rejected":"动议驳回","game-result":"王国命运"})[event.kind]||"卡美洛动态";}
 function beforePlay(event){const source=seat(event.actorId)||E.roundTable.querySelector(".table-focus"),target=seat(event.targetId)||(event.targetIds||[]).map(seat).find(Boolean)||E.roundTable.querySelector(".table-focus");const highlighted=[...new Set([source,target,...(event.targetIds||[]).map(seat)].filter(Boolean))];highlighted.forEach((el)=>el.classList.add("presentation-focus"));let token=null;if(source&&target&&source!==target){const stage=E.presentationEffects.getBoundingClientRect(),a=source.getBoundingClientRect(),b=target.getBoundingClientRect();token=document.createElement("span");token.className="presentation-token";token.style.left=`${a.left+a.width/2-stage.left}px`;token.style.top=`${a.top+a.height/2-stage.top}px`;token.style.setProperty("--to-x",`${b.left+b.width/2-stage.left}px`);token.style.setProperty("--to-y",`${b.top+b.height/2-stage.top}px`);E.presentationEffects.append(token);}return()=>{highlighted.forEach((el)=>el.classList.remove("presentation-focus"));token?.remove();};}

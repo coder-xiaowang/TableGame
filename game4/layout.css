@@ -261,3 +261,38 @@ h1 { font-size: clamp(34px,4vw,50px); }
 @media (prefers-reduced-motion: reduce) {
   .seat,.showdown-overlay,.showdown-rank { animation: none!important; transition: none!important; }
 }
+
+/* Bets and ranks grow with their seat; settlement grows below the whole table. */
+[data-play-layout="game4"] .poker-table::after { max-width: calc(100% - 24px); overflow: hidden; }
+[data-play-layout="game4"] .seat-meta { white-space: normal; overflow-wrap: anywhere; }
+[data-play-layout="game4"] .seat-bet,
+[data-play-layout="game4"] .showdown-rank {
+  position: static;
+  inset: auto;
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 4px;
+  transform: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  animation: none;
+}
+[data-play-layout="game4"] .seat-bet { grid-row: 3; }
+[data-play-layout="game4"] .showdown-rank { grid-row: 4; }
+[data-play-layout="game4"] .showdown-overlay {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-width: 0;
+  margin: 12px 0 0;
+  transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+  animation: poker-result-reveal .25s ease both;
+}
+[data-play-layout="game4"] .showdown-results { grid-template-columns: repeat(auto-fit,minmax(min(280px,100%),1fr)); gap: 10px; }
+[data-play-layout="game4"] .showdown-pot { display: grid; align-content: start; justify-content: stretch; min-width: 0; padding: 10px; border: 1px solid #e7ce8c55; border-radius: 8px; font-size: 12px; }
+[data-play-layout="game4"] .best-five { display: flex; flex-wrap: wrap; }
+@keyframes poker-result-reveal { from { opacity: 0; } to { opacity: 1; } }

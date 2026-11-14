@@ -80,12 +80,6 @@
 
 
 
-          <div id="showdownOverlay" class="showdown-overlay hidden" aria-live="polite" aria-atomic="true">
-            <p id="showdownKicker">SHOWDOWN</p>
-            <h2 id="showdownTitle">摊牌结算</h2>
-            <div id="showdownResults" class="showdown-results"></div>
-          </div>
-
           <div id="seatBoundary" class="seat-boundary" aria-label="牌桌玩家席边界">
             <div class="seats" id="seats">
 
@@ -99,7 +93,11 @@
           </section>
 </div>
           </div>
-
+          <section id="showdownOverlay" class="showdown-overlay hidden" aria-labelledby="showdownTitle" aria-live="polite" aria-atomic="true">
+            <p id="showdownKicker">SHOWDOWN</p>
+            <h2 id="showdownTitle">摊牌结算</h2>
+            <div id="showdownResults" class="showdown-results"></div>
+          </section>
 
         </div>
 <section class="action-panel table-action-dock" data-play-controls>

@@ -3,6 +3,8 @@
   "private": true,
   "engines": { "node": ">=24" },
   "scripts": {
+    "test": "node scripts/run-tests.cjs",
+    "verify": "npm test && npm run test:layout && npm run test:layout:remaining && npm run test:interaction",
     "test:layout": "node scripts/check-table-layout.cjs",
     "test:layout:remaining": "node scripts/check-play-layout.cjs",
     "test:interaction": "node scripts/check-play-interactions.cjs",

@@ -7,6 +7,7 @@ import {
   createCountdown,
   createRoomEntryController,
   createSessionStore,
+  createScopedDraftStore,
   createSpectatorUi,
   escapeHtml,
   renderConnectionStatus,
@@ -17,6 +18,8 @@ import {
 } from "/shared/client/index.js";
 import { COLOR_LABELS, COLORS, validateMeld } from "./rules.mjs";
 import { createGame15PartitionRenderer, createGame15RenderModel } from "./render-partitions.mjs";
+import { createEditSynchronizer } from "./edit-sync.mjs";
+import { draftContext, restoreDraft } from "./draft-state.mjs";
 
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 90;
@@ -37,12 +40,18 @@ let view = null;
 let draft = null;
 let selectedTileId = null;
 let handSort = "color";
-let markRequested = false;
-let markedTurnId = null;
+let turnSubmitPending = false;
+let restoredDraft = false;
 let changeTimer = null;
 let spectatorUi = null;
 
 const sessions = createSessionStore({ gameId: "rummikub" });
+const draftStore = createScopedDraftStore("rummikub");
+const editSync = createEditSynchronizer({
+  getState: () => ({ key: draftContext(view, room.snapshot().roomCode), edited: Boolean(view?.turnEdited), dirty: draftChanged() }),
+  send: action => room.submitAction(action),
+  onChange: () => render()
+});
 const countdown = createCountdown({
   onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); }
 });
@@ -53,22 +62,12 @@ const room = createAuthoritativeRoomClient({
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
     onView(nextView) {
-      const keepDraft = draft && nextView.phase === "playing" && nextView.turnId === draft.turnId
-        && nextView.currentPlayerId === nextView.selfId;
+      const keepDraft = draft && draft.context === draftContext(nextView, room.snapshot().roomCode);
       view = nextView;
       if (!keepDraft) initializeDraft();
-      if (view.turnEdited) {
-        markRequested = false;
-        markedTurnId = view.turnId;
-      } else if (markedTurnId === view.turnId && !draftChanged()) {
-        markedTurnId = null;
-      }
+      editSync.observe();
       enterRoom();
       render();
-      if (view.permissions.canAct && view.turnEdited && draft && !draftChanged() && !markRequested) {
-        markRequested = true;
-        queueMicrotask(() => submit({ type: "resetEdit" }).finally(() => { markRequested = false; }));
-      }
     },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
@@ -97,6 +96,17 @@ function submit(action) {
     alert(error.message);
     return null;
   });
+}
+
+async function submitTurn(action) {
+  if (turnSubmitPending || !view?.permissions.canAct) return;
+  const context = draftContext(view, room.snapshot().roomCode);
+  turnSubmitPending = true;
+  render();
+  try { return await submit(action); }
+  finally {
+    if (context === draftContext(view, room.snapshot().roomCode)) { turnSubmitPending = false; render(); }
+  }
 }
 
 function enterRoom() {
@@ -143,13 +153,17 @@ function serverTableLayout() {
 }
 
 function initializeDraft() {
+  turnSubmitPending = false;
+  restoredDraft = false;
   if (!view || view.phase !== "playing" || !view.permissions.canAct) {
     draft = null;
     selectedTileId = null;
+    draftStore.clear();
     return;
   }
   const table = serverTableLayout();
   draft = {
+    context: draftContext(view, room.snapshot().roomCode),
     turnId: view.turnId,
     base: JSON.stringify(table),
     table,
@@ -157,9 +171,11 @@ function initializeDraft() {
     originalHandIds: new Set(view.hand.map((tile) => tile.id)),
     undo: []
   };
-  selectedTileId = null;
-  markRequested = false;
-  markedTurnId = view.turnEdited ? view.turnId : null;
+  const saved = draftStore.load(draftContext(view, room.snapshot().roomCode));
+  const restored = restoreDraft(saved, draft);
+  if (restored) { draft = restored; restoredDraft = draftChanged(); }
+  selectedTileId = restored && [...draft.handIds, ...draft.table.flatMap(meld => meld.tileIds)].includes(saved.selectedTileId) ? saved.selectedTileId : null;
+  if (restored && ["color", "number"].includes(saved.handSort)) handSort = saved.handSort;
 }
 
 function tileMap() {
@@ -178,20 +194,18 @@ function snapshotDraft() {
 }
 
 function requestEditMark() {
-  if (!view?.permissions.canAct || view.turnEdited || markRequested || markedTurnId === view.turnId) return;
-  markRequested = true;
-  markedTurnId = view.turnId;
-  submit({ type: "beginEdit" }).finally(() => { markRequested = false; });
+  editSync.sync({ retry: true });
 }
 
 function mutateDraft(callback) {
-  if (!draft || !view.permissions.canAct) return;
+  if (!draft || !view.permissions.canAct || turnSubmitPending) return;
+  restoredDraft = false;
   draft.undo.push(snapshotDraft());
   draft.undo = draft.undo.slice(-60);
   callback();
   draft.table = draft.table.filter((meld) => meld.tileIds.length);
   selectedTileId = null;
-  if (draftChanged()) requestEditMark();
+  requestEditMark();
   render();
 }
 
@@ -235,7 +249,6 @@ function moveTileToMeld(id, meldIndex, beforeId = null) {
 function moveTileToHand(id) {
   if (!draft?.originalHandIds.has(id)) return;
   mutateDraft(() => { removeDraftTile(id); draft.handIds.push(id); });
-  if (!draftChanged() && view.turnEdited) submit({ type: "resetEdit" });
 }
 
 function moveTileToNewMeld(id, kind) {
@@ -254,22 +267,23 @@ function toggleMeldKind(index) {
 }
 
 function undoDraft() {
+  if (turnSubmitPending) return;
   const previous = draft?.undo.pop();
   if (!previous) return;
   draft.table = previous.table;
   draft.handIds = previous.handIds;
   selectedTileId = null;
-  if (!draftChanged() && view.turnEdited) submit({ type: "resetEdit" });
+  requestEditMark();
   render();
 }
 
 function resetDraft() {
-  if (!draft) return;
+  if (!draft || turnSubmitPending) return;
   draft.table = JSON.parse(draft.base);
   draft.handIds = view.hand.map((tile) => tile.id);
   draft.undo = [];
   selectedTileId = null;
-  if (view.turnEdited) submit({ type: "resetEdit" });
+  requestEditMark();
   render();
 }
 
@@ -368,7 +382,7 @@ function addAction(text, handler, className = "", disabled = false) {
   button.type = "button";
   button.textContent = text;
   button.className = className;
-  button.disabled = disabled;
+  button.disabled = disabled || turnSubmitPending;
   button.addEventListener("click", handler);
   E.actionButtons.append(button);
 }
@@ -417,13 +431,19 @@ function renderActions(memberRole) {
   addAction("撤销一步", undoDraft, "", !draft.undo.length);
   addAction("重置本回合", resetDraft, "", !status.changed);
   addAction(handSort === "color" ? "手牌改按数字整理" : "手牌改按颜色整理", () => { handSort = handSort === "color" ? "number" : "color"; render(); });
-  const ready = status.changed && status.valid && status.used > 0 && (self.opened || status.score >= 30) && view.turnEdited && !markRequested;
-  addAction("确认并公布牌桌", () => submit({ type: "commitLayout", layout: draft.table }), "primary", !ready);
+  const sync = editSync.status();
+  if (restoredDraft) E.actionHint.textContent += " · 已恢复本回合草稿";
+  if (sync.error) {
+    E.actionHint.textContent += " · 编辑状态同步失败，草稿已保留，请重试。";
+    addAction("重试同步", requestEditMark);
+  } else if (sync.pending) E.actionHint.textContent += " · 正在同步编辑状态…";
+  const ready = status.changed && status.valid && status.used > 0 && (self.opened || status.score >= 30) && view.turnEdited && !sync.pending && !sync.error;
+  addAction("确认并公布牌桌", () => submitTurn({ type: "commitLayout", layout: draft.table }), "primary", !ready);
   if (view.permissions.canDraw) addAction("摸1张并结束回合", () => {
-    if (!status.changed || confirm("当前草稿会被撤销，然后摸1张并结束回合。确定吗？")) submit({ type: "draw" });
+    if (!status.changed || confirm("当前草稿会被撤销，然后摸1张并结束回合。确定吗？")) submitTurn({ type: "draw" });
   }, "draw-action");
   if (view.permissions.canPassEmpty) addAction("牌池已空：声明无法出牌", () => {
-    if (!status.changed || confirm("当前草稿会被撤销，并声明无法出牌。确定吗？")) submit({ type: "passEmpty" });
+    if (!status.changed || confirm("当前草稿会被撤销，并声明无法出牌。确定吗？")) submitTurn({ type: "passEmpty" });
   }, "draw-action");
 }
 
@@ -527,6 +547,9 @@ const partitionRenderer = createGame15PartitionRenderer({
 
 function render() {
   if (!view) return;
+  if (draft) draftStore.save(draftContext(view, room.snapshot().roomCode), {
+    ...snapshotDraft(), base: draft.base, originalHandIds: [...draft.originalHandIds], undo: draft.undo, selectedTileId, handSort
+  });
   const spectatorModel = spectatorUi.render(view);
   const draftModel = draft ? {
     turnId: draft.turnId,
@@ -540,12 +563,13 @@ function render() {
     roomCode: room.snapshot().roomCode,
     draft: draftModel,
     selectedTileId,
-    handSort
+    handSort,
+    editStatus: { ...editSync.status(), turnSubmitPending, restoredDraft }
   }));
 }
 
 function handleTileClick(id) {
-  if (!view.permissions.canAct || tileLocked(id)) return;
+  if (!view.permissions.canAct || turnSubmitPending || tileLocked(id)) return;
   if (!selectedTileId || selectedTileId === id) {
     selectedTileId = selectedTileId === id ? null : id;
     render();
