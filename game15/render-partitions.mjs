@@ -34,7 +34,7 @@ export function createGame15RenderModel(view,{memberRole=view?.roomRole,roomCode
     table:key([view.phase,permissions.canAct,self?.opened,view.table,tableLayout,view.hand,selectedOnTable,view.lastChange]),
     decision:key([memberRole,view.phase,view.gameNumber,view.capacity,players.length,view.currentPlayerId,current?.name||"",
       view.turnEdited,permissions.canAct,permissions.canDraw,permissions.canPassEmpty,self?.opened,handSort,
-      permissions.canAct?draftFacts:null]),
+      permissions.canAct?draftFacts:null,selectedTileId]),
     changeNotice:key([view.lastChange,players.map((player)=>[player.id,player.name])]),
     result:key([view.gameResult,view.gameNumber,players.map((player)=>[player.id,player.name])]),
     log:key(view.logs||[]),

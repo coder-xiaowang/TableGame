@@ -1,5 +1,6 @@
 import {
   TOPICS,
+  getStartIssue,
   createDerangement,
   normalizeSubmission,
   normalizeWord,
@@ -335,8 +336,8 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
   if (type === "start") {
     requireHost(state, id);
     if (state.phase !== "lobby") throw new GameRuleError("already_started", "游戏已经开始。", 409);
-    if (state.players.length < MIN_PLAYERS) throw new GameRuleError("players_missing", "至少需要 2 名玩家。", 409);
-    if (state.players.some((player) => !player.connected)) throw new GameRuleError("players_offline", "所有玩家在线后才能开始。", 409);
+    const startIssue = getStartIssue(state);
+    if (startIssue) throw new GameRuleError(startIssue.code, startIssue.message, 409);
     state.submittedEntries = {};
     state.log = [];
     state.logSequence = 0;
@@ -348,7 +349,6 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
       return;
     }
     const words = shuffle(uniqueTopicWords(state.topic), random);
-    if (words.length < state.players.length) throw new GameRuleError("topic_too_small", "当前词库不够分配所有玩家。", 409);
     state.players.forEach((player, index) => {
       player.word = words[index];
       player.trapWord = "";

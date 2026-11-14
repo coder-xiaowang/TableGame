@@ -12,3 +12,6 @@
   #gameArea .keyword-rack > * { min-width: 0; padding: 7px 4px; overflow-wrap: anywhere; }
   #gameArea .history-list { max-height: 45dvh; overflow: auto; }
 }
+@media (pointer: coarse) {
+  body[data-mobile-input] :is(input, textarea, select) { font-size: 16px; }
+}

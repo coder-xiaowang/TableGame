@@ -297,7 +297,7 @@ function tileHtml(tile, { source = "table", changed = false, locked = false, ass
   const color = tile.joker ? "joker" : tile.color;
   const label = tile.joker ? "★" : tile.number;
   const assignmentText = tile.joker && assignment ? `${COLOR_LABELS[assignment.color]}${assignment.number}` : "";
-  return `<button type="button" class="tile tile-${color} ${selectedTileId === tile.id ? "selected" : ""} ${changed ? "recently-changed" : ""} ${locked ? "locked" : ""}" draggable="${!locked}" data-tile-id="${escapeHtml(tile.id)}" data-source="${source}">
+  return `<button type="button" aria-pressed="${selectedTileId === tile.id}" aria-label="${tile.joker ? "百搭牌" : `${COLOR_LABELS[tile.color]}${tile.number}`}" class="tile tile-${color} ${selectedTileId === tile.id ? "selected" : ""} ${changed ? "recently-changed" : ""} ${locked ? "locked" : ""}" draggable="${!locked}" data-tile-id="${escapeHtml(tile.id)}" data-source="${source}">
     <span>${label}</span>${assignmentText ? `<small>${escapeHtml(assignmentText)}</small>` : ""}
   </button>`;
 }
@@ -406,6 +406,14 @@ function renderActions(memberRole) {
   E.actionHint.textContent = status.changed
     ? `${status.valid ? "当前草稿中的牌组全部合法" : "仍有不合法或未完成牌组"} · 已使用${status.used}张手牌${self.opened ? "" : ` · 新牌组${status.score}分`}`
     : "拖动牌块，或先点一张牌再点目标位置。草稿只有你能看到。";
+  if (selectedTileId) {
+    const tile = tileMap().get(selectedTileId);
+    E.actionHint.textContent = `已选${tile.joker ? "百搭牌" : `${COLOR_LABELS[tile.color]}${tile.number}`}：点桌面牌可插入其前方，或点“放到末尾”及新建牌组。`;
+    addAction("取消选牌", () => { selectedTileId = null; render(); });
+    if (draft.originalHandIds.has(selectedTileId) && locateDraftTile(selectedTileId)?.place === "table") {
+      addAction("放回牌架", () => moveTileToHand(selectedTileId));
+    }
+  }
   addAction("撤销一步", undoDraft, "", !draft.undo.length);
   addAction("重置本回合", resetDraft, "", !status.changed);
   addAction(handSort === "color" ? "手牌改按数字整理" : "手牌改按颜色整理", () => { handSort = handSort === "color" ? "number" : "color"; render(); });
@@ -558,6 +566,7 @@ function bindBoardEvents() {
     if (toggle) return toggleMeldKind(Number(toggle.dataset.toggleKind));
     const fresh = event.target.closest("[data-new-kind]");
     if (fresh && selectedTileId) return moveTileToNewMeld(selectedTileId, fresh.dataset.newKind);
+    if (event.target.closest("[data-drop-hand]") && selectedTileId) return moveTileToHand(selectedTileId);
   });
   document.addEventListener("dragstart", (event) => {
     const tile = event.target.closest("[data-tile-id]");

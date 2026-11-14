@@ -41,10 +41,11 @@ test("进入房间时启用紧凑标题工具且旁观接口不依赖身份横�
   assert.doesNotMatch(script, /view\.permissions\.canAct && draft \? sortedHandIds\(\)/);
 });
 
-test("移动端优先展示牌桌并保留吸附操作牌架", () => {
+test("移动端牌桌与操作牌架分别占据布局空间", () => {
   const css = read("styles.css");
-
-  assert.match(css, /\.control-dock\s*\{[^}]*position:\s*sticky/s);
+  const layout = read("../shared/styles/play-layout.css");
+  assert.doesNotMatch(css, /\.control-dock\s*\{[^}]*position:\s*sticky/s);
+  assert.match(layout, /\[data-play-controls\] \{\s*grid-area: controls;\s*position: relative/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.room-layout\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.game-area\s*\{\s*order:\s*1;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*?\.sidebar\s*\{\s*order:\s*2;/);

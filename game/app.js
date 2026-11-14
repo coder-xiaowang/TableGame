@@ -10,13 +10,14 @@ import {
   renderConnectionStatus,
   setHidden
 } from "/shared/client/index.js";
-import { TOPICS, normalizeWord } from "./rules.mjs";
+import { TOPICS, normalizeWord, uniqueTopicWords, getStartIssue } from "./rules.mjs";
 import { createGame1PartitionRenderer, createGame1RenderModel } from "./render-partitions.mjs";
 
 const PROTOCOL_VERSION = 3;
 const ROOM_CAPACITY = 32;
 const $ = (id) => document.getElementById(id);
 const elements = Object.fromEntries([
+  "lobbySettings", "lobbyGameMode", "lobbyTopic", "lobbyTopicLabel", "startHint",
   "siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton",
   "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "gameModeSelect",
   "topicSelectLabel", "topicSelect", "wordExtraModeLabel", "wordExtraModeSelect",
@@ -198,7 +199,19 @@ async function kickPlayer(playerId) {
 }
 
 function startGame() {
+  if (!view || configuringRoom || getStartIssue(view)) return;
   submitAction({ type: "start" });
+}
+
+async function updateLobbySettings() {
+  if (!view?.permissions.canManage || view.phase !== "lobby" || configuringRoom) return;
+  const action = { type:"configure", gameMode:elements.lobbyGameMode.value,
+    topic:elements.lobbyTopic.value, wordExtraMode:view.wordExtraMode, playerWordMode:view.playerWordMode };
+  configuringRoom = true;
+  render();
+  try { await configureCreatedRoom(action); }
+  catch (error) { alert(error.message); }
+  finally { configuringRoom = false; render(); }
 }
 
 function endCurrentGame() {
@@ -212,7 +225,19 @@ function renderRoomPartition(model) {
   setHidden(elements.hostTools,!current.permissions?.canManage);
   setHidden(elements.startGameButton,!current.permissions?.canStart);
   setHidden(elements.endGameButton,!current.permissions?.canEnd);
-  elements.startGameButton.disabled = model.configuringRoom || current.players.length < 2 || current.players.some((player) => !player.connected);
+  const issue = getStartIssue(current);
+  elements.startGameButton.disabled = model.configuringRoom || Boolean(issue);
+  elements.startGameButton.setAttribute("aria-describedby", "startHint");
+  setHidden(elements.lobbySettings, current.phase !== "lobby" || !current.permissions.canManage);
+  setHidden(elements.startHint, current.phase !== "lobby");
+  elements.lobbyGameMode.value = current.gameMode;
+  elements.lobbyGameMode.disabled = model.configuringRoom;
+  elements.lobbyTopic.disabled = model.configuringRoom;
+  if (current.topic) elements.lobbyTopic.value = current.topic;
+  setHidden(elements.lobbyTopicLabel, current.gameMode !== "library");
+  for (const option of elements.lobbyTopic.options) option.disabled = uniqueTopicWords(option.value).length < current.players.length;
+  elements.startHint.textContent = model.configuringRoom ? "正在保存房间设置…" : issue?.message
+    || (current.gameMode === "library" ? `当前 ${current.players.length} 人；「${current.topic}」可支持 ${uniqueTopicWords(current.topic).length} 人。` : `当前 ${current.players.length} 人，开局后每人提交词语。`);
   elements.roomCodeDisplay.textContent = model.roomCode;
 }
 
@@ -588,10 +613,13 @@ async function init() {
   for (const topic of Object.keys(TOPICS)) {
     const option = document.createElement("option");
     option.value = topic;
-    option.textContent = topic;
+    option.textContent = `${topic}（最多 ${uniqueTopicWords(topic).length} 人）`;
+    elements.lobbyTopic.appendChild(option.cloneNode(true));
     elements.topicSelect.appendChild(option);
   }
   elements.startGameButton.addEventListener("click", startGame);
+  elements.lobbyGameMode.addEventListener("change", updateLobbySettings);
+  elements.lobbyTopic.addEventListener("change", updateLobbySettings);
   elements.endGameButton.addEventListener("click", endCurrentGame);
   elements.gameModeSelect.addEventListener("change", syncPlayerWordSettings);
   elements.playerWordModeSelect.addEventListener("change", syncPlayerWordSettings);

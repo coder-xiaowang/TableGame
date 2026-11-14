@@ -37,6 +37,17 @@ export function uniqueTopicWords(topic) {
   return [...new Set((TOPICS[topic] || []).map((word) => String(word).trim()).filter(Boolean))];
 }
 
+// Shared by the lobby and server; duplicate entries must not inflate capacity.
+export function getStartIssue({ players = [], gameMode, topic }) {
+  if (players.length < 2) return { code: "players_missing", message: "至少需要 2 名玩家。" };
+  if (players.some((player) => !player.connected)) return { code: "players_offline", message: "所有玩家在线后才能开始。" };
+  const capacity = uniqueTopicWords(topic).length;
+  if (gameMode === "library" && capacity < players.length) {
+    return { code: "topic_too_small", message: `「${topic}」有 ${capacity} 个不同词语，当前 ${players.length} 人。请选择更大的词库或切换为玩家各自出词。` };
+  }
+  return null;
+}
+
 export function normalizeSubmission({ word, trapWord, extra }, { playerWordMode, wordExtraMode }) {
   const clean = (value, max) => String(value ?? "").trim().replace(/\s+/g, " ").slice(0, max + 1);
   const result = {

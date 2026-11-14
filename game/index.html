@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>速速破译</title>
     <link rel="stylesheet" href="/shared/styles/spectator.css">
     <link rel="stylesheet" href="/shared/styles/room-entry-shell.css">
@@ -126,7 +126,14 @@
 
       <section class="room-panel decoder-room hidden" id="roomPanel" data-play-room>
 <section data-play-workspace>
-<div class="notice transmission-status" id="gameNotice" data-play-status>等待房主开始游戏。</div>
+<div data-play-status>
+  <div class="notice transmission-status" id="gameNotice">等待房主开始游戏。</div>
+  <div id="lobbySettings" class="lobby-settings hidden">
+    <label>密文来源 <select id="lobbyGameMode"><option value="library">词库随机发词</option><option value="playerWords">玩家各自出词</option></select></label>
+    <label id="lobbyTopicLabel">词库主题 <select id="lobbyTopic"></select></label>
+  </div>
+  <p id="startHint" class="start-hint hidden" role="status"></p>
+</div>
 <section class="cipher-machine" aria-label="机械译码室主操作台" data-play-board>
             <div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
               <svg class="presentation-trail-layer" aria-hidden="true">

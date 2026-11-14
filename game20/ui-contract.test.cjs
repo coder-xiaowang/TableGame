@@ -46,15 +46,18 @@ test("局内人使用独立问答沙龙外壳，同时保留完整信息责任",
 
   assert.match(css, /@media \(max-width: 720px\)/);
   assert.match(css, /\.players \{ position: static; order: 2; display: grid/);
-  assert.match(css, /\.control-dock \{ position: sticky/);
-  assert.match(css, /\.control-dock\[data-role="spectator"\] \{ position: relative/);
+  const layout = read("table-layout.css");
+  const shell = read("../shared/styles/play-layout.css");
+  assert.doesNotMatch(css, /\.control-dock \{ position: sticky/);
+  assert.match(shell, /\[data-play-controls\] \{\s*grid-area: controls;\s*position: relative/);
   assert.match(css, /\.salon-archive \{ display: grid; grid-template-columns:/);
   assert.match(css, /\.public-focus[\s\S]*?border-radius: 50%/);
   assert.match(css, /player-seat\[data-seat-slot="south"\]/);
   assert.match(css, /grid-template-columns: minmax\(0,1fr\) 286px/);
   assert.match(css, /url\("assets\/question-salon-board\.png"\)/);
   assert.match(css, /\.archive-heading/);
-  assert.match(css, /\.discussion-table \.control-dock/);
+  assert.doesNotMatch(css, /\.discussion-table \.control-dock/);
+  assert.match(layout, /#salonTable \{ display: grid/);
   assert.match(script, /E\.salonTable\.dataset\.phase = view\.phase/);
   assert.match(css, /\.presentation-effects/);
   assert.match(css, /\.presentation-trail\.active/);

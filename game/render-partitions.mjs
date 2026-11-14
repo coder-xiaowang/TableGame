@@ -55,7 +55,7 @@ export function createGame1RenderModel(view, {
     view,memberRole,roomCode,configuringRoom,logPlayerFilter,current,decisionContext,
     keys:{
       room:key([
-        roomCode,view.phase,players.length,configuringRoom,
+        roomCode,view.phase,players.length,configuringRoom,view.gameMode,view.topic,
         view.phase === "lobby" ? players.map((player) => [player.id,player.connected]) : null,
         permissions.canManage,permissions.canStart,permissions.canEnd
       ]),

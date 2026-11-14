@@ -10,7 +10,6 @@ const start = require('../shared/server/start-authoritative-game-server');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const root = path.resolve(__dirname, '..');
 const outputDir = path.join(root, 'audit', process.env.LAYOUT_DETAIL_DIR||'play-layout-checks');
-fs.mkdirSync(outputDir, {recursive:true});
 
 function measure() {
   const rect = e => { const r = e.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}; };
@@ -63,6 +62,7 @@ async function checkSeatAccess() {
 }
 
 async function run(){
+  fs.mkdirSync(outputDir, {recursive:true});
   const profile=fs.mkdtempSync(path.join(os.tmpdir(),'tablegame-layout-review-'));
   const chromePath=process.env.CHROME_PATH||(process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome');
   // This isolated Windows runner needs --no-sandbox; never used for remote sites.
@@ -198,4 +198,5 @@ async function run(){
     catch{console.log('Temporary browser profile retained: '+resolvedProfile);}
   }
 }
-run().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports = { measure, checkSeatAccess };
+if (require.main === module) run().catch(e=>{console.error(e);process.exitCode=1;});

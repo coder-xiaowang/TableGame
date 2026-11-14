@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "./server/game-engine.mjs";
 
+test("an undersized topic rejects start before mutating lobby state", () => {
+  const state = engine.createLobby({capacity:32,host:{id:"p1",name:"房主",connected:true}});
+  for (let i=2;i<=32;i++) engine.addPlayer(state,{id:`p${i}`,name:`玩家${i}`,connected:true});
+  engine.applyAction(state,"p1",{type:"configure",gameMode:"library",topic:"水果蔬菜"});
+  const before = structuredClone(state);
+  assert.throws(() => engine.applyAction(state,"p1",{type:"start"}), e => e.code === "topic_too_small");
+  assert.deepEqual(state,before);
+  engine.applyAction(state,"p1",{type:"configure",gameMode:"playerWords"});
+  engine.applyAction(state,"p1",{type:"start"});
+  assert.equal(state.phase,"collectingWords");
+});
+
 function readyLobby(count = 3) {
   const state = engine.createLobby({
     capacity: 32,

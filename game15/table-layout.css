@@ -7,3 +7,8 @@
 [data-play-layout="game15"] #controlDock .tile { flex-basis: 40px; width: 40px; height: 56px; }
 [data-play-layout="game15"] #controlDock .tile span { font-size: 22px; }
 [data-play-layout="game15"] .meld { scroll-margin: 10px; }
+@media (pointer: coarse) {
+  [data-play-layout="game15"] .tile { touch-action: manipulation; }
+  [data-play-layout="game15"] #controlDock .tile { flex-basis: 44px; width: 44px; }
+  [data-play-layout="game15"] :is(.drop-end, [data-new-kind], [data-toggle-kind]) { min-height: 44px; }
+}

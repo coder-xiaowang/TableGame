@@ -60,7 +60,9 @@ test("game15 HTTP server owns turns, hides racks and serves the transactional ed
   assert.match(page, /id="controlDock"/);
   assert.match(page, /data-new-kind="group"/);
   const css = await fetch(`${base}/styles.css`).then((response) => response.text());
-  assert.match(css, /\.control-dock\s*\{[^}]*position:\s*sticky/s);
+  const layout = await fetch(`${base}/shared/styles/play-layout.css`).then((response) => response.text());
+  assert.doesNotMatch(css, /\.control-dock\s*\{[^}]*position:\s*sticky/s);
+  assert.match(layout, /\[data-play-controls\] \{\s*grid-area: controls;\s*position: relative/);
   assert.match(css, /data-expanded="false"/);
   const app = await fetch(`${base}/app.js`).then((response) => response.text());
   assert.match(app, /type:\s*"beginEdit"/);

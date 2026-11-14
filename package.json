@@ -5,6 +5,7 @@
   "scripts": {
     "test:layout": "node scripts/check-table-layout.cjs",
     "test:layout:remaining": "node scripts/check-play-layout.cjs",
+    "test:interaction": "node scripts/check-play-interactions.cjs",
     "test:shared": "node --test shared/test/*.test.js"
   }
 }

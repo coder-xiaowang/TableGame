@@ -1,3 +1,5 @@
+/* Viewport, seat placement and dock geometry are owned by shared/styles/play-layout.css
+   and this game's table-layout.css. This sheet retains the visual theme. */
 :root {
   color-scheme: light;
   --ink: #20243b;
@@ -151,7 +153,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .answer-unknown { color: var(--ink); background: #eee3c9; }
 
 /* A speaking card overlaps the table edge, while the secret lives in a sealed envelope. */
-.control-dock { position: sticky; bottom: 8px; z-index: 20; display: grid; grid-template-columns: minmax(300px, 1.35fr) minmax(220px, .65fr); gap: 14px; width: min(940px, calc(100% - 34px)); max-height: 360px; overflow: auto; margin: -34px auto 0; padding: 13px 16px; border: 2px solid rgba(141, 48, 64, .32); border-radius: 8px 25px 8px 25px; }
+.control-dock { z-index: 20; border: 2px solid rgba(141, 48, 64, .32); border-radius: 8px 25px 8px 25px; }
 .control-dock::before { content: ""; position: absolute; inset: 6px; border: 1px dashed rgba(141, 48, 64, .15); border-radius: inherit; pointer-events: none; }
 .action-zone, .secret-panel { position: relative; }
 .action-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -171,7 +173,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .secret-panel span { color: var(--muted); font-size: .66rem; }
 .secret-panel strong { display: block; color: var(--coral-dark); }
 .secret-panel p { margin: 4px 0 0; font-size: 1rem; font-weight: 900; }
-.control-dock[data-role="spectator"] { position: relative; bottom: auto; grid-template-columns: 1fr; }
+.control-dock[data-role="spectator"] { grid-template-columns: 1fr; }
 
 /* Rules, score, public log and spectators are a low-frequency folio, not a permanent left rail. */
 .salon-archive { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(240px, 1fr) minmax(300px, 1.5fr) minmax(190px, .7fr); align-items: start; gap: 10px; margin-top: 13px; }
@@ -242,9 +244,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .public-focus strong { margin: 4px 0; font-size: 1.08rem; }
   .presentation-announcement { top: 62px; width: calc(100% - 28px); }
   .answer-echoes { margin-top: 8px; }
-  .control-dock { bottom: max(5px, env(safe-area-inset-bottom)); grid-template-columns: 1fr; width: calc(100% - 12px); max-height: 58vh; margin: -5px auto 0; padding: 10px; overflow-y: auto; }
   .secret-panel.private-zone { padding: 8px 10px 8px 49px; }
-  .control-dock[data-role="spectator"] { position: relative; bottom: auto; }
   .salon-archive { grid-template-columns: 1fr; margin-top: 9px; }
   .log { max-height: 190px; }
 }

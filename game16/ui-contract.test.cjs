@@ -4,8 +4,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const read = file => fs.readFileSync(path.join(__dirname, file), "utf8");
 
-test("页面接入共享旁观系统、私人区域和移动端吸附操作栏", () => {
+test("页面接入共享旁观系统、私人区域和独立操作栏", () => {
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "styles.css"), "utf8");
@@ -36,10 +37,13 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(script, /catchUpThreshold: 2/); assert.match(script, /severeBacklogThreshold: 4/);
   assert.match(script, /urgentPriority: 4/); assert.match(script, /retainPriority: 4/);
   assert.match(script, /setHidden\(E\.roomHeaderTools, false\)/);
-  assert.match(styles, /\.control-dock \{ position: sticky/); assert.match(styles, /control-dock\[data-role="spectator"\]/);
+  const layout = read("table-layout.css");
+  const shell = read("../shared/styles/play-layout.css");
+  assert.doesNotMatch(styles, /\.control-dock \{ position: sticky/);
+  assert.match(shell, /\[data-play-controls\] \{\s*grid-area: controls;\s*position: relative/);
   assert.match(styles, /@media \(min-width: 761px\)/);
-  assert.match(styles, /\.seat-boundary \{ position: absolute/);
-  assert.match(styles, /--court-seat-width/); assert.match(styles, /--court-seat-height/);
+  assert.match(layout, /\.seat-boundary \{ position: relative/);
+  assert.match(layout, /#players \{ position: relative; inset: auto; display: grid/);
   assert.match(styles, /\.gallery-rail \{/); assert.match(styles, /\.left-court-rail \{/);
   assert.match(styles, /\.right-court-rail \{/); assert.match(styles, /\.throne-rail \{/);
   assert.match(styles, /\.seat-admin-proxy\.shared-player-admin-trigger/);
@@ -47,7 +51,7 @@ test("页面接入共享旁观系统、私人区域和移动端吸附操作栏",
   assert.match(styles, /@media \(max-width: 520px\)/);
   assert.match(styles, /\.court-rail \{ display: contents; \}/);
   assert.match(styles, /grid-template-columns: minmax\(0, 1fr\) auto/);
-  assert.match(styles, /env\(safe-area-inset-bottom\)/);
+  assert.match(shell, /env\(safe-area-inset-bottom\)/);
   assert.match(styles, /\.moment-announcement/); assert.match(styles, /\.influence-card\.claim-pulse/); assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.doesNotMatch(styles, /sidebar \.rule-card[^}]*display:\s*none/); assert.doesNotMatch(styles, /sidebar \.log-card[^}]*display:\s*none/);
 });

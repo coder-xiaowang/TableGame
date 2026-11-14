@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TOPICS, createDerangement, normalizeSubmission, normalizeWord, uniqueTopicWords } from "./rules.mjs";
+import { TOPICS, createDerangement, normalizeSubmission, normalizeWord, uniqueTopicWords, getStartIssue } from "./rules.mjs";
+
+test("start preflight uses distinct words and allows 32 player-submitted entries", () => {
+  const players = Array.from({length:32}, (_, i) => ({id:String(i), connected:true}));
+  const capacity = uniqueTopicWords("日用品").length;
+  assert.equal(capacity, TOPICS["日用品"].length - 1);
+  assert.equal(getStartIssue({players:players.slice(0,capacity),gameMode:"library",topic:"日用品"}), null);
+  assert.equal(getStartIssue({players:players.slice(0,capacity+1),gameMode:"library",topic:"日用品"}).code, "topic_too_small");
+  assert.equal(getStartIssue({players,gameMode:"playerWords",topic:""}), null);
+  assert.equal(getStartIssue({players:[],gameMode:"playerWords"}).code, "players_missing");
+  assert.equal(getStartIssue({players:[players[0],{connected:false}],gameMode:"playerWords"}).code, "players_offline");
+});
 
 test("game word topics provide enough unique entries", () => {
   assert.ok(Object.keys(TOPICS).length >= 9);

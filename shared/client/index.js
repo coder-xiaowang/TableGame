@@ -15,4 +15,5 @@ export * from "./spectator-ui.js";
 export * from "./table-presence-toolbar.js";
 export * from "./turn-attention.js";
 export * from "./ui.js";
+export * from "./mobile-viewport.js";
 export * from "./utils.js";
