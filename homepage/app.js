@@ -7,7 +7,7 @@ const modules = [
     id: "tools",
     icon: "⌁",
     title: "实用工具",
-    description: "拼豆图纸工坊已经开放，把喜欢的图片变成可以动手制作的图纸。",
+    description: "用拼豆图纸工坊制作图纸，或在拼图工坊里拼出喜欢的画面。",
     href: "/tools/",
     status: "online",
     statusText: "已开放",

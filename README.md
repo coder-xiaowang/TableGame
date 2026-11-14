@@ -1,5 +1,7 @@
 # TableGame
 
+实用工具入口位于 `tools/index.html`：`tools/bead-pattern/` 是拼豆图纸工坊，`tools/puzzle/` 是拼图工坊（原 `game24/puzzle.html`）。两者均为独立静态工具，部署时保留目录结构，通过 `/tools/` 访问；拼图不属于多人桌游，也不需要房间服务器。
+
 原生 HTML/CSS/JavaScript 桌游集合。各游戏通过独立 Node 服务提供页面和房间；共享客户端、服务器与界面能力位于 `shared/`。Just One（`game12`）是未完成的遗留项目，暂不纳入本轮改造。
 
 使用 Node.js 24 或更新版本。在项目根目录启动，例如：
