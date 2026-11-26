@@ -107,8 +107,11 @@ test("sixth card captures a row while too-small card waits for an authorized cho
   engine.applyAction(state,"p1",{type:"selectCard",card:15},{now:2000});
   engine.applyAction(state,"p2",{type:"selectCard",card:5},{now:2000});
   assert.equal(state.phase,"revealing");
-  engine.handleTimeout(state,{now:state.deadline});
+  const rowChoiceStart = state.deadline;
+  engine.handleTimeout(state,{now:rowChoiceStart});
   assert.equal(state.phase,"choosingRow");
+  assert.equal(state.deadline - rowChoiceStart,30_000);
+  assert.equal(engine.handleTimeout(state,{now:state.deadline-1}),false);
   assert.equal(state.pendingPlayerId,"p2");
   assert.equal(state.pendingCard,5);
   assert.equal(state.presentationEvents.at(-1).kind,"row-choice");
@@ -138,6 +141,7 @@ test("sixth card captures a row while too-small card waits for an authorized cho
 test("selection and row-choice deadlines are executed by the server",() => {
   const state = readyState();
   const deadline = state.deadline;
+  assert.equal(deadline - 1000,30_000);
   assert.equal(engine.handleTimeout(state,{now:deadline-1,random:() => 0}),false);
   assert.equal(engine.handleTimeout(state,{now:deadline,random:() => 0}),true);
   assert.equal(state.phase,"revealing");

@@ -1,5 +1,6 @@
 /* The network core and every seat share the same grid and reference box. */
-.network-column { container: network / inline-size; min-width: 0; }
+.network-column { min-width: 0; }
+.network-map { container: network / inline-size; min-width: 0; }
 .intelligence-table.field-network {
   display: grid;
   grid-template-columns: minmax(0,1fr) minmax(190px,1.2fr) minmax(0,1fr);
@@ -43,6 +44,30 @@
   .field-network .public-focus { order: 0; width: 100%; min-height: 110px; }
   .field-network .players { order: 1; position: static; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
   .field-network .player-seat[data-node-slot] { display: block; grid-column: auto; grid-row: auto; place-self: stretch; max-width: none; }
+}
+@media (max-width: 850px) {
   .network-column .control-dock { grid-template-columns: 1fr; }
+}
+[data-command-first] .operation-grid { display: flex; flex-direction: column; }
+[data-command-first] .location-vault { order: 2; position: static; width: 100%; }
+[data-command-first] .network-column {
+  display: grid; width: 100%; gap: 8px; align-items: start;
+  grid-template: "command" auto "map" auto / minmax(0,1fr);
+}
+[data-command-first] .network-map { grid-area: map; }
+[data-command-first] .control-dock { grid-area: command; margin: 0; }
+[data-command-first] .action-buttons select { max-width: 100%; }
+[data-command-first] .control-dock[data-task="acknowledge"] .secret-panel { order: -1; }
+@media (orientation: landscape) and (min-width: 800px) {
+  [data-command-first] .network-column {
+    grid-template: "map command" auto / minmax(0,1fr) clamp(240px,28%,390px);
+  }
+  [data-command-first] .control-dock { grid-template-columns: minmax(0,1fr); }
+}
+@media (orientation: landscape) and (min-width: 1280px) {
+  [data-command-first] .operation-grid {
+    display: grid; grid-template-columns: 205px minmax(0,1fr);
+  }
+  [data-command-first] .location-vault { order: 0; position: sticky; }
 }
 @media (max-width: 430px) { .location-list { grid-template-columns: repeat(2,minmax(0,1fr)); } }

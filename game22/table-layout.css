@@ -14,3 +14,154 @@
 @media (max-height: 540px) {
   [data-play-layout="game22"] .quest-banner { display: flex; align-items: center; }
 }
+
+/* Keep the live phase and the volume toggle outside the play area's scroll. */
+body[data-play-layout="game22"] #roomPanel[data-play-room] {
+  --council-width: clamp(300px, 32%, 460px);
+  position: relative;
+  grid-template-rows: auto minmax(0, 1fr) 40px;
+}
+#roomPanel .quest-banner {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+#roomPanel .rejection-council { width: auto; margin-left: auto; }
+body[data-play-layout="game22"] [data-play-workspace] {
+  grid-area: 2 / 1;
+  grid-template: "roster" auto "board" minmax(240px, 1fr) "controls" auto / minmax(0, 1fr);
+  overflow: auto;
+}
+#roomPanel .knights-roster { grid-area: roster; min-height: 0; margin: 0; }
+#roomPanel .quest-workspace { overflow: visible; scrollbar-gutter: auto; }
+#roomPanel .round-table { height: 100%; min-height: 0; touch-action: pan-y pinch-zoom; }
+#roomPanel .round-table[data-exploring="true"] { touch-action: none; }
+#roomPanel .round-table:not([data-exploring="true"]) { overscroll-behavior: auto; }
+#roomPanel .map-controls { display: flex; align-items: stretch; }
+#mapControls button { min-height: 40px; min-width: 40px; }
+#mapControls #exploreMapButton { font: inherit; font-size: 13px; padding-inline: 10px; }
+#roundTable:not([data-exploring="true"]) .map-controls > :not(#exploreMapButton),
+#roundTable:not([data-exploring="true"]) .map-gesture-hint { display: none; }
+
+/* Overview nodes use screen-sized labels. Exploration uses the original world coordinates. */
+#roundTable:not([data-exploring="true"]) .quest-map-world {
+  width: 100%;
+  height: 100%;
+  transform: none !important;
+}
+#roundTable:not([data-exploring="true"]) .quest-node {
+  width: clamp(48px, 12%, 100px);
+}
+#roundTable:not([data-exploring="true"]) .quest-node strong { font-size: clamp(18px, 3vw, 32px); }
+#roundTable:not([data-exploring="true"]) .table-focus { bottom: 55px; }
+#roomPanel [data-play-reference] { grid-area: 3 / 1; position: relative; }
+#roomPanel [data-play-reference][open] { grid-row: 2 / 4; z-index: 21; }
+#roomPanel [data-play-reference] > summary {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px;
+  color: var(--gold-strong);
+  background: #23282b;
+  border-color: var(--line);
+}
+#roomPanel .close-volume, #roomPanel [open] > summary .open-volume { display: none; }
+#roomPanel [open] > summary .close-volume { display: inline; }
+#roomPanel [data-play-reference][open] > .archive-grid {
+  position: absolute;
+  inset: 0 0 46px;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  background: #1a2024;
+  border: 1px solid var(--line);
+}
+#roomPanel .archive-grid > * { flex: none; }
+#roomPanel:has([data-play-reference][open]) [data-play-workspace] { visibility: hidden; }
+
+@media (min-width: 880px) and (orientation: landscape),
+       (min-width: 650px) and (max-height: 540px) and (orientation: landscape) {
+  body[data-play-layout="game22"] [data-play-workspace] {
+    grid-template: "board roster" minmax(0, 1fr) "board controls" auto
+                   / minmax(0, 1fr) var(--council-width);
+    overflow: hidden;
+  }
+  #roomPanel .knights-roster {
+    display: flex;
+    flex-direction: column;
+  }
+  #roomPanel .roster-heading { flex: none; padding: 4px 8px; }
+  #roomPanel .roster-heading span { display: none; }
+  #roomPanel .players {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: max-content;
+    align-content: start;
+    overflow: auto;
+  }
+  body[data-play-layout="game22"] #controlDock {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    max-height: min(42dvh, 340px);
+  }
+  #roomPanel [data-play-reference] { width: var(--council-width); justify-self: end; }
+  #roomPanel:has([data-play-reference][open]) [data-play-workspace] { visibility: visible; }
+  #roomPanel:has([data-play-reference][open]) :is(.knights-roster, #controlDock) { visibility: hidden; }
+}
+
+@media (max-width: 600px) {
+  body[data-play-layout="game22"] [data-play-workspace] {
+    display: flex;
+    flex-direction: column;
+  }
+  #roomPanel [data-play-workspace] > * { flex: none; }
+  #roomPanel .quest-workspace { order: -1; }
+  #roomPanel .quest-banner { flex-wrap: wrap; }
+  #roomPanel .phase-copy { flex: 1 1 auto; }
+  #roomPanel .round-table { height: 244px; }
+  #roomPanel .round-table[data-exploring="true"] { height: clamp(280px, 50dvh, 460px); }
+  #roomPanel #controlDock { max-height: none; overflow: visible; }
+  #roundTable:not([data-exploring="true"]) .map-title { top: 4px; padding: 6px; }
+  #roundTable:not([data-exploring="true"]) .map-title span { display: none; }
+  #roundTable:not([data-exploring="true"]) .quest-track {
+    inset: 46px 8px auto;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+  #roundTable:not([data-exploring="true"]) .quest-node {
+    position: relative; inset: auto; width: 100%; height: 66px; min-height: 52px;
+    border-radius: 12px; padding: 4px 1px; transform: none;
+  }
+  #roundTable:not([data-exploring="true"]) :is(.quest-participants, .quest-size, .table-focus small),
+  #roundTable:not([data-exploring="true"]) .quest-node::before,
+  #roundTable:not([data-exploring="true"]) .quest-node.active::after { display: none; }
+  #roundTable:not([data-exploring="true"]) .table-focus { width: 95%; padding: 4px; top: 121px; bottom: auto; }
+  #roomPanel .reject-seal { width: 18px; height: 18px; }
+  #roomPanel .reject-track { gap: 2px; }
+  #roomPanel .rejection-council { gap: 4px; }
+  #roomPanel .quest-banner h2 { font-size: 15px; }
+}
+
+@media (max-height: 540px) and (min-width: 650px) and (orientation: landscape) {
+  body[data-play-layout="game22"] [data-play-workspace] {
+    grid-template-rows: minmax(0, 0.48fr) minmax(0, 0.52fr);
+  }
+  #roomPanel .knights-roster { padding: 0; }
+  #roomPanel .roster-heading,
+  #roundTable:not([data-exploring="true"]) :is(.map-title span, .table-focus small, .quest-participants) { display: none; }
+  #roomPanel .players { height: 100%; padding: 2px; }
+  body[data-play-layout="game22"] #controlDock { height: 100%; max-height: none; }
+  #roundTable:not([data-exploring="true"]) .map-title { top: 2px; padding: 2px; }
+  #roundTable:not([data-exploring="true"]) .quest-node { top: 43%; width: clamp(48px, 11%, 72px); padding: 2px; }
+  #roundTable:not([data-exploring="true"]) .quest-node strong { font-size: 19px; }
+  #roundTable:not([data-exploring="true"]) .table-focus {
+    left: 6px; bottom: 6px; width: calc(100% - 114px); padding: 3px 6px; transform: none;
+  }
+}

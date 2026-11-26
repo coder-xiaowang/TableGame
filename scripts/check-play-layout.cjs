@@ -98,6 +98,19 @@ async function run(){
       const capacity=await evaluate(`(()=>{const s=document.getElementById('playerCountSelect');if(s)s.selectedIndex=s.options.length-1;document.getElementById('hostNameInput').value='布局测试房主';document.getElementById('createRoomButton').click();return s?Number(s.value):${Number(process.env.GAME1_PLAYERS||8)};})()`);
       await delay(350);
       const code=await evaluate(`document.getElementById('roomCodeDisplay').textContent.trim()`);
+      if (name === 'game5') {
+        await send('Emulation.setDeviceMetricsOverride',{width:1800,height:948,deviceScaleFactor:1,mobile:false});
+        await delay(120);
+        const waiting = await evaluate(`({
+          code: document.querySelector('#invitationCode').innerText,
+          roster: document.querySelector('#players').checkVisibility(),
+          piles: document.querySelector('#tableStage').checkVisibility(),
+          hand: document.querySelector('#handPanel').checkVisibility()
+        })`);
+        assert.deepEqual(waiting, {code,roster:true,piles:false,hand:false}, 'UNO single-player waiting room');
+        const shot=await send('Page.captureScreenshot',{format:'png'});
+        fs.writeFileSync(path.join(outputDir,'uno-wide-lobby.png'),Buffer.from(shot.data,'base64'));
+      }
       const post=async(url,data)=>{const r=await fetch(base+url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const p=await r.json();if(!r.ok)throw Error(name+' '+r.status+' '+JSON.stringify(p));return p;};
       if(name==='game2')await evaluate("document.querySelector('[data-sit=\"0\"]').click()");
       if(name==='game11')await evaluate("document.querySelector('[data-sit=\"white\"]').click()");
@@ -142,10 +155,29 @@ async function run(){
       }
 
       if(await evaluate("!!document.querySelector('[data-play-workspace]')")){
-        for(const [width,height] of [[390,844],[844,390]]){
+        const readingSizes = name === 'game22' ? [[390,844],[844,390],[768,1024],[1024,768]] : [[390,844],[844,390]];
+        for(const [width,height] of readingSizes){
           await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<500});
           await evaluate("(()=>{document.querySelector('[data-play-reference]').open=true;for(const e of document.querySelectorAll('[data-play-controls] details'))e.open=true;const dock=document.querySelector('#controlDock');if(dock?.hasAttribute('data-expanded'))dock.dataset.expanded='true';const console=document.querySelector('#turnConsole');if(console)console.dataset.handExpanded='true';})()");
-          await delay(100);const m=await evaluate('('+measure.toString()+')()');m.scenario='expanded-panels';m.requestedViewport={width,height};m.blockedSeats=await evaluate('('+checkSeatAccess.toString()+')()');entry.measurements.push(m);
+          await delay(100);
+          if (name === 'game22') {
+            // The volume replaces the decision pane. Check the reader, then its return path.
+            const reader = await evaluate(`(()=>{
+              const rect = selector => document.querySelector(selector).getBoundingClientRect();
+              const page = rect('.archive-grid'), map = rect('#roundTable'), toggle = rect('[data-play-reference] > summary');
+              const hit = document.elementFromPoint(page.x + page.width / 2, page.y + 12);
+              return {readable: page.height > 100 && !!hit?.closest('.archive-grid'), clearMap: map.right <= page.left + 1,
+                returnVisible: toggle.bottom <= innerHeight && toggle.top >= page.bottom};
+            })()`);
+            assert.ok(reader.readable && reader.returnVisible, 'Avalon volume and return control must be reachable');
+            if (width > height) assert.ok(reader.clearMap, 'Landscape volume must leave the map clear');
+            await evaluate("document.querySelector('[data-play-reference] > summary').click()");
+            if (width <= 600) {
+              // On phones the open identity card follows the map in one scrollable column.
+              await evaluate("document.querySelector('#controlDock').scrollIntoView({block:'end',behavior:'instant'})");
+            }
+          }
+          const m=await evaluate('('+measure.toString()+')()');m.scenario='expanded-panels';m.requestedViewport={width,height};m.blockedSeats=await evaluate('('+checkSeatAccess.toString()+')()');entry.measurements.push(m);
         }
         await evaluate('localStorage.clear()');await send('Page.navigate',{url:base});await delay(400);
         await evaluate('(()=>{document.getElementById("guestModeButton").click();document.getElementById("roomCodeInput").value='+JSON.stringify(code)+';const radio=document.querySelector("input[name=joinIntent][value=spectate]");if(radio)radio.click();document.getElementById("joinRoomButton").click();})()');await delay(450);await evaluate('window.__layoutName='+JSON.stringify(name));

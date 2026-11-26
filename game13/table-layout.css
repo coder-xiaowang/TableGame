@@ -16,6 +16,25 @@
 }
 .table-stage .slots .slot-button { width: 100%; min-width: 0; height: auto; aspect-ratio: 27 / 38; }
 .table-stage .table-actions { min-width: 0; width: 100%; }
+.table-actions:has(.swap-actions) .selection-hint {
+  min-height: 2.9em;
+  overflow-wrap: anywhere;
+}
+.table-actions .swap-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 28rem;
+  margin-inline: auto;
+}
+.table-actions .swap-actions .power-action {
+  grid-column: 1 / -1;
+  background: var(--teal);
+}
+@container cabo (min-width: 721px) {
+  .table-actions:has(.swap-actions) .selection-hint { min-height: 1.45em; }
+  .table-actions .swap-actions { grid-template-columns: repeat(3, auto); }
+  .table-actions .swap-actions .power-action { grid-column: auto; }
+}
 @container cabo (max-width: 720px) {
   .table-stage {
     grid-template-columns: repeat(2,minmax(0,1fr));

@@ -311,7 +311,7 @@ function renderDecisionFacts(model) {
   const pass = E.actionArea.querySelector('[data-action="pass"]');
   if (pass) {
     pass.disabled = (me?.chips ?? 0) <= 0;
-    pass.querySelector("small").textContent = (me?.chips ?? 0) > 0 ? "支付 1 枚筹码" : "没有筹码，无法拒绝";
+    pass.querySelector("small").textContent = me.chips > 0 ? `你有 ${me.chips} 枚 · 支付 1 枚` : "你有 0 枚 · 无法拒绝";
   }
 }
 

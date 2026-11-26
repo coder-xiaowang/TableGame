@@ -23,7 +23,7 @@ const elements = Object.fromEntries([
   "topicSelectLabel", "topicSelect", "wordExtraModeLabel", "wordExtraModeSelect",
   "playerWordModeLabel", "playerWordModeSelect", "createRoomButton", "roomCodeInput", "joinIntentField",
   "joinRoomButton", "hostTools", "roomCodeDisplay", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton",
-  "playerList", "gameNotice", "wordBoard", "turnTitle", "roundBadge", "actionArea",
+  "playerList", "lobbyRoster", "rosterPanel", "roundRoster", "gameNotice", "wordBoard", "turnTitle", "roundBadge", "actionArea",
   "logPlayerFilter", "logList", "presentationEffects", "presentationTrail", "presentationAnnouncement",
   "presentationLabel", "presentationText"
 ].map((id) => [id, $(id)]));
@@ -222,6 +222,13 @@ function endCurrentGame() {
 function renderRoomPartition(model) {
   const current = model.view;
   document.body.dataset.phase = current.phase;
+  const showWords = ["playing", "ended"].includes(current.phase);
+  const roster = showWords ? elements.roundRoster : elements.lobbyRoster;
+  if (elements.playerList.parentElement !== roster) {
+    roster.append(elements.playerList);
+    elements.wordBoard.closest("[data-play-board]").scrollTop = 0;
+  }
+  setHidden(elements.rosterPanel, !showWords);
   setHidden(elements.hostTools,!current.permissions?.canManage);
   setHidden(elements.startGameButton,!current.permissions?.canStart);
   setHidden(elements.endGameButton,!current.permissions?.canEnd);

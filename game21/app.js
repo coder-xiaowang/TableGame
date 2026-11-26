@@ -202,7 +202,10 @@ function chooseTarget(targetId) {
   if (!target) return;
   if (selectionMode === "question") submit({ type: "selectQuestionTarget", targetId });
   else if (selectionMode === "accuse" && confirm(`确认消耗本轮唯一一次指认机会，指认 ${target.name} 是间谍吗？`)) submit({ type: "accuse", targetId });
-  else if (selectionMode === "nominate" && confirm(`确认提名 ${target.name} 接受全票表决吗？`)) submit({ type: "nominate", targetId });
+  else if (selectionMode === "nominate") {
+    if (!confirm(`确认提名 ${target.name} 接受全票表决吗？`)) return;
+    submit({ type: "nominate", targetId });
+  }
   selectionMode = null;
 }
 
@@ -347,6 +350,14 @@ function renderSecret(memberRole) {
 }
 
 function renderActions(memberRole) {
+  const task = view.permissions.canAcknowledgeSecret ? "acknowledge" : view.permissions.canNominate ? "nominate" : "";
+  if (task && E.controlDock.dataset.task !== task) {
+    requestAnimationFrame(() => {
+      const rect = E.actionTitle.getBoundingClientRect();
+      if (rect.bottom < 0 || rect.top > innerHeight) window.scrollTo(0, 0);
+    });
+  }
+  E.controlDock.dataset.task = task;
   E.actionButtons.innerHTML = "";
   if (memberRole === "spectator") {
     E.actionTitle.textContent = view.phase === "lobby" ? "正在旁观准备阶段" : `正在旁观：${PHASE_LABEL[view.phase]}`;
@@ -395,10 +406,22 @@ function renderActions(memberRole) {
     return;
   }
   if (view.phase === "timeoutNomination") {
-    E.actionTitle.textContent = `等待 ${nameOf(view.currentNominatorId)} 提名嫌疑人`;
+    E.actionTitle.textContent = view.permissions.canNominate ? "轮到你提名嫌疑人" : `等待 ${nameOf(view.currentNominatorId)} 提名嫌疑人`;
     E.actionHint.textContent = `提名进度 ${view.nominationIndex + 1}/${view.nominationCount}。全部提名均未获全票时，间谍获胜。`;
     if (view.permissions.canNominate) {
       addButton(selectionMode === "nominate" ? "取消选择" : "选择嫌疑人", () => beginSelection("nominate"), "primary");
+      if (selectionMode === "nominate") {
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", "选择要提名的玩家");
+        select.add(new Option("选择玩家…", ""));
+        for (const id of targetIds()) select.add(new Option(nameOf(id), id));
+        select.onchange = () => {
+          const targetId = select.value;
+          select.value = "";
+          if (targetId) chooseTarget(targetId);
+        };
+        E.actionButtons.append(select);
+      }
       addButton("跳过本次提名", () => submit({ type: "skipNomination" }));
     }
     return;
@@ -460,6 +483,8 @@ function renderRoom() {
 }
 
 function renderStatus(model) {
+  E.roomPanel.toggleAttribute("data-command-first", model.memberRole === "player" &&
+    ["secretReveal", "timeoutNomination", "timeoutVote"].includes(view.phase));
   E.phaseTitle.textContent = PHASE_LABEL[view.phase] || "服务器结算中";
   E.roundNumber.textContent = String(view.round);
   E.notice.textContent = view.phase === "lobby" ? `等待玩家加入：${view.players.length}/${view.capacity}` : `第 ${view.round}/${view.matchRounds} 轮 · ${PHASE_LABEL[view.phase]} · 发牌者：${nameOf(view.dealerId)}`;

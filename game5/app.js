@@ -4,7 +4,7 @@ import {
   bindRoomCodeInput,cleanPlayerName,createAuthoritativeRoomClient,createCountdown,createRoomEntryController,
   createPresentationTimeline,createSessionStore,createSpectatorUi,escapeHtml,renderConnectionStatus,renderCountdown,setHidden,setModeVisibility
 } from "/shared/client/index.js";
-import {ACTION_SECONDS,COLOR_NAMES} from "./rules.mjs";
+import {ACTION_SECONDS,COLOR_NAMES,compareHandCards} from "./rules.mjs";
 import {composePresentationText} from "./presentation.mjs";
 import {createGame5PartitionRenderer,createGame5RenderModel} from "./render-partitions.mjs";
 
@@ -15,7 +15,7 @@ const E=Object.fromEntries([
   "hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField",
   "roomCodeDisplay","rulesShortcutButton","rulesCard","hostTools","roomPlayerCountSelect","spectatorSettingButton","seatActionButton","spectatorPanel","spectatorCountBadge","spectatorList","startGameButton","endGameButton","notice","directionText",
   "deckCount","players","drawPile","discardPile","currentColor","penaltyBanner","actionTitle","timerText","timerBar",
-  "actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton",
+  "colorTimer","actionArea","handPanel","handCount","unoButton","hand","logList","toggleLogButton","colorModal","cancelColorButton",
   "unoStage","tableStage","presentationEffects","presentationTrail","presentationAnnouncement","presentationLabel","presentationText"
 ].map((id)=>[id,$(id)]));
 
@@ -26,7 +26,12 @@ let spectatorUi=null;
 let presentation=null;
 let partitionRenderer=null;
 const sessions=createSessionStore({gameId:"uno"});
-const countdown=createCountdown({onTick(value){renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);}});
+const countdown=createCountdown({onTick(value){
+  renderCountdown({textElement:E.timerText,barElement:E.timerBar},value);
+  renderCountdown({textElement:E.colorTimer},value);
+  E.roomPanel.dataset.timeLow=String(value.seconds>0 && value.seconds<=5);
+  E.colorTimer.dataset.timeLow=E.roomPanel.dataset.timeLow;
+}});
 const room=createAuthoritativeRoomClient({
   protocolVersion:PROTOCOL_VERSION,sessionStore:sessions,
   onStatus(status){renderConnectionStatus(E.connectionStatus,status,room.snapshot().roomCode);},
@@ -82,14 +87,16 @@ function chooseCard(card){
   submit({type:"play",cardId:card.id});
 }
 function renderRoom(model){const current=model.view;setHidden(E.hostTools,!current.permissions?.canManage);setHidden(E.startGameButton,!current.permissions?.canStart);setHidden(E.endGameButton,!current.permissions?.canEnd);E.roomPlayerCountSelect.value=String(current.capacity);E.roomPlayerCountSelect.disabled=!current.permissions?.canSetCapacity;E.startGameButton.disabled=current.players.length!==current.capacity||current.players.some((player)=>!player.connected);E.roomCodeDisplay.textContent=model.roomCode;}
-function renderStatus(model){const current=model.view;if(current.phase==="lobby")E.notice.textContent=model.memberRole==="spectator"?"你正在旁观准备阶段，可在有空位时进入玩家席。":current.players.length===current.capacity?"玩家已经到齐，房主可以开始。":`等待玩家加入：${current.players.length}/${current.capacity}`;else if(current.phase==="ended")E.notice.textContent=`${current.players.find((player)=>player.id===current.winnerId)?.name||"玩家"} 打完了所有牌，获得本局胜利！`;else E.notice.textContent=`轮到 ${model.current?.name||"玩家"}，每次行动限时15秒。`;}
+function renderStatus(model){const current=model.view;if(current.phase==="lobby")E.notice.textContent=model.memberRole==="spectator"?"你正在旁观准备阶段，可在有空位时进入玩家席。":current.players.length===current.capacity?"玩家已经到齐，房主可以开始。":`等待玩家加入：${current.players.length}/${current.capacity}`;else if(current.phase==="ended")E.notice.textContent=`${current.players.find((player)=>player.id===current.winnerId)?.name||"玩家"} 打完了所有牌，获得本局胜利！`;else E.notice.textContent=`轮到 ${model.current?.name||"玩家"}，每次行动限时${ACTION_SECONDS}秒。`;}
 function renderTable(model){const current=model.view;E.directionText.textContent=current.direction===1?"顺时针 ↻":"逆时针 ↺";E.deckCount.textContent=current.deckCount;E.discardPile.innerHTML=current.discard[0]?cardHtml(current.discard[0]):"";E.currentColor.textContent=`当前颜色：${COLOR_NAMES[current.currentColor]||"—"}`;E.currentColor.style.color={red:"#c92525",yellow:"#9a7200",green:"#168843",blue:"#176db7"}[current.currentColor]||"";setHidden(E.penaltyBanner,!current.pendingDraw);E.penaltyBanner.textContent=`累计罚牌 +${current.pendingDraw}：可继续叠加 +2 / +4`;E.drawPile.disabled=!current.permissions?.canDraw;E.drawPile.onclick=current.permissions?.canDraw?()=>submit({type:"draw"}):null;}
 function bindHandCard(node,card){node.onclick=()=>chooseCard(card);}
-function renderHand(model){const current=model.view,me=model.me;setHidden(E.handPanel,model.memberRole==="spectator");if(model.memberRole==="spectator")return;E.handCount.textContent=me?.hand.length||0;const playable=new Set(current.playableCardIds||[]),existing=new Map([...E.hand.querySelectorAll("[data-card]")].map((node)=>[node.dataset.card,node])),retained=new Set();(me?.hand||[]).forEach((card,index)=>{let node=existing.get(card.id);if(!node){const template=document.createElement("template");template.innerHTML=cardHtml(card,{button:true,enabled:playable.has(card.id)});node=template.content.firstElementChild;bindHandCard(node,card);}retained.add(card.id);const enabled=playable.has(card.id);node.classList.toggle("playable",enabled);node.disabled=!enabled;const at=E.hand.children[index];if(at!==node)E.hand.insertBefore(node,at||null);});[...E.hand.querySelectorAll("[data-card]")].forEach((node)=>{if(!retained.has(node.dataset.card))node.remove();});E.unoButton.disabled=!current.permissions?.canCallUno;E.unoButton.classList.toggle("called",Boolean(me?.unoCalled));E.unoButton.textContent=me?.unoCalled?"已喊 UNO！":"喊 UNO！";}
+function renderHand(model){const current=model.view,me=model.me;setHidden(E.handPanel,model.memberRole==="spectator");if(model.memberRole==="spectator")return;E.handCount.textContent=me?.hand.length||0;const playable=new Set(current.playableCardIds||[]),existing=new Map([...E.hand.querySelectorAll("[data-card]")].map((node)=>[node.dataset.card,node])),retained=new Set();[...(me?.hand||[])].sort(compareHandCards).forEach((card,index)=>{let node=existing.get(card.id);if(!node){const template=document.createElement("template");template.innerHTML=cardHtml(card,{button:true,enabled:playable.has(card.id)});node=template.content.firstElementChild;bindHandCard(node,card);}retained.add(card.id);const enabled=playable.has(card.id);node.classList.toggle("playable",enabled);node.disabled=!enabled;const at=E.hand.children[index];if(at!==node)E.hand.insertBefore(node,at||null);});[...E.hand.querySelectorAll("[data-card]")].forEach((node)=>{if(!retained.has(node.dataset.card))node.remove();});E.unoButton.disabled=!current.permissions?.canCallUno;E.unoButton.classList.toggle("called",Boolean(me?.unoCalled));E.unoButton.textContent=me?.unoCalled?"已喊 UNO！":"喊 UNO！";}
 function renderLog(model){E.logList.innerHTML=model.view.logs.map((entry)=>`<div class="log-item">${escapeHtml(entry.text)}</div>`).join("");}
-function renderCountdownPartition(model){if(model.view.deadline)countdown.start(model.view.deadline,ACTION_SECONDS*1000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}}
+function renderCountdownPartition(model){if(model.view.deadline)countdown.start(model.view.deadline,ACTION_SECONDS*1000);else{countdown.stop();E.roomPanel.dataset.timeLow="false";delete E.timerText.dataset.settling;E.timerText.textContent="--";E.timerBar.style.width="0";}}
 function render(){
   if(!view)return;
+  E.roomPanel.dataset.phase=view.phase;
+  if (view.phase==="lobby") $("invitationCode").textContent=room.snapshot().roomCode;
   const spectatorModel=spectatorUi.render(view),memberRole=spectatorModel.memberRole,model=createGame5RenderModel(view,{memberRole,roomCode:room.snapshot().roomCode});
   partitionRenderer??=createGame5PartitionRenderer({room:renderRoom,status:renderStatus,players:renderPlayers,table:renderTable,decision:renderDecision,decisionFacts:renderDecisionFacts,hand:renderHand,log:renderLog,countdown:renderCountdownPartition});partitionRenderer.render(model);
   if(memberRole==="spectator"||(pendingCardId&&!model.me?.hand.some((card)=>card.id===pendingCardId))){pendingCardId=null;setHidden(E.colorModal,true);}
@@ -147,12 +154,32 @@ presentation=createPresentationTimeline({
   urgentPriority:4,retainPriority:3
 });
 function endGame(){if(confirm("确定结束当前游戏并返回准备阶段吗？本局进度将被清空。"))submit({type:"end"});}
+function bindWideTable() {
+  const wide = matchMedia("(min-width: 820px) and (min-height: 541px) and (orientation: landscape)");
+  const roster = E.players.parentElement;
+  const board = E.tableStage.closest("[data-play-board]");
+  function arrange() {
+    if (wide.matches) {
+      E.unoStage.insertBefore(roster, board);
+      E.unoStage.append(E.presentationEffects);
+    } else {
+      board.append(roster, E.presentationEffects);
+    }
+  }
+  wide.addEventListener("change", arrange);
+  arrange();
+}
 async function init(){
+  bindWideTable();
   roomEntry.bind();
   spectatorUi.bind();
   E.roomPlayerCountSelect.addEventListener("change",()=>submit({type:"setCapacity",capacity:Number(E.roomPlayerCountSelect.value)}));
   E.startGameButton.addEventListener("click",()=>submit({type:"start"}));E.endGameButton.addEventListener("click",endGame);
-  E.rulesShortcutButton.addEventListener("click",()=>{E.rulesCard.open=true;E.rulesCard.scrollIntoView({behavior:"smooth",block:"start"});});
+  E.rulesShortcutButton.addEventListener("click",()=>{
+    E.rulesCard.closest("[data-play-reference]").open=true;
+    E.rulesCard.open=true;
+    E.rulesCard.scrollIntoView({block:"nearest"});
+  });
   E.unoButton.addEventListener("click",()=>submit({type:"callUno"}));E.toggleLogButton.addEventListener("click",()=>E.logList.classList.toggle("collapsed"));
   E.cancelColorButton.addEventListener("click",()=>{pendingCardId=null;setHidden(E.colorModal,true);});
   E.colorModal.querySelectorAll("[data-color]").forEach((button)=>button.addEventListener("click",()=>{if(pendingCardId)submit({type:"play",cardId:pendingCardId,color:button.dataset.color});pendingCardId=null;setHidden(E.colorModal,true);}));

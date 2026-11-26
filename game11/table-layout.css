@@ -1,15 +1,27 @@
 /* Keep both teams and the current message legible; history remains expandable. */
 #gameArea > * { min-width: 0; }
+#gameArea .intel-panel { container: intel / inline-size; }
+#gameArea .keyword-rack { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+#gameArea .keyword {
+  grid-template-columns: 27px minmax(0,1fr); min-width: 0; min-height: 44px;
+}
+#gameArea .keyword b { align-self: stretch; padding: 0; }
+#gameArea .keyword span { padding: 5px 7px; font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+#gameArea .keyword-rack > p { grid-column: 1 / -1; }
+@container intel (min-width: 400px) {
+  #gameArea .keyword-rack { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  #gameArea .keyword { grid-template-columns: minmax(0,1fr); grid-template-rows: auto 1fr; text-align: center; }
+  #gameArea .keyword span { padding: 6px; }
+}
 .history-panel > summary { cursor: pointer; font-weight: 700; }
 @media(max-width:760px) {
   #gameArea { display: flex; flex-direction: column; gap: 8px; }
   #gameArea > * { width: 100%; }
   #gameArea .intel-panel { order: 0; padding: 10px; }
   #gameArea .operation-panel { order: 1; padding: 10px; }
+  #gameArea .secret-code { margin-top: 8px; padding: 8px; font-size: 20px; letter-spacing: .1em; }
   #gameArea .scoreboard { order: 2; padding: 8px; }
   #gameArea .history-panel { order: 3; padding: 10px; }
-  #gameArea .keyword-rack { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
-  #gameArea .keyword-rack > * { min-width: 0; padding: 7px 4px; overflow-wrap: anywhere; }
   #gameArea .history-list { max-height: 45dvh; overflow: auto; }
 }
 @media (pointer: coarse) {

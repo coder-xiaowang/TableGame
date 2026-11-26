@@ -1,8 +1,30 @@
-[data-play-layout="game3"] .score-panel { padding: 10px; }
-[data-play-layout="game3"] .score-panel > .section-head { position: sticky; top: -10px; z-index: 2; padding: 8px 0; background: var(--paper,#fffdf5); }
-[data-play-layout="game3"] .score-summary { gap: 6px; margin-bottom: 8px; }
-[data-play-layout="game3"] .score-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
-[data-play-layout="game3"] .score-row { min-height: 48px; padding: 7px; }
+[data-play-layout="game3"] .score-panel { padding: 0; }
+.score-sheet {
+  --label-width: clamp(104px, 19vw, 210px);
+  width: 100%; min-width: calc(var(--label-width) + var(--player-count) * 76px);
+  border-spacing: 0; table-layout: fixed; font-variant-numeric: tabular-nums;
+}
+.score-sheet :is(th,td) {
+  padding: 5px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center;
+}
+.score-sheet th:first-child {
+  position: sticky; left: 0; z-index: 1; width: var(--label-width);
+  padding-inline: 10px; text-align: left; overflow-wrap: anywhere; background: #fcf8ee;
+}
+.score-sheet thead th { position: sticky; top: 0; z-index: 2; color: white; background: #285549; }
+.score-sheet thead th:first-child { z-index: 3; background: #285549; }
+.score-sheet thead .acting { background: #196953; box-shadow: inset 0 -3px #eac46c; }
+.score-sheet small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; }
+.score-sheet tbody small { color: var(--muted); }
+.score-sheet .sheet-player { overflow-wrap: anywhere; font-size: 14px; }
+.score-sheet .registered { font-weight: 800; }
+.score-sheet .unfilled { color: #8d938c; }
+.score-sheet .sheet-summary > * { background: #eaf0e9; font-size: 13px; }
+.score-sheet td:has(button) { padding: 2px; }
+.score-sheet button {
+  width: 100%; min-height: 44px; padding: 4px; border: 1px solid #8cb4a5;
+  color: #195843; background: #eaf6ef; font-weight: 800;
+}
 [data-play-layout="game3"] .game-panel[data-play-controls] { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
 [data-play-layout="game3"] .game-heading { grid-column: 1 / -1; margin: 0; }
 [data-play-layout="game3"] .dice-tray { min-height: 0; padding: 8px; gap: 6px; grid-template-columns: repeat(5,minmax(36px,65px)); }
@@ -12,9 +34,4 @@
   [data-play-layout="game3"] .game-panel[data-play-controls] { grid-template-columns: minmax(0,1fr); gap: 5px; }
   [data-play-layout="game3"] .dice-tray { grid-template-columns: repeat(5,minmax(0,55px)); }
   [data-play-layout="game3"] .turn-actions > button { padding: 6px 12px; }
-}
-@media(max-width:500px) {
-  [data-play-layout="game3"] .score-help { font-size: 10px; }
-  [data-play-layout="game3"] .score-name { font-size: 12px; }
-  [data-play-layout="game3"] .score-summary { font-size: 12px; }
 }

@@ -32,7 +32,7 @@ test("game6 folds detailed rules and orders the log before spectators",() => {
   assert.match(html,/<details class="panel rules-card">/);
   assert.doesNotMatch(html,/<details class="panel rules-card"[^>]*\sopen(?:\s|>)/);
   assert.match(html,/达到 66 分/);
-  assert.match(html,/15 秒内秘密选择/);
+  assert.match(html,/30 秒内秘密选择/);
 });
 
 test("game6 reserves separate board and control regions before optional references", () => {
@@ -75,6 +75,6 @@ test("game6 partitions stable anchors and starts placement animation only on ani
   assert.match(script,/createGame6PartitionRenderer/);assert.match(script,/createGame6RenderModel/);
   assert.match(script,/animation:renderAnimation/);
   assert.match(script,/existing=new Map\(\[\.\.\.E\.playerList\.querySelectorAll/);
-  assert.match(script,/existing=new Map\(\[\.\.\.E\.rows\.querySelectorAll/);
+  assert.match(script,/let node = E\.rows\.children\[index\]/);
   assert.match(partitions,/"room","status","players","reveal","rows","decision","hand","log","countdown","animation"/);
 });

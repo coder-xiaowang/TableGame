@@ -7,6 +7,46 @@
 [data-play-layout="game15"] #controlDock .tile { flex-basis: 40px; width: 40px; height: 56px; }
 [data-play-layout="game15"] #controlDock .tile span { font-size: 22px; }
 [data-play-layout="game15"] .meld { scroll-margin: 10px; }
+#controlDock .new-meld-actions { justify-content: flex-start; gap: 6px; margin: 0; }
+#controlDock .new-meld-actions button { color: #245c47; background: #f3f8f3; border-color: #90ad9c; }
+#roomPanel .empty-table { min-height: clamp(80px, 14dvh, 180px); }
+#controlDock .hand { padding-top: 10px; }
+#controlDock .hand-zone:not(.hidden) { display: block; }
+#roomPanel #controlDock .action-zone { display: block; }
+#roomPanel #controlDock .action-hint { min-height: 0; }
+body[data-play-layout="game15"] #controlDock {
+  grid-template-columns: minmax(240px, 0.85fr) minmax(0, 2fr);
+  max-height: min(38dvh, 290px);
+}
+#roomPanel #controlDock[data-role="spectator"] { grid-template-columns: 1fr; }
+@media (max-width: 700px) and (min-height: 541px), (max-width: 649px) {
+  body[data-play-layout="game15"] #controlDock {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: 45dvh;
+  }
+  #controlDock .hand-zone { order: -1; }
+}
+@media (max-height: 540px) and (min-width: 650px) {
+  body[data-play-layout="game15"] #roomPanel:has([data-play-reference][open]) {
+    grid-template: "game reference" minmax(0, 1fr) / minmax(0, 1fr) minmax(180px, 26%);
+  }
+  #roomPanel:has([data-play-reference][open]) [data-play-workspace] { grid-area: game; }
+  #roomPanel [data-play-reference][open] { grid-area: reference; overflow-y: auto; }
+  #roomPanel [data-play-reference][open] > summary { position: sticky; top: 0; z-index: 1; }
+  #roomPanel [data-play-reference][open] > aside {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: none;
+    overflow: visible;
+  }
+  body[data-play-layout="game15"] [data-play-workspace] {
+    grid-template: "status" auto "board" minmax(0,1fr) "controls" auto / minmax(0,1fr);
+  }
+  body[data-play-layout="game15"] [data-play-workspace] > #controlDock {
+    height: auto; max-height: 40dvh; padding: 4px;
+  }
+  #controlDock .hand-head .eyebrow { display: none; }
+  #roomPanel .table-head { font-size: 12px; }
+}
 @media (pointer: coarse) {
   [data-play-layout="game15"] .tile { touch-action: manipulation; }
   [data-play-layout="game15"] #controlDock .tile { flex-basis: 44px; width: 44px; }

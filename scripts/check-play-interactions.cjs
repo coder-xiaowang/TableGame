@@ -98,7 +98,10 @@ async function run() {
     const begin = async()=>{await until(()=>evaluate("!document.getElementById('startGameButton').disabled"),'start enabled');await tap('#startGameButton');await until(()=>state.phase!=='lobby','started');await delay(350);};
     const check = async label => {
       await delay(120);
-      for (const [w,h] of [[390,844],[844,390]]) {
+      const sizes = ['game5','game15'].includes(name)
+        ? [[390,844],[768,1024],[1024,768],[1440,900],[844,390]]
+        : [[390,844],[844,390]];
+      for (const [w,h] of sizes) {
         await viewport(w,h);
         const m = await evaluate(`(${measure.toString()})()`);
         const blocked = await evaluate(`(${checkSeatAccess.toString()})()`);
@@ -161,7 +164,321 @@ async function run() {
   try {
     const selected = process.env.INTERACTION_GAMES?.split(',');
     const include = name => !selected || selected.includes(name);
+    async function checkFirstScreen(selectors) {
+      for (const [w,h] of [[390,844],[768,1024],[1024,768],[1440,900]]) {
+        await viewport(w,h);
+        await evaluate('window.scrollTo(0,0)');
+        for (const selector of selectors) {
+          const reachable = await evaluate(`(() => {
+            const node = document.querySelector(${JSON.stringify(selector)});
+            if (!node) return false;
+            const rect = node.getBoundingClientRect();
+            const hit = document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2);
+            return rect.top >= 0 && rect.bottom <= innerHeight && node.contains(hit);
+          })()`);
+          assert.ok(reachable, `${selector} outside first screen or obscured at ${w}×${h}`);
+        }
+      }
+      await viewport(390,844);
+    }
+    for (const capacity of include('game14') ? [6,2] : []) {
+      const r = await room('game14',capacity,state => {
+        state.currentIndex = 0;
+        const hostHand = state.players[0].hand;
+        const farmer = state.deck.findIndex(card => card.type === 'farmer');
+        assert.notEqual(farmer,-1);
+        [hostHand[0],state.deck[farmer]] = [state.deck[farmer],hostHand[0]];
+        for (const player of state.players.slice(1)) player.pigs.at(-1).dirty = true;
+      });
+      await r.begin();
+      const last = r.state.players.at(-1);
+      await tap('#hand .type-farmer');
+      await tap('.target-shortcut',`查看 ${last.name} 的可选小猪`);
+      const target = `.pig.targetable[data-player="${last.id}"][data-pig="${last.pigs.at(-1).id}"]`;
+      // Check the shortcut's own scroll result before tap() can scroll the target.
+      await until(() => evaluate(`(() => {
+        const pig = document.querySelector(${JSON.stringify(target)});
+        const box = pig.getBoundingClientRect();
+        return pig.contains(document.elementFromPoint(box.left+box.width/2,box.top+box.height/2));
+      })()`),'last farm target visible after shortcut');
+      await tap(target);
+      await until(() => !r.state.players.at(-1).pigs.at(-1).dirty,'last pig washed');
+      await r.check(`${capacity} farms, locate and wash last-seat farthest pig`);
+    }
+    if (include('game3')) {
+      const r = await room('game3',6);
+      await r.begin();
+      const ones = '[data-score-row="ones"]';
+      const readScores = row => evaluate(`[...document.querySelectorAll('${row} td')].map(cell=>cell.textContent)`);
+      assert.equal(await evaluate("document.querySelectorAll('#scoreGrid [scope=col]').length"),7);
+      await tap('[data-action="roll"]');
+      assert.equal(await evaluate("document.querySelectorAll('#scoreGrid button').length"),13);
+      assert.ok(await evaluate("[...document.querySelectorAll('#scoreGrid button')].every(b=>b.closest('td').cellIndex===1)"));
+      await tap('[data-category="ones"]');
+      await until(()=>r.state.players[0].scorecard.ones === 0,'host registers zero');
+      await r.act(1,{type:'roll'});
+      await r.act(1,{type:'score',category:'twos'});
+      assert.deepEqual(await readScores(ones),['0','—','—','—','—','—']);
+      assert.deepEqual(await readScores('[data-score-row="twos"]'),['—','10','—','—','—','—']);
+      assert.equal(await evaluate("document.querySelectorAll('#scoreGrid button').length"),0);
+      await viewport(390,844);
+      const pinned = await evaluate(`(() => {
+        const panel = document.querySelector('.score-panel');
+        panel.scrollLeft = panel.scrollWidth;
+        panel.scrollTop = 240;
+        const bounds = panel.getBoundingClientRect();
+        const last = document.querySelector('#scoreGrid thead th:last-child').getBoundingClientRect();
+        const label = document.querySelector('#scoreGrid tbody th').getBoundingClientRect();
+        return panel.scrollLeft > 0 && last.right <= bounds.right+1 && last.top >= bounds.top && label.left >= bounds.left;
+      })()`);
+      assert.ok(pinned,'names and categories pinned while comparing the sixth player');
+      await r.check('six columns, another player scores live and recorded zero stays visible');
+      await evaluate('localStorage.clear()');
+      await send('Page.reload');
+      await until(()=>evaluate("!!document.querySelector('#guestModeButton')"),'guest setup');
+      await tap('#guestModeButton');
+      await evaluate(`document.querySelector('#roomCodeInput').value=${JSON.stringify(r.code)}; document.querySelector('[name=joinIntent][value=spectate]').click()`);
+      await tap('#joinRoomButton');
+      await until(()=>evaluate("!!document.querySelector('#turnActions .spectator-action-note')"),'spectator watching');
+      await r.act(2,{type:'roll'});
+      assert.equal(await evaluate("document.querySelectorAll('#scoreGrid button').length"),0);
+      assert.deepEqual(await readScores(ones),['0','—','—','—','—','—']);
+      await r.act(2,{type:'score',category:'chance'});
+      await until(async ()=>(await readScores('[data-score-row="chance"]'))[2] === '10','spectator receives new score');
+    }
+    if (include('game19')) {
+      const r = await room('game19', 7, state => {
+        state.currentIndex = 0;
+        state.phase = 'play';
+        state.pending = null;
+        state.deadline = Date.now() + 75000;
+        const players = state.players;
+        const zones = [state.deck, ...players.map(player => player.hand)];
+        for (const [type, destination] of [
+          ['bang', players[0].hand], ['schofield', players[0].equipment],
+          ['mustang', players[1].equipment], ['barrel', players[6].equipment]
+        ]) {
+          const source = zones.find(cards => cards.some(card => card.type === type));
+          destination.push(source.splice(source.findIndex(card => card.type === type), 1)[0]);
+        }
+      });
+      await r.begin();
+      const [host] = r.state.players;
+      const bang = host.hand.find(card => card.type === 'bang');
+      await tap(`[data-card="${bang.id}"]`);
+      assert.match(await evaluate("document.querySelector('#actionHint').textContent"), /斯科菲尔德.*射程2/);
+      const labels = await evaluate("Array.from(document.querySelectorAll('#actionButtons button'), b => b.textContent)");
+      assert.ok(labels.includes('玩家1 · 距离2 · 野马'));
+      assert.ok(labels.includes('玩家6 · 距离1 · 木桶'));
+      assert.ok(!labels.some(label => label.startsWith('玩家3 ·')), 'outside weapon range');
+      assert.ok(await evaluate("document.querySelector('#actionButtons').getBoundingClientRect().bottom <= document.querySelector('#privateZone').getBoundingClientRect().top"), 'actions overlap hand');
+      await tap('#actionButtons button', '玩家6 · 距离1 · 木桶');
+      await tap('#actionButtons button', '确认对 玩家6 使用');
+      await until(() => r.state.phase === 'defense', 'target receives BANG');
+      assert.equal(r.state.pending.actorId, r.state.players[6].id);
+      assert.deepEqual(browser.errors, []);
+      results.push({game:'game19', scenario:'seven-player ranged attack and hand clearance'});
+    }
+    if (include('game13')) {
+      const r = await room('game13', 4, state => {
+        const index = state.deck.findIndex(card => card.power === 'swap');
+        assert.ok(index >= 0);
+        state.pending = {card:state.deck.splice(index, 1)[0], source:'deck'};
+        state.phase = 'drawn';
+        state.currentIndex = 0;
+        state.deadline = Date.now() + 30000;
+      });
+      await r.begin();
+      const own = r.state.players[0].slots[1], other = r.state.players[3].slots[2];
+      const ownId = own.card.id, otherId = other.card.id;
+      const ownButton = `[data-slot="${own.slotId}"]`, otherButton = `[data-slot="${other.slotId}"]`;
+      const swap = '#actionArea .power-action';
+      await tap(otherButton);
+      assert.match(await evaluate("document.querySelector('#selectionHint').textContent"), /玩家3的第3张/);
+      assert.ok(await evaluate("document.querySelector('#actionArea .power-action').disabled"));
+      await tap(otherButton);
+      await tap(ownButton);
+      const ownBottom = () => evaluate(`document.querySelector('${ownButton}').getBoundingClientRect().bottom`);
+      const before = await ownBottom();
+      await tap(otherButton);
+      assert.equal(await evaluate("document.querySelector('#selectionHint').textContent"), '交换：我的第2张 ↔ 玩家3的第3张');
+      assert.ok(Math.abs(before - await ownBottom()) < 2 && before <= 844, 'SWAP shifts selected card off screen');
+      await tap(swap);
+      await until(() => r.state.phase === 'turn', 'SWAP accepted');
+      assert.equal(r.state.players[0].slots[1].card.id, otherId);
+      assert.equal(r.state.players[3].slots[2].card.id, ownId);
+      await until(() => evaluate("!document.querySelector('[data-slot].selected')"), 'selection cleared');
+      assert.deepEqual(browser.errors, []);
+      results.push({game:'game13', scenario:'four-player SWAP selection, deselection and confirmation'});
+    }
+    if (include('game18')) {
+      const engine = await import('../game18/server/game-engine.mjs');
+      const r = await room('game18', 8, state => {
+        engine.applyAction(state, state.pending.actorId, {type:'submitCase',text:'遗失的桌游'}, {now:Date.now()});
+        state.currentIndex = state.players.findIndex(player => !player.isHost && player.hand.some(card => card.type === 'trade'));
+        assert.ok(state.currentIndex > 0);
+      });
+      await r.begin();
+      const traderIndex = r.state.currentIndex;
+      const trader = r.state.players[traderIndex];
+      const trade = trader.hand.find(card => card.type === 'trade');
+      await r.act(traderIndex, {type:'playCard',cardId:trade.id});
+      await r.act(traderIndex, {type:'chooseTarget',targetId:r.state.players[0].id});
+      await tap('#myHand [data-card-id]');
+      await tap('#actionButtons .primary');
+      await until(() => evaluate("document.querySelector('#actionTitle').textContent === '选择已确认'"), 'trade acknowledged');
+      assert.equal(await evaluate("document.querySelector('#actionHint').textContent"), `等待${trader.name}选牌。`);
+      assert.equal(r.engine.buildView(r.state,trader.id).pending.ownSelectionId, null);
+      const otherCard = r.state.players[traderIndex].hand[0];
+      await r.act(traderIndex, {type:'submitTradeCard',cardId:otherCard.id});
+      assert.ok(r.state.players[0].hand.some(card => card.id === otherCard.id));
+      assert.deepEqual(browser.errors, []);
+      results.push({game:'game18', scenario:'private trade receipt and exchange'});
+    }
+    if (include('game21')) {
+      const r = await room('game21',8);
+      await r.begin();
+      await checkFirstScreen(['#secretRole','#actionButtons .primary']);
+      await tap('#actionButtons .primary');
+      for (let index = 1; index < 7; index++) await r.act(index,{type:'acknowledgeSecret'});
+      await r.expire(7,{type:'acknowledgeSecret'});
+      await until(() => r.state.phase === 'timeoutNomination','questioning expired');
+      while (r.state.nominationOrder[r.state.nominationIndex] !== r.sessions[0].clientId) {
+        const actor = r.state.nominationOrder[r.state.nominationIndex];
+        await r.act(r.sessions.findIndex(s => s.clientId === actor),{type:'skipNomination'});
+      }
+      await until(() => evaluate("document.querySelector('#controlDock').dataset.task === 'nominate'"),'host nomination');
+      await checkFirstScreen(['#actionTitle','#actionButtons .primary']);
+      await tap('#actionButtons .primary');
+      const target = r.sessions[7].clientId;
+      await evaluate(`(() => {const select = document.querySelector('#actionButtons select'); select.value=${JSON.stringify(target)}; select.dispatchEvent(new Event('change'));})()`);
+      await until(() => r.state.nomination?.targetId === target,'nominee submitted');
+      assert.deepEqual(browser.errors,[]);
+      results.push({game:'game21',scenario:'secret confirmation and eighth-seat nomination',phase:r.state.phase});
+    }
+    if (include('game17')) {
+      const r = await room('game17',5);
+      await r.begin();
+      while (r.state.phase === 'supply') {
+        const i = r.state.players.findIndex(p => p.id === r.state.currentActorId);
+        const [up,down] = r.state.players[i].supplyHand;
+        await r.act(i,{type:'placeSupply',faceUpCardId:up.id,faceDownCardId:down.id,
+          faceUpPileId:r.state.stockpiles[i].id,faceDownPileId:r.state.stockpiles[i].id});
+      }
+      const target = r.state.stockpiles[0].id;
+      let top = null;
+      for (const amount of [0,1000,3000,6000]) {
+        const i = r.state.players.findIndex(p => p.id === r.state.currentActorId);
+        if (i === 0) break;
+        await r.act(i,{type:'placeBid',pileId:target,amount});
+        top = amount;
+      }
+      const picker = '[data-action-draft="bid-target"]';
+      await until(() => evaluate(`!!document.querySelector('${picker}')`),'host bidding');
+      await checkFirstScreen([picker,'.bid-choice:not([hidden]) button','#stockpiles .stockpile header']);
+      await evaluate(`(() => {const picker=document.querySelector('${picker}'); picker.selectedIndex=1; picker.dispatchEvent(new Event('change')); picker.selectedIndex=0; picker.dispatchEvent(new Event('change'));})()`);
+      const amount = await evaluate(`(() => {const select=document.querySelector('.bid-choice:not([hidden]) select'); select.selectedIndex=1; return Number(select.value);})()`);
+      assert.ok(amount > (top ?? -1));
+      assert.equal(await evaluate("document.querySelector('.bid-target').dataset.pileId"), target);
+      await tap('.bid-choice:not([hidden]) button');
+      await until(() => r.state.bidTokens.some(t => t.ownerId === r.sessions[0].clientId && t.pileId === target && t.amount === amount),'chosen pile and price recorded');
+      await r.check('compare five lots and submit a higher bid');
+    }
+    if (include('game9')) {
+      const r = await room('game9',7,state => {
+        state.currentIndex = 0;
+        state.players[1].chips += state.players[0].chips - 1;
+        state.players[0].chips = 1;
+      });
+      await r.begin();
+      const pass = '[data-action="pass"]';
+      await checkFirstScreen([pass,'[data-action="take"]']);
+      assert.match(await evaluate(`document.querySelector('${pass}').textContent`),/你有 1 枚/);
+      await tap(pass);
+      for (let i = 1; i < 7; i++) await r.act(i,{type:'pass'});
+      assert.ok(await evaluate(`document.querySelector('${pass}').disabled`));
+      assert.match(await evaluate(`document.querySelector('${pass}').textContent`),/你有 0 枚/);
+      await tap('[data-action="take"]');
+      await until(() => evaluate(`document.querySelector('${pass}').textContent.includes('你有 7 枚')`),'collected chips available');
+      await r.check('last chip spent, refusal disabled, pot collected');
+    }
+    if (include('game6')) {
+      const r = await room('game6', 10, state => {
+        // Put the lowest dealt card in the host's hand to force a real row choice.
+        const piles = [...state.players.map(p => p.hand), ...state.rows];
+        const lowest = Math.min(...piles.flat());
+        const pile = piles.find(cards => cards.includes(lowest));
+        const index = pile.indexOf(lowest);
+        [pile[index], piles[0][0]] = [piles[0][0], pile[index]];
+      });
+      await r.begin();
+      const card = r.state.players[0].hand[0];
+      const before = await evaluate("window.__firstRow = document.querySelector('[data-row]'); document.querySelectorAll('#rows .row-label').length");
+      assert.equal(before, 4);
+      await tap(`#hand [data-card="${card}"]`);
+      for (let i = 1; i < 10; i++) await r.act(i, {type:'selectCard', card:r.state.players[i].hand[0]});
+      await until(() => evaluate("!!document.querySelector('#rows .choice')"), 'host can choose a row');
+      assert.ok(await evaluate("window.__firstRow === document.querySelector('[data-row]')"));
+      const visible = await evaluate(`(() => {
+        const board = document.querySelector('[data-play-board]').getBoundingClientRect();
+        return [...document.querySelectorAll('#rows .card-row')].every(row => {
+          const rect = row.getBoundingClientRect();
+          return rect.top >= board.top && rect.bottom <= board.bottom;
+        });
+      })()`);
+      assert.ok(visible, 'four row choices visible before scrolling');
+      const captured = [...r.state.rows[3]];
+      await tap('#rows [data-row="3"]');
+      await until(() => captured.every(c => r.state.players[0].captured.includes(c)), 'row captured');
+      await r.check('ten players select and collect a row');
+    }
+    if (include('game8')) {
+      const r = await room('game8', 4, state => {state.game.turn = 0;});
+      await r.begin();
+      await tap('.market-switch [aria-controls="specialMarket"]');
+      assert.ok(await evaluate("document.querySelector('#rareMarket [data-card]').checkVisibility() && !document.querySelector('#markets').checkVisibility()"));
+      await tap('.market-switch [aria-controls="markets"]');
+      const card = await evaluate("document.querySelector('#markets [data-market-tier=stage1] [data-card]').dataset.card");
+      await tap(`#markets [data-card="${card}"]`);
+      await tap(`#markets [data-card-action="reserve"][data-card-id="${card}"]`);
+      await until(() => r.state.game.players[0].reserve.includes(card), 'market card reserved');
+      await r.check('switch markets and reserve a visible card');
+    }
+    if (include('game23')) {
+      const r = await room('game23', 8, state => {state.storytellerId = state.players[1].id;});
+      await r.begin();
+      await r.act(1, {type:'submitStory', cardId:r.state.players[1].hand[0].id, clueMode:'text', clueText:'河上的月亮'});
+      for (const index of [0,2,3,4,5,6,7]) {
+        await r.act(index, {type:'submitDecoys', cardIds:[r.state.players[index].hand[0].id]});
+      }
+      await until(() => evaluate("document.querySelectorAll('#gallery [data-display-id]').length === 8"), 'gallery open');
+      assert.ok(await evaluate("!document.querySelector('#gallery .empty-gallery') && !document.querySelector('#handPanel').checkVisibility()"));
+      const choice = '#gallery .dream-card.selectable';
+      await tap(choice+' .zoom-card');
+      assert.ok(await evaluate("document.querySelector('#cardPreview').open"));
+      await tap('#closePreviewButton');
+      await tap(choice+' .card-choice');
+      const target = await evaluate("document.querySelector('#gallery .selected').dataset.displayId");
+      await tap('[data-action="submit-vote"]');
+      await until(() => r.state.votes[r.state.players[0].id] === target, 'selected vote sealed');
+      await r.check('eight paintings, preview and confirm vote');
+    }
     if (include('game')) {
+      const table = await room('game',8);
+      await table.begin();
+      const publicWord = '#wordBoard .operator-card:not(.self-card) .word-value';
+      await checkFirstScreen([publicWord,'#questionInput']);
+      await tap('#questionInput');
+      await send('Input.insertText',{text:'它能吃吗？'});
+      await tap('#submitQuestionButton');
+      await until(() => table.state.currentQuestion?.text === '它能吃吗？','question submitted');
+      for (let i=1;i<8;i++) await table.act(i,{type:'answer',answer:'yes'});
+      await tap('#skipTurnButton');
+      await table.act(1,{type:'question',text:'它会飞吗？'});
+      await checkFirstScreen([publicWord,'.current-question','#answerMaybeButton']);
+      await tap('#answerMaybeButton');
+      await until(() => table.state.currentQuestion?.answers[table.sessions[0].clientId] === 'maybe','host answer recorded');
+      await table.check('eight players consult words and exchange questions');
       const r=await room('game',32);
       await until(()=>evaluate("document.getElementById('startHint').textContent.includes('32')"),'capacity hint');
       assert.equal(await evaluate("document.getElementById('startGameButton').disabled"),true);
@@ -169,14 +486,42 @@ async function run() {
       await evaluate("document.getElementById('lobbyGameMode').value='playerWords';document.getElementById('lobbyGameMode').dispatchEvent(new Event('change'))");
       await r.begin();assert.equal(r.state.phase,'collectingWords');
       await keyboardCheck('#submittedWordInput','game');await r.check('32 players switch from insufficient library');
+      for (let i=0;i<32;i++) await r.act(i,{type:'submitWord',word:`密文${i+1}`});
+      await until(() => evaluate("document.querySelectorAll('#wordBoard .operator-card').length===32 && !!document.querySelector('#questionInput')"),'32 players decoding');
+      assert.equal(await evaluate("document.querySelectorAll('#roundRoster [data-player-id]').length"),32);
+      await checkFirstScreen([publicWord,'#questionInput']);
+      await r.check('32 dealt words and separate roster');
     }
     for (const [name,count,selector] of [['game2',2,'#descriptionInput'],['game11',4,'#clue1'],['game23',3,'#clueDraftInput']]) {
       if (!include(name)) continue;
-      const r=await room(name,count,s=>{if(name==='game23')s.storytellerId=s.players[0].id;});
+      const r=await room(name,count,s=>{
+        if(name==='game23')s.storytellerId=s.players[0].id;
+        if(name==='game11')s.teams.white.keywords=['桥','天文望远镜','自动气象观测站','北极光'];
+      });
       await r.begin();await until(()=>evaluate(`!!document.querySelector(${JSON.stringify(selector)})&&!document.querySelector(${JSON.stringify(selector)}).closest('.hidden')`),'editable turn');
       await keyboardCheck(selector,name);
       await r.post('/api/join',{roomCode:r.code,clientId:'draft-observer',name:'观察员',intent:'spectate'});await delay(150);
       assert.ok(await evaluate(`document.querySelector(${JSON.stringify(selector)}).value.includes('触屏输入草稿')`),`${name}: background SSE preserves input`);
+      if (name === 'game11') {
+        for (const [w,h,columns] of [[390,844,2],[1440,900,4]]) {
+          await viewport(w,h);
+          const rows = await evaluate(`(() => {
+            const cards = [...document.querySelectorAll('#keywordRack .keyword')];
+            return cards.map(card => [card.offsetTop,card.scrollWidth <= card.clientWidth+1]);
+          })()`);
+          assert.equal(rows.length,4);
+          assert.equal(rows.filter(([top])=>top === rows[0][0]).length,columns);
+          assert.ok(rows.every(([,fits])=>fits));
+        }
+        await viewport(390,844);
+        for (const [selector,clue] of [['#clue2','清晨'],['#clue3','远方']]) {
+          await tap(selector);
+          await send('Input.insertText',{text:clue});
+        }
+        await tap('#submitCluesButton');
+        await until(()=>r.state.phase === 'guess','three clues submitted');
+        results.push({game:name,scenario:'numbered keyword layout and three-clue submission'});
+      }
       if(name!=='game11')await r.check('input preserved across spectator broadcast');
     }
     if (include('game4')) {
@@ -221,6 +566,23 @@ async function run() {
         s.pendingDraw=0;s.pendingWild=null;s.drawnCardId=null;s.unoVulnerableId=null;s.pendingWinnerId=null;
       });
       await r.begin();await r.check('26-card hand');
+      const {compareHandCards} = await import('../game5/rules.mjs');
+      const checkHandOrder = async () => {
+        const expected=[...r.state.players[0].hand].sort(compareHandCards).map(card=>card.id);
+        await until(async()=>JSON.stringify(await evaluate("[...document.querySelectorAll('#hand [data-card]')].map(el=>el.dataset.card)"))===JSON.stringify(expected),'displayed hand matches sorted physical cards');
+      };
+      await checkHandOrder();
+      for (const [w,h] of [[390,844],[768,1024],[1024,768],[1440,900]]) {
+        await viewport(w,h);
+        await evaluate("document.querySelector('[data-play-board]').scrollTop=0;document.querySelector('[data-play-controls]').scrollTop=0;document.querySelector('#hand').scrollLeft=0");
+        for (const selector of ['#discardPile .uno-card','#currentColor','#hand .uno-card']) {
+          assert.ok(await evaluate(`(()=>{
+            const card=document.querySelector(${JSON.stringify(selector)}), box=card.getBoundingClientRect();
+            return card.contains(document.elementFromPoint(box.left+box.width/2,box.top+box.height/2));
+          })()`), `UNO ${w}: ${selector} must be visible before scrolling`);
+        }
+      }
+      await viewport(390,844);
       const wild=r.state.players[0].hand.find(c=>c.type==='wild4');
       await tap(`[data-card="${wild.id}"]`);assert.equal(await evaluate("document.getElementById('colorModal').classList.contains('hidden')"),false);
       await tap('#cancelColorButton');assert.ok(r.state.players[0].hand.some(c=>c.id===wild.id));
@@ -231,6 +593,7 @@ async function run() {
       await r.check('wild +4 challenge controls');
       await tap('[data-action="challenge"]');await until(()=>r.state.pendingDraw===0,'challenge resolved');
       await r.check('challenge result');
+      await checkHandOrder();
     }
     if (include('game15')) {
       const r=await room('game15',2,s=>{
@@ -281,6 +644,27 @@ async function run() {
       await r.reload();assert.equal(await evaluate("sessionStorage.getItem('tablegame:draft:rummikub')"),null);
       assert.equal(await evaluate("document.querySelectorAll('#table .meld').length"),1);
       await r.check('timeout discards expired draft and applies penalty');
+
+      // Keep all 106 original tiles. The acting player can extend the last of ten public groups.
+      const crowded=await room('game15',4,state=>{
+        const tiles=[...state.pool,...state.players.flatMap(p=>p.hand)];
+        const take=(number,color)=>{const i=tiles.findIndex(t=>t.number===number&&t.color===color);assert.ok(i>=0);return tiles.splice(i,1)[0];};
+        state.table=Array.from({length:10},(_,i)=>({
+          id:'m'+(++state.meldSequence),kind:'group',assignments:[],
+          tiles:['red','blue','black'].map(color=>take(i+2,color))
+        }));
+        const extra=take(11,'orange');
+        for(const [i,p] of state.players.entries()) p.hand=i===0?[extra,...tiles.splice(0,13)]:tiles.splice(0,14);
+        state.pool=tiles;state.currentIndex=0;state.players[0].opened=true;
+      });
+      await crowded.begin();
+      const extra=crowded.state.players[0].hand[0].id;
+      await tap(`#hand [data-tile-id="${extra}"]`);
+      await tap('[data-drop-meld="9"]');
+      await until(()=>crowded.state.turnEdited,'dense board edit acknowledged');
+      await tap('#actionButtons button','确认并公布牌桌');
+      await until(()=>crowded.state.table[9].tiles.some(t=>t.id===extra),'last group extended');
+      await crowded.check('extend last of ten groups from rack');
     }
     if (include('game16')) {
       const r=await room('game16',3,s=>{
@@ -346,6 +730,46 @@ async function run() {
       assert.equal(r.state.phase,'assassination');await r.check('assassin target selection');
       await tap(`#players [data-id="${r.state.merlinId}"]`);await until(()=>r.state.phase==='assassinationReveal','assassination submitted');
       await r.check('assassination reveal');await drain();assert.equal(r.state.result.winner,'evil');await r.check('final result');
+
+      const council = await room('game22',10,state => { state.leaderId = state.players[0].id; });
+      await council.begin();
+      for (let i = 0; i < 10; i++) await council.act(i,{type:'acknowledgeSecret'});
+      await until(()=>evaluate("!!document.querySelector('.team-selection-summary')"),'ten-player proposal');
+      const knights = council.state.players.slice(0,3).map(player => `#players [data-id="${player.id}"]`);
+      await viewport(768,1024);
+      await tap(knights[0]); await tap(knights[1]);
+      await viewport(1024,768);
+      const mapRect = () => evaluate("document.querySelector('#roundTable').getBoundingClientRect().toJSON()");
+      const beforeReading = await mapRect();
+      await tap('[data-play-reference] > summary');
+      await tap('.archive-grid details > summary', '圆桌骑士资料');
+      assert.equal(await evaluate("document.querySelectorAll('#rosterNotes dt').length"),10);
+      assert.deepEqual(await mapRect(),beforeReading);
+      await tap('[data-play-reference] > summary');
+      assert.equal(await evaluate("document.querySelectorAll('#players .selected').length"),2);
+      await tap(knights[2]);
+      await tap('#actionButtons button','确认远征队伍');
+      await until(()=>council.state.phase==='teamVote','rotated proposal accepted');
+      await viewport(390,640);
+      const mapPoint = await evaluate(`(()=>{
+        const box=document.querySelector('#roundTable').getBoundingClientRect();
+        return {x:box.left+20,y:box.top+box.height-18};
+      })()`);
+      const scrollTop = () => evaluate("document.querySelector('[data-play-workspace]').scrollTop");
+      const startScroll = await scrollTop();
+      await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[mapPoint]});
+      for(let dy=15;dy<=90;dy+=15){
+        await send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:mapPoint.x,y:mapPoint.y-dy}]});
+        await delay(30);
+      }
+      await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await until(async()=>await scrollTop()>startScroll,'swipe from overview scrolls to actions');
+      await tap('#exploreMapButton');
+      await tap('#mapZoomInButton');
+      assert.ok(parseInt(await evaluate("document.querySelector('#mapZoomText').textContent"),10)>150);
+      await tap('#exploreMapButton');
+      assert.equal(await evaluate("document.querySelector('#mapZoomText').textContent"),'100%');
+      await council.check('ten knights rotate, read volume, submit team and explore map');
     }
     assert.deepEqual(browser.errors,[]);
     fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(results,null,2));

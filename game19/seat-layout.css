@@ -5,3 +5,15 @@
 .table-workspace .player-seat .role { white-space: nowrap; font-size: 10px; }
 .table-workspace .player-seat.responding::after { position: static; display: block; margin-top: 4px; }
 .table-workspace .table-centerpiece { border-radius: 24px; }
+
+@container tabletop (max-width: 640px) {
+  .table-workspace .control-dock.table-dock {
+    grid-auto-rows: max-content;
+    align-items: start;
+    max-height: 46dvh;
+  }
+  .table-workspace .action-buttons button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}

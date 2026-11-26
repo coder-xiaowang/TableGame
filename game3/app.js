@@ -17,7 +17,6 @@ import { createGame3PartitionRenderer, createGame3RenderModel } from "./render-p
 const PROTOCOL_VERSION = 3;
 let mode = "host";
 let view = null;
-let selectedScorePlayerId = "";
 let partitionRenderer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -31,7 +30,7 @@ const elements = {
   spectatorCountBadge: $("spectatorCountBadge"), spectatorList: $("spectatorList"),
   startGameButton: $("startGameButton"), endGameButton: $("endGameButton"), playerList: $("playerList"), playerCountBadge: $("playerCountBadge"),
   gameNotice: $("gameNotice"), turnTitle: $("turnTitle"), roundBadge: $("roundBadge"), rollBadge: $("rollBadge"),
-  diceTray: $("diceTray"), turnActions: $("turnActions"), scorePlayerSelect: $("scorePlayerSelect"), scoreSummary: $("scoreSummary"), scoreGrid: $("scoreGrid")
+  diceTray: $("diceTray"), turnActions: $("turnActions"), scoreGrid: $("scoreGrid")
 };
 
 let spectatorUi = null;
@@ -46,7 +45,6 @@ const room = createAuthoritativeRoomClient({
   handlers: {
     onView(nextView) {
       view = nextView;
-      selectedScorePlayerId ||= nextView.selfId;
       enterRoom();
       render();
     },
@@ -274,47 +272,40 @@ function renderTurnActionFactsPartition(model) {
   }
 }
 
-function renderScoreSelectorPartition(model) {
-  const existing = new Map([...elements.scorePlayerSelect.options].map((option) => [option.value, option]));
-  const retained = new Set();
-  model.view.players.forEach((player, index) => {
-    const id = String(player.id);
-    let option = existing.get(id);
-    if (!option) {
-      option = document.createElement("option");
-      option.value = id;
-    }
-    retained.add(id);
-    option.textContent = `${player.name}${player.id === model.view.selfId ? "（我）" : ""}`;
-    const currentAtIndex = elements.scorePlayerSelect.options[index];
-    if (currentAtIndex !== option) elements.scorePlayerSelect.insertBefore(option, currentAtIndex || null);
-  });
-  [...elements.scorePlayerSelect.options].forEach((option) => {
-    if (!retained.has(option.value)) option.remove();
-  });
-  elements.scorePlayerSelect.value = model.selectedScorePlayerId;
-}
-
-function renderScorecardPartition(model) {
-  const player = model.scorePlayer;
-  if (!player) {
-    elements.scoreSummary.innerHTML = "";
-    elements.scoreGrid.innerHTML = "";
-    return;
-  }
-  const value = player.totals;
-  elements.scoreSummary.innerHTML = `<div class="summary-item"><span>上半区</span><strong>${value.upper}</strong></div><div class="summary-item"><span>上半区奖励</span><strong>${value.upperBonus}</strong></div><div class="summary-item"><span>快艇奖励</span><strong>${value.yahtzeeBonus}</strong></div><div class="summary-item total"><span>总分</span><strong>${value.total}</strong></div>`;
-  let previousSection = "";
-  elements.scoreGrid.innerHTML = CATEGORIES.map((category) => {
-    const score = player.scorecard[category.id];
-    const available = model.canScore && model.view.rolls > 0 && score === null;
-    const preview = available ? categoryScore(category.id, model.view.dice) : null;
-    const divider = category.section !== previousSection
-      ? `<div class="upper-divider">${category.section === "upper" ? "上半区" : "下半区"}</div>`
-      : "";
-    previousSection = category.section;
-    return `${divider}<div class="score-row ${available ? "available" : ""}" ${available ? `data-category="${category.id}"` : ""}><div><div class="score-name">${category.name}</div><div class="score-help">${category.help}</div></div><div class="score-value ${available ? "preview" : ""}">${score === null ? (available ? `+${preview}` : "—") : score}</div></div>`;
+function renderScorecardPartition({ view, me, canScore }) {
+  const players = me ? [me, ...view.players.filter(player => player.id !== me.id)] : view.players;
+  const headers = players.map(player => {
+    const active = player.id === view.currentPlayerId;
+    const own = player.id === view.selfId;
+    return `<th scope="col" class="player-heading${active ? " acting" : ""}">
+      <span class="sheet-player">${escapeHtml(player.name)}${own ? "（我）" : ""}</span>
+      <small>${active ? "行动中 · " : ""}总分 ${player.totals.total}</small>
+    </th>`;
   }).join("");
+
+  function scoreRow(category) {
+    const cells = players.map(player => {
+      const score = player.scorecard[category.id];
+      if (score != null) return `<td class="registered">${score}</td>`;
+      if (!canScore || player.id !== view.selfId) return '<td class="unfilled" aria-label="未登记">—</td>';
+      const preview = categoryScore(category.id, view.dice);
+      return `<td><button type="button" data-category="${category.id}" aria-label="${category.name}，可登记 ${preview} 分">+${preview}</button></td>`;
+    }).join("");
+    return `<tr data-score-row="${category.id}"><th scope="row">${category.name}<small>${category.help}</small></th>${cells}</tr>`;
+  }
+
+  function summaryRow(label, field) {
+    return `<tr class="sheet-summary"><th scope="row">${label}</th>${players.map(player => `<td>${player.totals[field]}</td>`).join("")}</tr>`;
+  }
+
+  elements.scoreGrid.style.setProperty("--player-count", players.length);
+  elements.scoreGrid.innerHTML = `<thead><tr><th scope="col">全桌计分表</th>${headers}</tr></thead>
+    <tbody>${CATEGORIES.filter(c => c.section === "upper").map(scoreRow).join("")}
+      ${summaryRow("上半区小计", "upper")}${summaryRow("上半区奖励", "upperBonus")}
+    </tbody>
+    <tbody>${CATEGORIES.filter(c => c.section === "lower").map(scoreRow).join("")}
+      ${summaryRow("快艇奖励", "yahtzeeBonus")}
+    </tbody>`;
 }
 
 function render() {
@@ -322,10 +313,8 @@ function render() {
   const spectatorModel = spectatorUi.render(view);
   const model = createGame3RenderModel(view, {
     memberRole: spectatorModel.memberRole,
-    roomCode: room.snapshot().roomCode,
-    selectedScorePlayerId
+    roomCode: room.snapshot().roomCode
   });
-  selectedScorePlayerId = model.selectedScorePlayerId;
   partitionRenderer ??= createGame3PartitionRenderer({
     room: renderRoomPartition,
     players: renderPlayersPartition,
@@ -333,7 +322,6 @@ function render() {
     dice: renderDicePartition,
     turnAction: renderTurnActionPartition,
     turnActionFacts: renderTurnActionFactsPartition,
-    scoreSelector: renderScoreSelectorPartition,
     scorecard: renderScorecardPartition
   });
   partitionRenderer.render(model);
@@ -365,10 +353,6 @@ async function init() {
     if (confirm(`确定将本次结果记入“${category.name}”（${points} 分）吗？`)) {
       submitAction({ type: "score", category: row.dataset.category });
     }
-  });
-  elements.scorePlayerSelect.addEventListener("change", () => {
-    selectedScorePlayerId = elements.scorePlayerSelect.value;
-    render();
   });
   setMode("host");
   try { spectatorUi.applyConfig(await room.checkServer()); } catch { /* join/create shows details */ }

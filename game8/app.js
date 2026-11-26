@@ -3,7 +3,7 @@
 import { bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createPresentationTimeline, createRoomEntryController, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus, setHidden, setModeVisibility } from "/shared/client/index.js";
 import { createGame8PartitionRenderer, createGame8RenderModel } from "./render-partitions.mjs";
 
-const Engine=window.Engine, PROTOCOL_VERSION=3, COLORS=Engine.COLORS, TIER_KEYS=["stage3","stage2","stage1"];
+const Engine=window.Engine, PROTOCOL_VERSION=3, COLORS=Engine.COLORS, TIER_KEYS=["stage1","stage2","stage3"];
 const BALL_FILES={red:"red.png",blue:"blue.png",black:"black.png",pink:"pink.png",yellow:"yellow.png",purple:"master.png"};
 const BALL_NAMES={red:"精灵球",blue:"超级球",black:"高级球",pink:"治愈球",yellow:"先机球",purple:"大师球"};
 const $=(id)=>document.getElementById(id);
@@ -32,7 +32,7 @@ function reconcileLocalSelection(){
   if(!myTurn){selection=[];selectedCardId=null;return;}
   selection=selection.filter((color,index,list)=>COLORS.includes(color)&&g.supply[color]>0&&list.indexOf(color)===index).slice(0,3);
   const me=g.players[seat];
-  const legalCardIds=new Set([...TIER_KEYS.flatMap((tier)=>g.field[tier]),...(me?.reserve||[]).filter((id)=>typeof id==="string")]);
+  const legalCardIds=new Set([...Object.values(g.field).flat(),...(me?.reserve||[]).filter((id)=>typeof id==="string")]);
   if(!legalCardIds.has(selectedCardId))selectedCardId=null;
 }
 
@@ -67,6 +67,16 @@ function renderPlayers(model){const v=model.view,g=v.game,existing=new Map([...E
 function elementFromHtml(html){const template=document.createElement("template");template.innerHTML=html.trim();return template.content.firstElementChild;}
 function reconcileCardList(container,values,ctx="market"){const existing=new Map([...container.children].map((node)=>[node.dataset.slotIndex,node]));values.forEach((value,index)=>{const slot=String(index),renderKey=JSON.stringify([value,ctx,selectedCardId===value]);let node=existing.get(slot);if(!node||node.dataset.renderKey!==renderKey){const replacement=elementFromHtml(cardHtml(value,ctx));replacement.dataset.slotIndex=slot;replacement.dataset.renderKey=renderKey;if(node){if(node.classList.contains("presentation-source"))replacement.classList.add("presentation-source");if(node.classList.contains("presentation-target"))replacement.classList.add("presentation-target");node.replaceWith(replacement);}node=replacement;}container.append(node);existing.delete(slot);});existing.forEach((node)=>node.remove());}
 function renderSupply(model){const g=model.view.game;if(!g){E.tokens.replaceChildren();return;}const existing=new Map([...E.tokens.querySelectorAll(":scope > [data-token]")].map((node)=>[node.dataset.token,node]));Engine.ALL_TOKENS.forEach((color)=>{const renderKey=JSON.stringify([g.supply[color],model.selection.includes(color),model.myTurn,g.acted,color==="purple"]);let node=existing.get(color);if(!node){node=document.createElement("button");node.dataset.token=color;}if(node.dataset.renderKey!==renderKey){const source=node.classList.contains("presentation-source"),target=node.classList.contains("presentation-target");node.dataset.renderKey=renderKey;node.className=`token ${color} ${model.selection.includes(color)?"selected":""}`;if(source)node.classList.add("presentation-source");if(target)node.classList.add("presentation-target");node.disabled=!model.myTurn||g.acted||color==="purple";node.innerHTML=`<b>${g.supply[color]}</b><span>${BALL_NAMES[color]}</span>`;}E.tokens.append(node);existing.delete(color);});existing.forEach((node)=>node.remove());}
+for (const button of document.querySelectorAll(".market-switch button")) {
+  button.addEventListener("click", () => {
+    for (const option of button.parentElement.querySelectorAll("button")) {
+      const active = option === button;
+      option.setAttribute("aria-pressed", String(active));
+      document.getElementById(option.getAttribute("aria-controls")).hidden = !active;
+    }
+  });
+}
+
 function renderMarkets(model){const g=model.view.game;if(!g){E.rareCount.textContent="";E.legendCount.textContent="";E.rareMarket.replaceChildren();E.legendMarket.replaceChildren();E.markets.replaceChildren();return;}E.rareCount.textContent=`牌库 ${g.decks.rare.length}`;E.legendCount.textContent=`牌库 ${g.decks.legend.length}`;reconcileCardList(E.rareMarket,g.field.rare);reconcileCardList(E.legendMarket,g.field.legend);const existing=new Map([...E.markets.querySelectorAll(":scope > [data-market-tier]")].map((node)=>[node.dataset.marketTier,node]));TIER_KEYS.forEach((tier)=>{let section=existing.get(tier);if(!section){section=document.createElement("section");section.className="market-row";section.dataset.marketTier=tier;section.innerHTML='<div class="deck"><b></b><span></span></div><div class="cards"></div>';}const deck=section.querySelector(".deck");deck.querySelector("b").textContent=Engine.zhTier(tier);deck.querySelector("span").innerHTML=`剩余 ${g.decks[tier].length}${model.isSpectator?"":"<br>点击暗中保留"}`;if(model.isSpectator)delete deck.dataset.blind;else deck.dataset.blind=tier;reconcileCardList(section.querySelector(".cards"),g.field[tier]);E.markets.append(section);existing.delete(tier);});existing.forEach((node)=>node.remove());}
 function renderTrainer(model){const g=model.view.game;setHidden(E.trainerBoard,model.isSpectator);if(!g||model.isSpectator||!model.me){E.myPokemon.innerHTML="";E.myReserved.innerHTML="";E.myResources.innerHTML="";E.myScore.textContent="0";E.reserveCount.textContent="0 / 3";return;}const me=model.me,stats=playerStats(g,me);E.myScore.innerHTML=`${stats.score} <small>奖杯</small>`;E.myResources.innerHTML=Engine.ALL_TOKENS.map((color)=>orbHtml(color,`${me.tokens[color]} + ${stats.bonuses[color]||0}`)).join("");E.myPokemon.innerHTML=me.board.map((id)=>ownedPokemonHtml(id,g,me)).join("")||'<div class="placeholder">还没有捕捉宝可梦</div>';E.reserveCount.textContent=`${me.reserve.length} / 3`;E.myReserved.innerHTML=me.reserve.map((id)=>reservedPokemonHtml(id)).join("")||'<div class="placeholder">没有保留卡</div>';}
 function renderDecision(model){const v=model.view,g=v.game;if(!g){E.notice.textContent=model.isSpectator?"你正在旁观准备阶段，可在有空位时进入玩家席。":`等待训练家加入（${v.players.length}/${v.capacity}）`;E.actionTitle.textContent="准备阶段";E.phaseBadge.textContent="大厅";E.selectionSummary.textContent="";E.actionArea.innerHTML=model.isSpectator?'<p class="spectator-action-note">旁观者不计入开局人数；玩家席有空位时可以切换身份。</p>':"";return;}renderActions(v,g,model.me,model.myTurn,g.players[g.turn],model.memberRole);}

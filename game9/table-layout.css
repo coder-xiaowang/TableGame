@@ -1,5 +1,6 @@
 /* This game already keeps the decision next to the public card. */
 .game-grid > *, .player-item, .my-area > * { min-width: 0; }
+.game-grid .table-panel { align-self: start; }
 .player-item .public-card-runs { max-height: 140px; overflow: auto; }
 @media(max-width:720px) {
   .game-grid .table-panel { min-height: 0; padding: 12px; }

@@ -63,10 +63,6 @@
         </div>
         <div id="changeNotice" class="change-notice hidden"></div>
         <div id="table" class="meld-board"></div>
-        <div id="newMeldActions" class="new-meld-actions hidden">
-          <button type="button" data-new-kind="group">把所选牌放入新数字组</button>
-          <button type="button" data-new-kind="run">把所选牌放入新顺子</button>
-        </div>
       </section><section id="resultPanel" class="panel result-panel hidden"><p class="eyebrow">GAME RESULT</p><h2 id="resultTitle"></h2><div id="resultScores"></div></section></div>
 <section id="controlDock" class="panel control-dock" data-expanded="false" data-role="player" data-play-controls>
         <div class="action-zone">
@@ -80,6 +76,10 @@
         <div class="hand-zone" id="handZone">
           <div class="hand-head"><div><p class="eyebrow">YOUR RACK</p><h2>我的牌架</h2></div><span id="handHint">开局获得14张牌</span></div>
           <div id="hand" class="hand drop-hand" data-drop-hand="true"></div>
+          <div id="newMeldActions" class="new-meld-actions hidden" role="group" aria-label="用选中的牌新建牌组">
+            <button type="button" data-new-kind="group">新数字组</button>
+            <button type="button" data-new-kind="run">新顺子</button>
+          </div>
         </div>
       </section>
 </section><details data-play-reference><summary>玩家资料、规则与记录</summary>

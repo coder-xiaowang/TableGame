@@ -75,17 +75,65 @@ function presentationLabel(kind){return ({"round-start":"新一轮启程","memor
 function eventSource(event){if(event.kind==="draw-deck")return E.drawPile;if(["exchange","match-success","failed-placement"].includes(event.kind))return event.source==="discard"?E.discardPile:E.drawPile;if(event.kind==="draw-discard")return E.discardPile;if(["round-start","initial-reveal","memory-timeout","round-result"].includes(event.kind))return document.querySelector(".piles");return playerAnchor(event.actorId)||document.querySelector(".piles");}
 function eventTarget(event){if(["discard-drawn","turn-timeout","decision-timeout","power-use"].includes(event.kind))return E.discardPile;if(event.kind==="cabo-call")return E.caboBanner;if(event.incomingSlotId)return slotAnchor(event.targetPlayerId,event.incomingSlotId);if(["private-reveal","target-notice"].includes(event.kind))return slotAnchor(event.targetPlayerId,event.slotId);if(event.kind==="initial-memory")return slotAnchor(event.targetPlayerId,event.slotIds?.[0]);return playerAnchor(event.targetId||event.actorId)||document.querySelector(".piles");}
 function playPresentationObject(event){const source=eventSource(event),target=eventTarget(event);const extraIds=[...(event.slotIds||[]),event.penaltySlotId].filter(Boolean);const extraSlots=extraIds.map((slotId)=>slotAnchor(event.targetPlayerId||event.actorId,slotId)).filter(Boolean);const highlighted=[...new Set([source,target,...extraSlots].filter(Boolean))];highlighted.forEach((element)=>element.classList.add("presentation-focus"));let token=null;if(source&&target&&source!==target){const stage=document.querySelector(".table-stage").getBoundingClientRect(),from=source.getBoundingClientRect(),to=target.getBoundingClientRect();token=document.createElement("span");token.className="presentation-token";token.textContent=({"draw-deck":"牌","draw-discard":event.cardValue,"discard-drawn":event.cardValue,exchange:"换","match-success":"✓","match-failed":"×","failed-placement":event.end==="left"?"←":"→","power-use":String(event.power||"能力").toUpperCase(),"private-reveal":"✦","target-notice":"!",swap:"⇄","cabo-call":"CABO","turn-timeout":"⌛","decision-timeout":"⌛","round-result":"揭"})[event.kind]||"✦";token.style.setProperty("--from-x",`${from.left+from.width/2-stage.left}px`);token.style.setProperty("--from-y",`${from.top+from.height/2-stage.top}px`);token.style.setProperty("--to-x",`${to.left+to.width/2-stage.left}px`);token.style.setProperty("--to-y",`${to.top+to.height/2-stage.top}px`);E.presentationEffects.append(token);}return()=>{highlighted.forEach((element)=>element.classList.remove("presentation-focus"));token?.remove();};}
-function addButton(text,action,className=""){const button=document.createElement("button");button.textContent=text;button.className=className;button.addEventListener("click",()=>{selected=[];submit(action);});E.actionArea.append(button);}
+function addButton(text,action,className=""){
+  const button=document.createElement("button");
+  button.textContent=text;
+  button.className=className;
+  button.disabled=!action;
+  if(action)button.addEventListener("click",()=>{selected=[];submit(action);});
+  E.actionArea.append(button);
+}
 function selectedParts(){return selected.map(findSlot).filter(Boolean);}
-function renderActions(memberRole){E.actionArea.innerHTML="";E.selectionHint.textContent="";const me=view.players.find((player)=>player.id===view.selfId);const chosen=selectedParts();
+function slotLabel({player,slot}){
+  const owner=player.id===view.selfId?"我":player.name;
+  return `${owner}的第${player.slots.indexOf(slot)+1}张`;
+}
+function renderSwapActions(own,other){
+  E.actionArea.classList.add("swap-actions");
+  const ready=own.length===1 && other.length===1;
+  if(ready){
+    E.selectionHint.textContent=`交换：${slotLabel(own[0])} ↔ ${slotLabel(other[0])}`;
+  }else if(own.length+other.length===1){
+    const first=own[0] || other[0];
+    E.selectionHint.textContent=`已选：${slotLabel(first)}。再选${own.length?"对手":"自己"}的一张牌即可交换。`;
+  }else if(own.length || other.length){
+    E.selectionHint.textContent=`已选自己 ${own.length} 张、对手 ${other.length} 张。交换各需一张，点已选牌可取消。`;
+  }else{
+    E.selectionHint.textContent="交换自己和对手各一张牌；也可只选自己的牌，用抽牌替换或匹配同点牌。";
+  }
+  addButton("确认 SWAP 交换",ready?{type:"usePower",ownSlotId:own[0].slot.slotId,targetPlayerId:other[0].player.id,targetSlotId:other[0].slot.slotId}:null,"power-action primary");
+  const replace=own.length?{type:"exchange",slotIds:own.map(item=>item.slot.slotId)}:null;
+  addButton(own.length>1?`匹配自己的 ${own.length} 张牌`:"用抽牌替换我的牌",replace);
+  if(view.permissions.canDiscard)addButton("弃掉抽牌",{type:"discardDrawn"});
+}
+function renderActions(memberRole){E.actionArea.innerHTML="";E.actionArea.classList.remove("swap-actions");E.selectionHint.textContent="";const chosen=selectedParts();
   if(memberRole==="spectator"){E.actionTitle.textContent=view.phase==="lobby"?"等待牌局开始":view.phase==="roundEnd"?"本轮已经结算":view.phase==="ended"?"整局游戏结束":`旁观 ${view.players.find((player)=>player.id===view.currentPlayerId)?.name||"玩家"} 的回合`;E.selectionHint.textContent="旁观视图只显示公共牌面；初始记忆、抽牌、技能查看结果和目标通知均不会发送。";E.actionArea.innerHTML='<p class="spectator-action-note">旁观模式不能选择牌位、抽牌、换牌、发动能力或宣布 CABO。</p>';return;}
   if(view.permissions.canInitialPeek){E.actionTitle.textContent="选择任意两张自己的牌";E.selectionHint.textContent=`已选择 ${chosen.filter((item)=>item.player.id===view.selfId).length}/2 张，确认后等待其他玩家。`;const own=chosen.filter((item)=>item.player.id===view.selfId);if(own.length===2)addButton("确认查看这两张",{type:"initialPeek",slotIds:own.map((item)=>item.slot.slotId)},"primary");return;}
   if(view.phase==="initialPeek"||view.phase==="initialReveal"){E.actionTitle.textContent=view.phase==="initialReveal"?"记住你查看的两张牌":"等待其他玩家选择初始牌";E.selectionHint.textContent="带红色光圈的牌只对你显示；倒计时结束后会重新盖住。";return;}
   if(view.permissions.canCloseReveal){E.actionTitle.textContent="记住这张牌";E.selectionHint.textContent="这是仅发送给你的临时私密视图。";addButton("提前盖回并结束回合",{type:"closeReveal"},"primary");return;}
   if(view.permissions.canDraw){E.actionTitle.textContent="轮到你行动";addButton("从牌库抽一张",{type:"drawDeck"},"primary");if(view.discardTop)addButton(`拿取弃牌 ${view.discardTop.value}`,{type:"drawDiscard"});if(view.permissions.canCallCabo)addButton("宣布 CABO",{type:"callCabo"},"cabo");return;}
   if(view.permissions.canPlaceFailedExchange){E.actionTitle.textContent="多牌匹配失败";E.selectionHint.textContent=`所选牌已经公开。请决定把抽到的 ${view.pendingCard.value} 放在手牌最左侧还是最右侧。`;addButton("放在最左侧",{type:"placeFailedExchange",end:"left"},"primary");addButton("放在最右侧",{type:"placeFailedExchange",end:"right"});return;}
-  if(view.permissions.canExchange){E.actionTitle.textContent=`处理抽到的 ${view.pendingCard.value}`;const own=chosen.filter((item)=>item.player.id===view.selfId);E.selectionHint.textContent="选择自己的一张牌替换；选择多张时必须数值相同，匹配成功后新牌固定放在所选牌中最靠左的位置。";if(own.length===1)addButton("确认替换所选牌",{type:"exchange",slotIds:own.map((item)=>item.slot.slotId)},"primary");if(own.length>1)addButton(`确认匹配 ${own.length} 张 · 新牌放最左选位`,{type:"exchange",slotIds:own.map((item)=>item.slot.slotId)},"primary");if(view.permissions.canDiscard)addButton("直接弃掉，不发动能力",{type:"discardDrawn"});
-    if(view.permissions.canUsePower){const power=view.pendingCard.power;if(power==="peek"){const ownBack=own.filter((item)=>!item.slot.faceUp);if(ownBack.length===1)addButton("发动PEEK查看所选牌",{type:"usePower",slotId:ownBack[0].slot.slotId},"power-action");E.selectionHint.textContent+=" PEEK需要选择自己一张背面牌。";}else if(power==="spy"){const targets=chosen.filter((item)=>item.player.id!==view.selfId&&!item.slot.faceUp);if(targets.length===1)addButton("发动SPY查看所选对手牌",{type:"usePower",targetPlayerId:targets[0].player.id,slotId:targets[0].slot.slotId},"power-action");E.selectionHint.textContent+=" SPY需要选择对手一张背面牌。";}else{const ownOne=own.length===1?own[0]:null;const other=chosen.filter((item)=>item.player.id!==view.selfId);if(ownOne&&other.length===1)addButton("发动SWAP交换两张牌",{type:"usePower",ownSlotId:ownOne.slot.slotId,targetPlayerId:other[0].player.id,targetSlotId:other[0].slot.slotId},"power-action");E.selectionHint.textContent+=" SWAP需要选择自己和对手各一张牌。";}}
+  if(view.permissions.canExchange){
+    E.actionTitle.textContent=`处理抽到的 ${view.pendingCard.value}`;
+    const own=chosen.filter(item=>item.player.id===view.selfId);
+    const power=view.permissions.canUsePower && view.pendingCard.power;
+    if(power==="swap"){
+      renderSwapActions(own,chosen.filter(item=>item.player.id!==view.selfId));
+      return;
+    }
+    E.selectionHint.textContent="选择自己的一张牌替换；选择多张时必须数值相同，匹配成功后新牌固定放在所选牌中最靠左的位置。";
+    if(own.length===1)addButton("确认替换所选牌",{type:"exchange",slotIds:own.map(item=>item.slot.slotId)},"primary");
+    if(own.length>1)addButton(`确认匹配 ${own.length} 张 · 新牌放最左选位`,{type:"exchange",slotIds:own.map(item=>item.slot.slotId)},"primary");
+    if(view.permissions.canDiscard)addButton("直接弃掉，不发动能力",{type:"discardDrawn"});
+    if(power==="peek"){
+      const backs=own.filter(item=>!item.slot.faceUp);
+      if(backs.length===1)addButton("发动PEEK查看所选牌",{type:"usePower",slotId:backs[0].slot.slotId},"power-action");
+      E.selectionHint.textContent+=" PEEK需要选择自己一张背面牌。";
+    }else if(power==="spy"){
+      const targets=chosen.filter(item=>item.player.id!==view.selfId&&!item.slot.faceUp);
+      if(targets.length===1)addButton("发动SPY查看所选对手牌",{type:"usePower",targetPlayerId:targets[0].player.id,slotId:targets[0].slot.slotId},"power-action");
+      E.selectionHint.textContent+=" SPY需要选择对手一张背面牌。";
+    }
     return;}
   if(view.phase==="roundEnd"){E.actionTitle.textContent="本轮已经结算";return;}if(view.phase==="ended"){E.actionTitle.textContent="整局游戏结束";return;}E.actionTitle.textContent=view.currentPlayerId?`等待 ${view.players.find((player)=>player.id===view.currentPlayerId)?.name} 行动`:"等待房主开始";
 }

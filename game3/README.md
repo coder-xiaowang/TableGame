@@ -25,7 +25,7 @@ node -e "require('node:sqlite'); console.log('SQLite ready')"
 - `rules.mjs`：纯计分规则、计分表和总分计算。
 - `server/game-engine.mjs`：大厅、玩家、权威骰子、回合、掉线处理和视图。
 - `../shared/server/start-authoritative-game-server.js`：HTTP、SSE、会话、动作去重和持久化流程。
-- `app.js`：只保存当前权威视图和计分表查看选择。
+- `app.js`：根据服务器视图显示全桌计分表，并在本人投骰后预览可登记的分数。
 
 游戏没有回合倒计时。当前玩家主动掉线时，服务端会清空其未完成的投掷并跳到下一名在线玩家；服务重启不视为普通掉线，恢复后会保留原当前玩家和未完成投掷。
 

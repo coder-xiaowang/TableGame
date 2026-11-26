@@ -67,13 +67,11 @@ function harness() {
       dom.actionNode = { id: ++actionSequence };
     },
     turnActionFacts: () => calls.push("turnActionFacts"),
-    scoreSelector: () => calls.push("scoreSelector"),
     scorecard: () => calls.push("scorecard")
   });
-  const draw = (view, selectedScorePlayerId = "p1") => renderer.render(createGame3RenderModel(view, {
+  const draw = (view) => renderer.render(createGame3RenderModel(view, {
     memberRole: view.roomRole,
-    roomCode: "ABCD",
-    selectedScorePlayerId
+    roomCode: "ABCD"
   }));
   const clear = () => { calls.length = 0; };
   return { calls, dom, draw, clear };
@@ -112,7 +110,7 @@ test("投骰只更新骰盘和当前计分预览，不替换回合操作 DOM", (
   assert.strictEqual(h.dom.actionNode, actionNode);
 });
 
-test("同一回合的投掷次数只修补按钮事实，选择他人计分只更新计分浏览器", () => {
+test("同一回合再投出相同点数只更新投掷次数与操作提示", () => {
   const h = harness();
   const view = baseView();
   h.draw(view);
@@ -121,15 +119,11 @@ test("同一回合的投掷次数只修补按钮事实，选择他人计分只�
 
   const rolledAgain = clone(view);
   rolledAgain.rolls = 2;
-  assert.deepEqual(h.draw(rolledAgain), ["status", "dice", "turnActionFacts", "scorecard"]);
-  assert.strictEqual(h.dom.actionNode, actionNode);
-
-  h.clear();
-  assert.deepEqual(h.draw(rolledAgain, "p2"), ["scoreSelector", "scorecard"]);
+  assert.deepEqual(h.draw(rolledAgain), ["status", "dice", "turnActionFacts"]);
   assert.strictEqual(h.dom.actionNode, actionNode);
 });
 
-test("未查看玩家的分数变化不重建自己的计分表或操作区", () => {
+test("其他玩家登记分数和零分都更新公共计分表", () => {
   const h = harness();
   const view = baseView();
   h.draw(view);
@@ -139,7 +133,9 @@ test("未查看玩家的分数变化不重建自己的计分表或操作区", ()
   const otherScored = clone(view);
   otherScored.players[1].scorecard.ones = 3;
   otherScored.players[1].totals = totals(3);
-  assert.deepEqual(h.draw(otherScored), ["players"]);
+  assert.deepEqual(h.draw(otherScored), ["players","scorecard"]);
+  otherScored.players[2].scorecard.twos = 0;
+  assert.deepEqual(h.draw(otherScored), ["scorecard"]);
   assert.strictEqual(h.dom.actionNode, actionNode);
 });
 

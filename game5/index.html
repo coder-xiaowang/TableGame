@@ -88,10 +88,12 @@
         </section>
         <section class="layout hidden" id="roomPanel" data-play-room>
 <section id="unoStage" class="main" data-play-workspace>
+<section class="uno-invitation" aria-label="邀请牌友">
+  <div><h2>邀请牌友入座</h2><p>把房间码发给牌友，在「加入房间」里输入即可。</p></div>
+  <strong id="invitationCode" aria-label="房间码"></strong>
+</section>
 <div class="notice" id="notice" data-play-status>等待玩家加入。</div>
-<div class="uno-workspace" data-play-board><div class="panel players-panel">
-                    <div class="players" id="players"></div>
-                </div><div class="table panel">
+<div class="uno-workspace" data-play-board><div class="table panel">
                     <div class="table-head"><span id="directionText">顺时针 ↻</span><span>摸牌堆 <b
                                 id="deckCount">0</b></span></div>
                     <div class="table-stage" id="tableStage">
@@ -103,6 +105,8 @@
                         <div class="penalty hidden" id="penaltyBanner"></div>
                     </div>
 
+                </div><div class="panel players-panel">
+                    <div class="players" id="players"></div>
                 </div><div id="presentationEffects" class="presentation-effects" aria-live="polite">
                     <svg class="presentation-trail-layer" aria-hidden="true">
                         <defs><marker id="unoTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
@@ -147,7 +151,7 @@
                         <h3>质疑 +4</h3>
                         <p>玩家仍持有当前颜色牌时打出 +4 属于非法，但系统允许先打出。质疑成功时出牌者摸 4 张，本张 +4 从罚牌链中移除；质疑失败时质疑者摸取累计罚牌并额外摸 2 张，然后跳过回合。</p>
                         <h3>UNO 与计时</h3>
-                        <p>玩家可在出牌前主动喊 UNO；手牌降至 1 张但未喊时，其他玩家可在下一次有效摸牌或出牌前抓 UNO，使其摸 2 张。每次行动限时 15 秒；超时有罚牌时自动接受，否则自动摸 1 张并结束回合。</p>
+                        <p>玩家可在出牌前主动喊 UNO；手牌降至 1 张但未喊时，其他玩家可在下一次有效摸牌或出牌前抓 UNO，使其摸 2 张。每次行动限时 25 秒；超时有罚牌时自动接受，否则自动摸 1 张并结束回合。</p>
                         <h3>信息边界</h3>
                         <p>每人只能看到自己的牌面，其他玩家只公开手牌数量。牌堆、私密手牌、+4 合法性、UNO 抢喊、倒计时和胜负全部由服务器判定。</p>
                     </div>
@@ -167,7 +171,7 @@
 </section>
         <div class="modal hidden" id="colorModal">
             <div class="panel modal-card">
-                <h2>选择接下来的颜色</h2>
+                <div class="color-prompt"><h2>选择接下来的颜色</h2><b id="colorTimer" role="timer" aria-label="剩余行动时间">--</b></div>
                 <div class="color-grid"><button data-color="red">红色</button><button
                         data-color="yellow">黄色</button><button data-color="green">绿色</button><button
                         data-color="blue">蓝色</button></div><button id="cancelColorButton">取消</button>

@@ -9,6 +9,9 @@ export function createGame13RenderModel(view,{memberRole=view?.roomRole,roomCode
   const permissions=view.permissions||{};
   const current=players.find((player)=>player.id===view.currentPlayerId)||null;
   const selectedKeys=Array.isArray(selected)?selected:[];
+  const swapSeats=permissions.canUsePower && view.pendingCard?.power==="swap" && selectedKeys.length
+    ? players.map(player=>[player.name,player.slots.map(slot=>slot.slotId)])
+    : null;
   return{view,memberRole,roomCode,current,isSpectator:memberRole==="spectator",selected:selectedKeys,keys:{
     room:key([roomCode,view.phase,view.capacity,players.length,
       permissions.canStart?players.map((player)=>[player.id,player.connected]):null,
@@ -19,7 +22,7 @@ export function createGame13RenderModel(view,{memberRole=view?.roomRole,roomCode
       players.map((player)=>[player.id,player.name,player.isHost,player.connected,player.slots])]),
     targetNotice:key([view.targetNotice,players.map((player)=>[player.id,player.name,player.slots.map((slot)=>slot.slotId)])]),
     score:key(players.map((player)=>[player.id,player.name,player.score,player.resetUsed])),
-    decision:key([memberRole,view.phase,view.currentPlayerId,current?.name||"",view.pendingCard,view.discardTop,permissions,selectedKeys]),
+    decision:key([memberRole,view.phase,view.currentPlayerId,current?.name||"",view.pendingCard,view.discardTop,permissions,selectedKeys,swapSeats]),
     result:key([view.roundResult,players.map((player)=>[player.id,player.name])]),
     log:key(view.logs||[]),
     countdown:key([view.deadline||0])

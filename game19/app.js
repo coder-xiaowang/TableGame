@@ -6,6 +6,7 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame19PartitionRenderer, createGame19RenderModel } from "./render-partitions.mjs";
+import { CARD_META } from "./rules.mjs";
 import { sideColumnSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
@@ -91,8 +92,12 @@ function renderPlayers(){
   existing.forEach((seat)=>seat.remove());
 }
 function eligibleTargets(card){
-  const self=own(),type=card?.type;
-  return view.players.filter((p)=>p.alive&&p.id!==view.selfId&&(!(type==="bang"||type==="missed")||p.distance<=weaponRange(self))&&(!(type==="panic")||p.distance<=1)&&(type!=="jail"||p.role!=="sheriff"));
+  const type=card?.type, range=equippedWeapon()?.range ?? 1;
+  return view.players.filter((p)=>p.alive&&p.id!==view.selfId&&(!(type==="bang"||type==="missed")||p.distance<=range)&&(!(type==="panic")||p.distance<=1)&&(type!=="jail"||p.role!=="sheriff"));
+}
+function equippedWeapon(){
+  const weapon=own()?.equipment.find(card=>CARD_META[card.type]?.equipment==="weapon");
+  return weapon && CARD_META[weapon.type];
 }
 function targetButtons(card){
   const self=own(), type=card.type;
@@ -100,7 +105,25 @@ function targetButtons(card){
   const needsTarget=["bang","missed","duel","panic","cat_balou","jail"].includes(type);
   if(!needsTarget)return addButton(`使用${cardName(type)}`,()=>submit({type:"playCard",cardId:card.id}),"primary");
   const targets=eligibleTargets(card);
-  if(!selectedTargetId){E.actionHint.textContent="请选择目标；服务器会再次校验距离与规则。";for(const p of targets)addButton(`${p.name}${p.distance?` · 距离${p.distance}`:""}`,()=>{selectedTargetId=p.id;render();});return;}
+  const rangedAttack=type==="bang"||type==="missed";
+  if(rangedAttack){
+    const weapon=equippedWeapon();
+    E.actionHint.textContent=`${weapon?.name ?? "柯尔特 .45"} · 射程${weapon?.range ?? 1}`;
+    if(!targets.length)E.actionHint.textContent+=" · 射程内没有目标";
+  }
+  if(!selectedTargetId){
+    if(!rangedAttack)E.actionHint.textContent="请选择目标。";
+    for(const p of targets){
+      const label=[p.name,`距离${p.distance}`];
+      if(rangedAttack){
+        for(const item of p.equipment){
+          if(item.type==="barrel"||item.type==="mustang")label.push(cardName(item.type));
+        }
+      }
+      addButton(label.join(" · "),()=>{selectedTargetId=p.id;render();});
+    }
+    return;
+  }
   const target=player(selectedTargetId);
   if(["panic","cat_balou"].includes(type)){
     if(target?.handCount)addButton(`随机选择 ${target.name} 的一张手牌`,()=>submit({type:"playCard",cardId:card.id,targetId:selectedTargetId,targetZone:"hand"}),"primary");
@@ -108,7 +131,6 @@ function targetButtons(card){
   }else addButton(`确认对 ${target?.name} 使用`,()=>submit({type:"playCard",cardId:card.id,targetId:selectedTargetId}),"primary");
   addButton("重选目标",()=>{selectedTargetId=null;render();});
 }
-function weaponRange(self){const weapon=self?.equipment.find((c)=>["volcanic","schofield","remington","rev_carabine","winchester"].includes(c.type));return {volcanic:1,schofield:2,remington:3,rev_carabine:4,winchester:5}[weapon?.type]||1;}
 function responseCards(expected){return own()?.hand.filter((card)=>card.type===expected||(own().characterId==="calamity_janet"&&((expected==="missed"&&card.type==="bang")||(expected==="bang"&&card.type==="missed"))))||[];}
 function renderActions(role){
   if(!view)return;E.actionButtons.innerHTML="";E.actionHint.textContent="";

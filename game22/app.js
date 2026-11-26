@@ -67,13 +67,41 @@ function openCustomPaceDialog(){const timers=view?.timers||DEFAULT_CUSTOM_TIMERS
 function mapMetrics(){return {viewportWidth:E.roundTable.clientWidth,viewportHeight:E.roundTable.clientHeight,worldWidth:E.questMapWorld.offsetWidth,worldHeight:E.questMapWorld.offsetHeight};}
 function mapFitScale(){const m=mapMetrics();return m.viewportWidth&&m.viewportHeight?Math.min(m.viewportWidth/m.worldWidth,m.viewportHeight/m.worldHeight):1;}
 function clampMapView(){const m=mapMetrics(),scaledWidth=m.worldWidth*mapView.scale,scaledHeight=m.worldHeight*mapView.scale;mapView.x=scaledWidth<=m.viewportWidth?(m.viewportWidth-scaledWidth)/2:Math.min(0,Math.max(m.viewportWidth-scaledWidth,mapView.x));mapView.y=scaledHeight<=m.viewportHeight?(m.viewportHeight-scaledHeight)/2:Math.min(0,Math.max(m.viewportHeight-scaledHeight,mapView.y));}
-function applyMapView(){clampMapView();E.questMapWorld.style.transform=`translate3d(${mapView.x}px,${mapView.y}px,0) scale(${mapView.scale})`;const relative=mapView.fitScale?mapView.scale/mapView.fitScale:1;E.mapZoomText.textContent=`${Math.round(relative*100)}%`;E.roundTable.dataset.mapZoomed=String(relative>1.015);E.mapZoomOutButton.disabled=relative<=1.015;E.mapZoomInButton.disabled=relative>=3.985;}
+function applyMapView(){clampMapView();mapView.lastWidth=E.roundTable.clientWidth;mapView.lastHeight=E.roundTable.clientHeight;E.questMapWorld.style.transform=`translate3d(${mapView.x}px,${mapView.y}px,0) scale(${mapView.scale})`;const relative=mapView.fitScale?mapView.scale/mapView.fitScale:1;E.mapZoomText.textContent=`${Math.round(relative*100)}%`;E.roundTable.dataset.mapZoomed=String(relative>1.015);E.mapZoomOutButton.disabled=relative<=1.015;E.mapZoomInButton.disabled=relative>=3.985;}
 function resetMapView(){const m=mapMetrics();if(!m.viewportWidth||!m.viewportHeight)return;mapView.fitScale=mapFitScale();mapView.scale=mapView.fitScale;mapView.x=(m.viewportWidth-m.worldWidth*mapView.scale)/2;mapView.y=(m.viewportHeight-m.worldHeight*mapView.scale)/2;mapView.ready=true;applyMapView();}
 function zoomMap(factor,point=null){if(!mapView.ready)resetMapView();const m=mapMetrics(),anchor=point||{x:m.viewportWidth/2,y:m.viewportHeight/2},oldScale=mapView.scale,newScale=Math.min(mapView.fitScale*4,Math.max(mapView.fitScale,oldScale*factor));const worldX=(anchor.x-mapView.x)/oldScale,worldY=(anchor.y-mapView.y)/oldScale;mapView.scale=newScale;mapView.x=anchor.x-worldX*newScale;mapView.y=anchor.y-worldY*newScale;applyMapView();}
-function refitMapView(){const m=mapMetrics();if(!m.viewportWidth||!m.viewportHeight)return;if(!mapView.ready){resetMapView();return;}const oldFit=mapView.fitScale||1,ratio=mapView.scale/oldFit,worldCenterX=(m.viewportWidth/2-mapView.x)/mapView.scale,worldCenterY=(m.viewportHeight/2-mapView.y)/mapView.scale;mapView.fitScale=mapFitScale();mapView.scale=Math.min(mapView.fitScale*4,Math.max(mapView.fitScale,mapView.fitScale*ratio));mapView.x=m.viewportWidth/2-worldCenterX*mapView.scale;mapView.y=m.viewportHeight/2-worldCenterY*mapView.scale;applyMapView();}
+function refitMapView(){
+  const metrics = mapMetrics();
+  if (!metrics.viewportWidth || !metrics.viewportHeight) return;
+  if (!mapView.ready || E.roundTable.dataset.exploring !== "true") {
+    resetMapView();
+    return;
+  }
+  const relativeZoom = mapView.scale / mapView.fitScale;
+  const centerX = (mapView.lastWidth / 2 - mapView.x) / mapView.scale;
+  const centerY = (mapView.lastHeight / 2 - mapView.y) / mapView.scale;
+  mapView.fitScale = mapFitScale();
+  mapView.scale = mapView.fitScale * relativeZoom;
+  mapView.x = metrics.viewportWidth / 2 - centerX * mapView.scale;
+  mapView.y = metrics.viewportHeight / 2 - centerY * mapView.scale;
+  applyMapView();
+}
 function mapPoint(event){const rect=E.roundTable.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top};}
 function rebaseMapGesture(){const points=[...mapView.pointers.values()];if(points.length>=2){const [a,b]=points,mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2},distance=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));mapView.gesture={type:"pinch",distance,scale:mapView.scale,worldX:(mid.x-mapView.x)/mapView.scale,worldY:(mid.y-mapView.y)/mapView.scale};return;}if(points.length===1){const [point]=points;mapView.gesture={type:"pan",pointerId:point.id,startX:point.x,startY:point.y,originX:mapView.x,originY:mapView.y};return;}mapView.gesture=null;E.roundTable.dataset.mapDragging="false";}
-function bindMapNavigation(){const stop=(event)=>event.stopPropagation(),isUi=(event)=>event.target.closest(".map-controls,.quest-node,.quest-archive");E.mapControls.addEventListener("pointerdown",stop);E.mapZoomOutButton.onclick=()=>zoomMap(1/1.35);E.mapZoomInButton.onclick=()=>zoomMap(1.35);E.mapResetButton.onclick=resetMapView;E.roundTable.addEventListener("pointerdown",(event)=>{if(E.roundTable.dataset.ceremonyActive==="true"||isUi(event))return;const point=mapPoint(event);mapView.pointers.set(event.pointerId,{id:event.pointerId,...point});E.roundTable.setPointerCapture?.(event.pointerId);rebaseMapGesture();event.preventDefault();});E.roundTable.addEventListener("pointermove",(event)=>{if(!mapView.pointers.has(event.pointerId))return;const point=mapPoint(event);mapView.pointers.set(event.pointerId,{id:event.pointerId,...point});const points=[...mapView.pointers.values()];if(points.length>=2&&mapView.gesture?.type==="pinch"){const [a,b]=points,mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2},distance=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));mapView.scale=Math.min(mapView.fitScale*4,Math.max(mapView.fitScale,mapView.gesture.scale*distance/mapView.gesture.distance));mapView.x=mid.x-mapView.gesture.worldX*mapView.scale;mapView.y=mid.y-mapView.gesture.worldY*mapView.scale;E.roundTable.dataset.mapDragging="true";applyMapView();}else if(points.length===1&&mapView.gesture?.type==="pan"&&mapView.scale>mapView.fitScale*1.015){mapView.x=mapView.gesture.originX+point.x-mapView.gesture.startX;mapView.y=mapView.gesture.originY+point.y-mapView.gesture.startY;E.roundTable.dataset.mapDragging="true";applyMapView();}event.preventDefault();});const endPointer=(event)=>{mapView.pointers.delete(event.pointerId);rebaseMapGesture();};E.roundTable.addEventListener("pointerup",endPointer);E.roundTable.addEventListener("pointercancel",endPointer);E.roundTable.addEventListener("dblclick",(event)=>{if(E.roundTable.dataset.ceremonyActive==="true"||isUi(event))return;zoomMap(mapView.scale>mapView.fitScale*1.8?mapView.fitScale/mapView.scale:1.8,mapPoint(event));});E.roundTable.addEventListener("wheel",(event)=>{if(E.roundTable.dataset.ceremonyActive==="true"||!event.ctrlKey&&!event.metaKey)return;event.preventDefault();zoomMap(event.deltaY<0?1.18:1/1.18,mapPoint(event));},{passive:false});new ResizeObserver(()=>requestAnimationFrame(refitMapView)).observe(E.roundTable);}
+function bindMapNavigation(){
+  const exploreButton = $("exploreMapButton");
+  const isExploring = () => E.roundTable.dataset.exploring === "true";
+  exploreButton.onclick = () => {
+    const exploring = !isExploring();
+    E.roundTable.dataset.exploring = String(exploring);
+    exploreButton.setAttribute("aria-pressed", String(exploring));
+    exploreButton.textContent = exploring ? "返回总览" : "探索地图";
+    mapView.pointers.clear();
+    rebaseMapGesture();
+    resetMapView();
+    if (exploring) zoomMap(1.5);
+  };
+  const stop=(event)=>event.stopPropagation(),isUi=(event)=>event.target.closest(".map-controls,.quest-node,.quest-archive");E.mapControls.addEventListener("pointerdown",stop);E.mapZoomOutButton.onclick=()=>zoomMap(1/1.35);E.mapZoomInButton.onclick=()=>zoomMap(1.35);E.mapResetButton.onclick=resetMapView;E.roundTable.addEventListener("pointerdown",(event)=>{if(!isExploring()||E.roundTable.dataset.ceremonyActive==="true"||isUi(event))return;const point=mapPoint(event);mapView.pointers.set(event.pointerId,{id:event.pointerId,...point});E.roundTable.setPointerCapture?.(event.pointerId);rebaseMapGesture();event.preventDefault();});E.roundTable.addEventListener("pointermove",(event)=>{if(!mapView.pointers.has(event.pointerId))return;const point=mapPoint(event);mapView.pointers.set(event.pointerId,{id:event.pointerId,...point});const points=[...mapView.pointers.values()];if(points.length>=2&&mapView.gesture?.type==="pinch"){const [a,b]=points,mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2},distance=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y));mapView.scale=Math.min(mapView.fitScale*4,Math.max(mapView.fitScale,mapView.gesture.scale*distance/mapView.gesture.distance));mapView.x=mid.x-mapView.gesture.worldX*mapView.scale;mapView.y=mid.y-mapView.gesture.worldY*mapView.scale;E.roundTable.dataset.mapDragging="true";applyMapView();}else if(points.length===1&&mapView.gesture?.type==="pan"&&mapView.scale>mapView.fitScale*1.015){mapView.x=mapView.gesture.originX+point.x-mapView.gesture.startX;mapView.y=mapView.gesture.originY+point.y-mapView.gesture.startY;E.roundTable.dataset.mapDragging="true";applyMapView();}event.preventDefault();});const endPointer=(event)=>{mapView.pointers.delete(event.pointerId);rebaseMapGesture();};E.roundTable.addEventListener("pointerup",endPointer);E.roundTable.addEventListener("pointercancel",endPointer);E.roundTable.addEventListener("dblclick",(event)=>{if(!isExploring()||E.roundTable.dataset.ceremonyActive==="true"||isUi(event))return;zoomMap(mapView.scale>mapView.fitScale*1.8?mapView.fitScale/mapView.scale:1.8,mapPoint(event));});E.roundTable.addEventListener("wheel",(event)=>{if(!isExploring()||E.roundTable.dataset.ceremonyActive==="true"||!event.ctrlKey&&!event.metaKey)return;event.preventDefault();zoomMap(event.deltaY<0?1.18:1/1.18,mapPoint(event));},{passive:false});new ResizeObserver(()=>requestAnimationFrame(refitMapView)).observe(E.roundTable);}
 
 
 function targetable(id){if(view.permissions.canPropose)return true;if(view.permissions.canUseLady)return view.permissions.ladyTargetIds.includes(id);if(view.permissions.canAssassinate)return id!==view.selfId;return false;}
@@ -115,6 +143,13 @@ function renderPlayers(){
   const existing=new Map([...E.players.querySelectorAll(":scope > [data-id]")].map((node)=>[node.dataset.id,node]));
   view.players.forEach((p,index)=>{const badges=createAvalonPlayerBadges({player:p,phase:view.phase,leaderId:view.leaderId,proposedTeam:view.proposedTeam,teamVoteProgress:view.teamVoteProgress,questProgress:view.questProgress,knownEvilIds:view.knownEvilIds,percivalCandidates:view.percivalCandidates,lastTeamVoteResult:view.lastTeamVoteResult});const inActiveExpedition=["questAction","questReveal"].includes(view.phase)&&view.proposedTeam.includes(p.id),manageable=canManagePlayer(p.id);const cls=["player-seat",p.id===view.leaderId?"leader":"",teamDraft.has(p.id)||inActiveExpedition?"selected":"",targetable(p.id)?"targetable":"",manageable?"manageable":"",p.connected?"":"offline"].join(" ");const renderKey=JSON.stringify([p,index,view.selfId,cls,badges]);let node=existing.get(p.id);if(!node){node=document.createElement("button");node.type="button";node.dataset.id=p.id;}if(node.dataset.renderKey!==renderKey){const presentationFocus=node.classList.contains("presentation-focus"),menuOpen=E.playerAdminMenu.dataset.targetId===p.id,initial=escapeHtml([...p.name][0]||"骑");node.dataset.renderKey=renderKey;node.className=cls;if(presentationFocus)node.classList.add("presentation-focus");if(menuOpen)node.classList.add("admin-menu-open");node.style.setProperty("--seat-index",String(index));node.style.setProperty("--player-accent",playerAccent(p.id));node.setAttribute("aria-haspopup",manageable?"menu":"false");node.innerHTML=`<span class="player-avatar" aria-hidden="true"><i>${initial}</i></span><span class="player-copy"><h3>${escapeHtml(p.name)}${p.id===view.selfId?" · 你":""}</h3><p>${p.connected?"在线":"离线"}${p.isHost?" · 房主":""}</p><small>${badges.map((badge)=>escapeHtml(badge.label)).join(" · ")||"身份隐藏"}</small></span><span class="player-badges">${badges.map(badgeHtml).join("")}</span>`;node.onclick=(event)=>openPlayerAdminMenu(p.id,event.currentTarget);}E.players.append(node);existing.delete(p.id);});
   existing.forEach((node)=>node.remove());
+  $("rosterNotes").replaceChildren(...[...E.players.children].flatMap(seat => {
+    const name = document.createElement("dt");
+    const info = document.createElement("dd");
+    name.textContent = seat.querySelector("h3").textContent;
+    info.textContent = [".player-copy p", ".player-copy small"].map(selector => seat.querySelector(selector).textContent).join(" · ");
+    return [name, info];
+  }));
   const managedId=E.playerAdminMenu.dataset.targetId;if(managedId&&(!player(managedId)||!canManagePlayer(managedId)))closePlayerAdminMenu();
 }
 
@@ -154,7 +189,7 @@ function renderActions(role){
     if(view.permissions.canRequestExtension){const b=addButton("申请延长（最后30秒开放）",()=>submit({type:"requestDiscussionExtension"}));b.dataset.extensionRequest="";b.disabled=lastCountdownSeconds>30||lastCountdownSeconds<=0;b.title="仅在组队倒计时最后30秒可申请，本轮限一次";}
     return;
   }
-  if(view.phase==="teamVote"){E.actionTitle.textContent="是否同意这支远征队伍？";E.actionHint.textContent=view.permissions.canTeamVote?"你的选择会密封保存，收齐后所有人的票同时公开。":`已封存${view.teamVoteProgress.length}/${view.players.length}票。`;if(view.permissions.canTeamVote){addButton("同意提案",()=>submit({type:"submitTeamVote",approve:true}),"primary");addButton("反对提案",()=>submit({type:"submitTeamVote",approve:false}));}return;}
+  if(view.phase==="teamVote"){E.actionTitle.textContent="是否同意这支远征队伍？";E.actionHint.textContent=view.permissions.canTeamVote?`提案队伍：${view.proposedTeam.map(nameOf).join("、")}。收齐后公开票型。`:`已封存${view.teamVoteProgress.length}/${view.players.length}票。`;if(view.permissions.canTeamVote){addButton("同意提案",()=>submit({type:"submitTeamVote",approve:true}),"primary");addButton("反对提案",()=>submit({type:"submitTeamVote",approve:false}));}return;}
   if(view.phase==="questAction"){E.actionTitle.textContent=view.permissions.canQuest?"秘密提交任务牌":"等待远征队员提交任务牌";E.actionHint.textContent=view.permissions.canQuest?"任务牌由服务器匿名混洗，其他人无法知道你的选择。":`${view.questProgress.length}/${view.proposedTeam.length}张已投入圣杯。`;if(view.permissions.canQuest){addButton("任务成功",()=>submit({type:"submitQuestCard",card:"success"}),"primary");if(view.permissions.canFailQuest)addButton("破坏任务",()=>submit({type:"submitQuestCard",card:"fail"}),"danger");}return;}
   if(view.phase==="ladyInspect"){E.actionTitle.textContent=view.permissions.canUseLady?"选择一名玩家秘密查验":"等待湖中仙女完成查验";E.actionHint.textContent=view.permissions.canUseLady?"点击发光的玩家纹章。只有你会看到其显示阵营。":`${nameOf(view.ladyHolderId)}正在查验。`;return;}
   if(view.phase==="assassination"){E.actionTitle.textContent=view.permissions.canAssassinate?"指出你认为是梅林的玩家":"刺客正在寻找梅林";E.actionHint.textContent=view.permissions.canAssassinate?"点击任意其他玩家纹章并确认。":"邪恶仍有最后一次翻盘机会。";return;}
@@ -185,6 +220,13 @@ function fillCounts(select){select.innerHTML=Array.from({length:6},(_,i)=>`<opti
 async function init(){
   fillCounts(E.playerCountSelect);fillCounts(E.roomPlayerCountSelect);roomEntry.bind();bindMapNavigation();
   E.questArchiveClose.onclick=closeQuestArchive;
+  const volume = E.roomPanel.querySelector("[data-play-reference]");
+  volume.addEventListener("keydown", event => {
+    if (event.key === "Escape" && volume.open) {
+      volume.open = false;
+      volume.querySelector("summary").focus();
+    }
+  });
   E.removePlayerButton.onclick=removeManagedPlayer;
   document.addEventListener("pointerdown",(event)=>{if(!E.playerAdminMenu.classList.contains("hidden")&&!event.target.closest("#playerAdminMenu,.player-seat"))closePlayerAdminMenu();});
   document.addEventListener("keydown",(event)=>{if(event.key==="Escape")closePlayerAdminMenu();});

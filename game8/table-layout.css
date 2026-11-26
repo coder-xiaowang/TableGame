@@ -1,4 +1,28 @@
 [data-play-layout="game8"] .market-workspace { padding: 3px; }
+[data-play-layout="game8"] .market-switch {
+  display: flex; gap: 4px; margin: 0 0 7px;
+}
+[data-play-layout="game8"] .market-switch button {
+  padding: 5px 14px; min-height: 36px; border: 1px solid #b8c4d4; border-radius: 8px; background: white; color: #283955;
+}
+[data-play-layout="game8"] .market-switch [aria-pressed="true"] { background: #294c82; color: white; }
+[data-play-layout="game8"] .market-workspace [hidden] { display: none; }
+[data-play-layout="game8"] .supply { position: static; }
+[data-play-layout="game8"] .tokens .token { min-height: 48px; }
+[data-play-layout="game8"] .token::before { width: 30px; height: 30px; top: 1px; }
+[data-play-layout="game8"] .token span { margin: 0; }
+[data-play-layout="game8"] .market-workspace .card-face {
+  width: calc(100% + 20px); height: clamp(80px, 13dvh, 146px); object-fit: contain;
+  background: linear-gradient(135deg,var(--card),#fff); margin-bottom: 4px;
+}
+@media (orientation: landscape) and (min-width: 900px) {
+  body[data-play-layout="game8"] [data-play-workspace] {
+    grid-template: "status status" auto "board controls" minmax(0,1fr) / minmax(0,1fr) clamp(236px,23%,340px);
+  }
+  body[data-play-layout="game8"] [data-play-workspace] > .trainer-controls {
+    grid-template-columns: minmax(0,1fr); height: 100%; max-height: none;
+  }
+}
 [data-play-layout="game8"] .supply { padding: 8px; margin-bottom: 8px; }
 [data-play-layout="game8"] .supply .section-head { margin-bottom: 5px; }
 [data-play-layout="game8"] .tokens { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 5px; }

@@ -256,16 +256,46 @@ function renderSupplyAction() {
 
 function renderBidAction() {
   const self = view.players.find((player) => player.id === view.selfId);
-  E.actionTitle.textContent = "选择股票堆并报价"; E.actionHint.textContent = `你有 ${money(self.cash)}；报价公开，被超过后可重新竞价。`;
+  E.actionTitle.textContent = "选择股票堆并报价";
   const ownOther = view.bidTokens.filter((token) => token.ownerId === view.selfId && token.pileId);
+  const available = self.cash - ownOther.reduce((sum, token) => sum + token.amount, 0);
+  E.actionHint.textContent = `可用于本次报价：${money(available)}`;
+  const target = document.createElement("select");
+  target.dataset.actionDraft = "bid-target";
+  target.setAttribute("aria-label", "选择股票堆，查看当前报价");
+  E.actionButtons.append(target);
+  const groups = new Map();
   view.stockpiles.forEach((pile, index) => {
     if (ownOther.some((token) => token.pileId === pile.id)) return;
-    const top = view.bidTokens.find((token) => token.pileId === pile.id); const committed = ownOther.reduce((sum, token) => sum + token.amount, 0);
-    const legal = BID_LEVELS.filter((amount) => (!top || amount > top.amount) && amount + committed <= self.cash);
+    const top = view.bidTokens.find((token) => token.pileId === pile.id);
+    const legal = BID_LEVELS.filter((amount) => (!top || amount > top.amount) && amount <= available);
     if (!legal.length) return;
-    const group = document.createElement("div"); group.className = "bid-choice"; const select = document.createElement("select"); select.dataset.actionDraft = `bid:${pile.id}`; select.innerHTML = legal.map((amount) => `<option value="${amount}">${money(amount)}</option>`).join("");
-    const button = document.createElement("button"); button.className = "primary"; button.textContent = `竞价股票堆 ${index + 1}`; button.onclick = () => submit({ type: "placeBid", pileId: pile.id, amount: Number(select.value) }); group.append(select, button); E.actionButtons.append(group);
+    const label = `股票堆 ${index + 1}`;
+    target.add(new Option(`${label} · ${top ? "现价 " + money(top.amount) : "尚无报价"}`, pile.id));
+    const group = document.createElement("div");
+    group.className = "bid-choice";
+    const select = document.createElement("select");
+    select.dataset.actionDraft = `bid:${pile.id}`;
+    select.setAttribute("aria-label", label + "的出价");
+    for (const amount of legal) select.add(new Option(money(amount), String(amount)));
+    const button = document.createElement("button");
+    button.className = "primary";
+    button.textContent = `向${label}报价`;
+    button.onclick = () => submit({ type: "placeBid", pileId: pile.id, amount: Number(select.value) });
+    group.append(select, button);
+    E.actionButtons.append(group);
+    groups.set(pile.id, group);
   });
+  const showTarget = () => {
+    for (const [id, group] of groups) {
+      group.hidden = id !== target.value;
+      pileAnchor(id)?.classList.toggle("bid-target", id === target.value);
+    }
+  };
+  const savedTarget = actionDraft?.values["bid-target"];
+  if (groups.has(savedTarget)) target.value = savedTarget;
+  target.onchange = showTarget;
+  showTarget();
 }
 
 function renderMarketAction() {
@@ -301,6 +331,7 @@ function renderDividendAction() {
 }
 
 function renderActions(memberRole) {
+  E.stockpiles.querySelector(".bid-target")?.classList.remove("bid-target");
   E.actionButtons.innerHTML = ""; E.actionHint.textContent = "";
   if (memberRole === "spectator") { E.actionTitle.textContent = view.phase === "lobby" ? "旁观准备阶段" : `旁观行情 · 等待 ${nameOf(view.currentPlayerId)}`; E.actionHint.textContent = "旁观者只能查看公开行情、报价、资金和持股牌数。"; return; }
   if (view.phase === "lobby") { E.actionTitle.textContent = "等待投资人到齐"; E.actionHint.textContent = `当前 ${view.players.length}/${view.capacity} 人，所有玩家在线后由房主开始。`; return; }
@@ -329,6 +360,11 @@ function renderRoom() {
 }
 
 function renderStatus(model) {
+  if (view.phase === "bidding" && E.roomPanel.dataset.phase !== "bidding") {
+    E.stockpiles.closest("[data-play-board]").scrollTop = 0;
+    E.controlDock.scrollTop = 0;
+  }
+  E.roomPanel.dataset.phase = view.phase;
   E.controlDock.dataset.role = model.memberRole;
   E.notice.textContent = view.phase === "lobby" ? `等待玩家加入：${view.players.length}/${view.capacity}` : view.phase === "ended" ? "交易结束，最终净资产已经公开" : `第 ${view.round}/${view.totalRounds} 轮 · 当前阶段：${view.phase} · 行动者：${nameOf(view.currentPlayerId)}`;
 }

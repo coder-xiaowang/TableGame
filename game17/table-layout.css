@@ -4,6 +4,26 @@
 [data-play-layout="game17"] .portfolio-details { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 5px; }
 [data-play-layout="game17"] .portfolio-details summary { cursor: pointer; font-size: 13px; }
 [data-play-layout="game17"] .stockpiles { grid-template-columns: repeat(3,minmax(0,1fr)); }
+[data-phase="bidding"] .market-board { display: grid; gap: 8px; padding: 10px; }
+[data-phase="bidding"] .market-head { grid-row: 1; }
+[data-phase="bidding"] .stockpiles { grid-row: 2; }
+[data-phase="bidding"] .stock-ticker { margin: 0; }
+[data-phase="bidding"] .stock-ticker article { padding: 4px 6px; }
+[data-phase="bidding"] .stock-ticker b { font-size: 1rem; }
+[data-phase="bidding"] .stockpile.bid-target { outline: 2px solid #f7d880; outline-offset: -2px; background: #365944; }
+[data-phase="bidding"] .bid-choice[hidden] { display: none; }
+[data-phase="bidding"] #actionButtons > select { width: 100%; }
+[data-phase="bidding"] .bid-choice { width: 100%; }
+[data-phase="bidding"] .bid-choice > * { flex: 1; min-width: 0; }
+@media (orientation: landscape) and (min-width: 900px) {
+  body[data-play-layout="game17"] [data-phase="bidding"] [data-play-workspace] {
+    grid-template: "status status" auto "board controls" minmax(0,1fr) / minmax(0,1fr) clamp(240px,26%,360px);
+  }
+  body[data-play-layout="game17"] [data-phase="bidding"] #controlDock {
+    grid-template-columns: minmax(0,1fr); max-height: 100%;
+  }
+  [data-phase="bidding"] #privateZone { border-left: 0; border-top: 1px solid var(--line); padding: 8px 0 0; }
+}
 @container play (max-width: 650px) {
   [data-play-layout="game17"] .stockpiles { grid-template-columns: repeat(2,minmax(0,1fr)); }
   [data-play-layout="game17"] .stockpile { display: block; }

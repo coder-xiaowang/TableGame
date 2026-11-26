@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createDeck,isPlayable} from "./rules.mjs";
+import {createDeck,isPlayable,compareHandCards} from "./rules.mjs";
+
+test("mixed UNO hands group colors, sort numbers, then actions and wilds",()=>{
+  const hand=createDeck(()=>0.37).sort(compareHandCards);
+  const group=(color)=>hand.filter(c=>c.color===color).map(c=>c.type==="number"?c.value:c.type);
+  assert.deepEqual([...new Set(hand.map(c=>c.color))],["red","yellow","green","blue",null]);
+  for(const [i,color] of ["red","yellow","green","blue"].entries()){
+    assert.ok(hand.slice(i*25,(i+1)*25).every(c=>c.color===color));
+    assert.deepEqual(group(color),[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,"skip","skip","reverse","reverse","draw2","draw2"]);
+  }
+  assert.deepEqual(group(null),["wild","wild","wild","wild","wild4","wild4","wild4","wild4"]);
+});
 
 test("UNO deck contains 108 unique physical cards with standard composition",()=>{
   const deck=createDeck(()=>0.37);

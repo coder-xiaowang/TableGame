@@ -19,7 +19,7 @@ test("game5 server owns turns, cards and player-specific hidden views",async(con
   const baseUrl=`http://127.0.0.1:${server.address().port}`;
   context.after(async()=>{if(server.listening)await closeServer(server);});
   const config=await fetch(`${baseUrl}/api/config`).then((response)=>response.json());
-  assert.equal(config.authorityMode,"server");assert.equal(config.protocolVersion,3);assert.equal(config.actionSeconds,15);
+  assert.equal(config.authorityMode,"server");assert.equal(config.protocolVersion,3);assert.equal(config.actionSeconds,25);
   const host=(await post(baseUrl,"/api/rooms",{hostId:"p1",name:"甲",capacity:2})).payload;await openEvents(baseUrl,host);
   const guest=(await post(baseUrl,"/api/join",{roomCode:host.roomCode,clientId:"p2",name:"乙"})).payload;await openEvents(baseUrl,guest);
   assert.equal((await action(baseUrl,host,"start",{type:"start"})).response.status,200);

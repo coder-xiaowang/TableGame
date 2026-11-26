@@ -4,15 +4,33 @@
 [data-play-layout="game"] .decoder-console[data-play-controls] { display: block; }
 [data-play-layout="game"] .decoder-console .turn-header { margin-bottom: 5px; }
 [data-play-layout="game"] .decoder-console .action-area { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 8px; }
+[data-play-layout="game"] .answer-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
 [data-play-layout="game"] .archive-strip { order: initial; }
+[data-play-layout="game"] #rosterPanel { min-width: 0; grid-column: 1 / -1; }
+[data-play-layout="game"] #rosterPanel h2 { margin: 0; font-size: 15px; }
+[data-play-layout="game"] #roundRoster .operator-registry { margin: 5px 0 0; }
+@media (orientation: landscape) and (min-width: 800px) {
+  body[data-play-layout="game"][data-phase="playing"] [data-play-workspace] {
+    grid-template: "status status" auto "board controls" minmax(0,1fr) / minmax(0,1fr) clamp(260px,32%,420px);
+  }
+  body[data-play-layout="game"][data-phase="playing"] .decoder-console[data-play-controls] {
+    max-height: 100%; align-self: start;
+  }
+  [data-play-layout="game"][data-phase="playing"] .decoder-console .action-area { grid-template-columns: minmax(0,1fr); }
+}
 [data-play-layout="game"] .lobby-settings { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 10px; }
 [data-play-layout="game"] .lobby-settings label { display: flex; align-items: center; gap: 6px; margin: 0; min-width: 0; font-size: 12px; }
 [data-play-layout="game"] .lobby-settings select { width: auto; min-width: 0; padding: 5px; }
 [data-play-layout="game"] .start-hint { margin: 3px 10px; font-size: 12px; overflow-wrap: anywhere; }
 @container play (max-width: 650px) {
-  [data-play-layout="game"] .machine-header { padding: 0 0 8px; }
+  [data-play-layout="game"] .machine-header { padding: 0 12px 8px; }
   [data-play-layout="game"] .machine-header h2 { font-size: 17px; }
   [data-play-layout="game"] .cipher-wall-heading { display: none; }
   [data-play-layout="game"] .operator-wall { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
   [data-play-layout="game"] .operator-card { min-height: 110px; }
+  [data-play-layout="game"] .cipher-label { min-height: 44px; padding: 5px; margin-top: 5px; }
+  [data-play-layout="game"] .cipher-label > small { display: none; }
+  [data-play-layout="game"] .decoder-console .turn-header { flex-direction: row; align-items: center; }
+  [data-play-layout="game"] .decoder-console .turn-header > div { min-width: 0; }
+  [data-play-layout="game"] .decoder-console .round-badge { flex-shrink: 0; }
 }

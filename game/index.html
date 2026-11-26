@@ -147,13 +147,12 @@
             </div>
             <header class="machine-header">
               <div>
-                <p class="eyebrow">OPERATOR REGISTRY · 译码名册</p>
                 <h2>全员密文档案</h2>
               </div>
               <div class="machine-lamps" aria-hidden="true"><i></i><i></i><i></i></div>
             </header>
 
-            <div class="player-list operator-registry" id="playerList"></div>
+            <div id="lobbyRoster"><div class="player-list operator-registry" id="playerList"></div></div>
 
             <div class="cipher-wall-heading" aria-hidden="true">
               <span>公开可见代号</span>
@@ -177,6 +176,10 @@
             </div>
 </section><details data-play-reference><summary>玩家资料、规则与记录</summary>
 <section class="archive-strip" aria-label="译码室档案区">
+          <section id="rosterPanel" class="panel hidden">
+            <h2>玩家名册</h2>
+            <div id="roundRoster"></div>
+          </section>
           <details class="panel rules-card archive-drawer">
             <summary><span>详细规则</span><b>展开查看</b></summary>
             <div class="rule-details">

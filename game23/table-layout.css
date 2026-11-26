@@ -7,6 +7,47 @@
 [data-play-layout="game23"] #actionDock .hand { min-width: 0; overflow-x: auto; padding: 5px; }
 [data-play-layout="game23"] #actionDock .dream-card { flex: 0 0 85px; width: 85px; }
 [data-play-layout="game23"] #actionDock textarea { min-height: 48px; }
+[data-play-layout="game23"] .dream-stage { min-height: 0; margin-bottom: 7px; overflow: clip; }
+[data-play-layout="game23"] .clue-orbit {
+  width: min(100%,650px); min-height: 58px; margin-bottom: 8px; padding: 6px 18px;
+  overflow-wrap: anywhere;
+}
+[data-play-layout="game23"] .clue-orbit strong { font-size: clamp(17px,2.1vw,26px); }
+[data-play-layout="game23"] .gallery {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 9px; min-height: 0; justify-items: center; align-items: start;
+}
+[data-play-layout="game23"] .gallery .dream-card {
+  width: 100%; max-width: clamp(108px,18dvh,164px);
+}
+[data-play-layout="game23"] .gallery .empty-gallery { grid-column: 1/-1; padding: 6px 12px; }
+[data-play-layout="game23"] .gallery .empty-gallery p { margin: 3px 0; }
+[data-play-layout="game23"] .room[data-exhibition] #handPanel { display: none; }
+[data-play-layout="game23"] .room[data-exhibition] #actionDock { grid-template-columns: minmax(0,1fr); }
+[data-play-layout="game23"] .room[data-exhibition] .action-copy {
+  grid-template: "title timer" auto "hint confirm" auto / minmax(0,1fr) auto;
+  align-items: center; gap: 3px 10px;
+}
+[data-play-layout="game23"] .room[data-exhibition] .action-copy .eyebrow { display: none; }
+[data-play-layout="game23"] .room[data-exhibition] #actionHint { grid-area: hint; }
+[data-play-layout="game23"] .room[data-exhibition] #actionControls { grid-area: confirm; justify-content: end; }
+[data-play-layout="game23"] .room[data-exhibition] .timer { grid-area: timer; justify-self: end; }
+[data-play-layout="game23"] .gallery .own-card::after { left: 4px; right: auto; }
+[data-play-layout="game23"] .room[data-exhibition] .clue-orbit {
+  position: sticky; top: 0; z-index: 3; border-radius: 18px; background: #20203eef;
+}
+@media (min-width: 701px) and (min-height: 541px) {
+  [data-play-layout="game23"] .room[data-exhibition] .action-copy {
+    grid-template: "title hint timer confirm" auto / auto minmax(0,1fr) auto auto;
+  }
+}
+[data-play-layout="game23"] .room[data-phase="lobby"] .gallery-workspace {
+  display: flex; flex-direction: column;
+}
+[data-play-layout="game23"] .room[data-phase="lobby"] .travelers { order: -1; }
+@container play (min-width: 1200px) {
+  [data-play-layout="game23"] .gallery { grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); }
+}
 @container play (max-width: 650px) {
-  [data-play-layout="game23"] .gallery { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  [data-play-layout="game23"] .gallery { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
 }

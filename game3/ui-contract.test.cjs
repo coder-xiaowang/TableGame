@@ -44,10 +44,11 @@ test("game3 reserves separate board and control regions before optional referenc
 });
 
 test("game3 preserves dice controls and public score inspection",() => {
-  for (const id of ["gameNotice","turnTitle","roundBadge","rollBadge","diceTray","turnActions","scorePlayerSelect","scoreSummary","scoreGrid"]) {
+  for (const id of ["gameNotice","turnTitle","roundBadge","rollBadge","diceTray","turnActions","scoreGrid"]) {
     assert.match(html,new RegExp(`id="${id}"`));
   }
   assert.match(script,/categoryScore/);
+  assert.match(html,/<table id="scoreGrid"/);
   assert.match(script,/data-die-index/);
   assert.match(script,/spectatorUi\.render\(view\)/);
 });

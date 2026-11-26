@@ -294,7 +294,7 @@ function renderSecretSelection(kind) {
   const title = kind === "trade" ? "秘密选择交易牌" : "秘密选择向左传递的牌";
   E.actionTitle.textContent = waiting ? "选择已确认" : title;
   E.actionHint.textContent = waiting
-    ? `正在等待：${view.pending.participantIds.filter((id) => !view.pending.submittedIds.includes(id)).map(nameOf).join("、") || "服务器结算"}`
+    ? `等待${view.pending.participantIds.filter((id) => !view.pending.submittedIds.includes(id)).map(nameOf).join("、")}选牌。`
     : "对方只能看到你已经确认，不能看到你选择了哪张牌。";
   if (!waiting && selectedCardId) {
     const actionType = kind === "trade" ? "submitTradeCard" : "submitPassCard";
@@ -359,7 +359,7 @@ function renderActions(memberRole) {
   if (view.permissions.canSubmitCase) return renderCaseAction();
   if (view.permissions.canPlayCard) return renderPlayAction();
   if (view.permissions.canChooseTarget) return renderTargetAction();
-  if (view.permissions.canSubmitTrade) return renderSecretSelection("trade");
+  if (view.phase === "trade" && view.pending?.participantIds.includes(view.selfId)) return renderSecretSelection("trade");
   if (view.permissions.canSubmitPass) return renderSecretSelection("passLeft");
   if (view.permissions.canChooseDogSlot) return renderDogPick();
   if (renderPrivateInsight()) return;

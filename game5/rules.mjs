@@ -1,9 +1,19 @@
-export const ACTION_SECONDS = 15;
+export const ACTION_SECONDS = 25;
 export const COLORS = ["red","yellow","green","blue"];
 export const COLOR_NAMES = {red:"红色",yellow:"黄色",green:"绿色",blue:"蓝色"};
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 6;
 export const INITIAL_HAND_SIZE = 7;
+
+const HAND_COLORS = [...COLORS, null];
+const ACTION_CARD_RANK = {skip: 10, reverse: 11, draw2: 12, wild: 13, wild4: 14};
+
+export function compareHandCards(left, right) {
+  const colorOrder = HAND_COLORS.indexOf(left.color) - HAND_COLORS.indexOf(right.color);
+  if (colorOrder) return colorOrder;
+  const rank = card => card.type === "number" ? card.value : ACTION_CARD_RANK[card.type];
+  return rank(left) - rank(right);
+}
 
 export function isDrawCard(card) {
   return card?.type === "draw2" || card?.type === "wild4";

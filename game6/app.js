@@ -6,7 +6,7 @@ import {
   setModeVisibility
 } from "/shared/client/index.js";
 import {
-  ACTION_SECONDS, CAPTURE_ANIMATION_MS, PLACE_ANIMATION_MS, REVEAL_MS, TURN_END_MS, bullheads
+  ACTION_SECONDS, CAPTURE_ANIMATION_MS, PLACE_ANIMATION_MS, REVEAL_MS, TURN_END_MS, bullheads, rowBullheads
 } from "./rules.mjs";
 import { createGame6PartitionRenderer, createGame6RenderModel } from "./render-partitions.mjs";
 
@@ -124,7 +124,8 @@ async function kickPlayer(playerId) {
 function cardHtml(number, options={}) {
   const points = bullheads(number);
   const classes = ["number-card",points >= 5 ? "danger-card" : "",options.selected ? "selected" : ""].filter(Boolean).join(" ");
-  const content = `<strong>${number}</strong><small>${"🐂".repeat(points)}</small>`;
+  const marks = options.row && points > 1 ? `🐂×${points}` : "🐂".repeat(points);
+  const content = `<strong>${number}</strong><small>${marks}</small>`;
   if (!options.button) return `<div class="${classes}">${content}</div>`;
   return `<button class="${classes}" data-card="${number}" ${options.disabled ? "disabled" : ""}>${content}</button>`;
 }
@@ -153,7 +154,45 @@ function renderPlayers(model) {
 }
 
 function renderRows(model) {
-  const current=model.view,existing=new Map([...E.rows.querySelectorAll("[data-row]")].map((node)=>[node.dataset.row,node])),retained=new Set();current.rows.forEach((row,index)=>{const id=String(index),target=current.animation?.rowIndex===index,capture=target&&current.animation?.type==="captureAndPlace",contentKey=JSON.stringify([row,capture,capture?current.animation?.playerId:null,capture?current.animation?.points:null]);let node=existing.get(id);if(!node||node.dataset.contentKey!==contentKey){const replacement=document.createElement("div");replacement.dataset.row=id;replacement.innerHTML=`<div class="row-label">${index+1}</div>${row.map((card)=>cardHtml(card)).join("")}${capture?`<div class="capture-preview">${escapeHtml(playerName(current.animation.playerId))} 收列<br><b>+${current.animation.points} 🐂</b></div>`:""}`;replacement.dataset.contentKey=contentKey;replacement.onclick=()=>{if(view.permissions?.canChooseRow)submit({type:"chooseRow",rowIndex:index});};if(node)node.replaceWith(replacement);node=replacement;}retained.add(id);node.className=`card-row ${current.permissions?.canChooseRow?"choice":""} ${target?"animation-target":""} ${capture?"will-capture":""}`;const at=E.rows.children[index];if(at!==node)E.rows.insertBefore(node,at||null);});[...E.rows.querySelectorAll("[data-row]")].forEach((node)=>{if(!retained.has(node.dataset.row))node.remove();});
+  const current = model.view;
+  const canChoose = Boolean(current.permissions?.canChooseRow);
+  current.rows.forEach((row, index) => {
+    let node = E.rows.children[index];
+    if (!node) {
+      node = document.createElement("div");
+      node.dataset.row = String(index);
+      node.onclick = () => {
+        if (view.permissions?.canChooseRow) submit({type: "chooseRow", rowIndex: index});
+      };
+      node.onkeydown = (event) => {
+        if (view.permissions?.canChooseRow && ["Enter", " "].includes(event.key)) {
+          event.preventDefault();
+          node.click();
+        }
+      };
+      E.rows.append(node);
+    }
+    const animation = current.animation?.rowIndex === index ? current.animation : null;
+    const capture = animation?.type === "captureAndPlace";
+    const key = JSON.stringify([row, capture && animation.playerId, capture && animation.points]);
+    if (node.dataset.contentKey !== key) {
+      const points = rowBullheads(row);
+      node.innerHTML = `<div class="row-label"><b>第${index + 1}列</b><span>${row.length}/5 张</span><strong>${points} 牛头</strong></div>${row.map(card => cardHtml(card, {row: true})).join("")}`;
+      if (capture) node.insertAdjacentHTML("beforeend", `<div class="capture-preview">${escapeHtml(playerName(animation.playerId))} 收列<br><b>+${animation.points} 🐂</b></div>`);
+      node.dataset.contentKey = key;
+    }
+    node.className = ["card-row", canChoose && "choice", animation && "animation-target", capture && "will-capture"].filter(Boolean).join(" ");
+    if (canChoose) {
+      node.setAttribute("role", "button");
+      node.tabIndex = 0;
+      node.setAttribute("aria-label", `收走第${index + 1}列，末张 ${row.at(-1)}，${node.querySelector(".row-label strong").textContent}`);
+    } else {
+      node.removeAttribute("role");
+      node.removeAttribute("tabindex");
+      node.removeAttribute("aria-label");
+    }
+  });
+  while (E.rows.children.length > current.rows.length) E.rows.lastElementChild.remove();
 }
 
 function renderNotice() {
@@ -201,7 +240,7 @@ function renderAction(me, memberRole) {
   } else if (view.phase === "choosingRow") {
     const player = view.players.find((item) => item.id === view.pendingPlayerId);
     E.actionTitle.textContent = view.permissions?.canChooseRow ? "选择收走一列" : `等待 ${player?.name || "玩家"} 选列`;
-    E.actionArea.textContent = view.permissions?.canChooseRow ? "直接点击桌面上的任意一列。" : "该玩家有 15 秒进行选择。";
+    E.actionArea.textContent = view.permissions?.canChooseRow ? "直接点击桌面上的任意一列。" : `该玩家有 ${ACTION_SECONDS} 秒进行选择。`;
   } else if (view.phase === "roundEnd") {
     E.actionTitle.textContent = "本局结束";
     E.actionArea.textContent = view.permissions?.canStart ? "点击左侧“开始下一局”继续游戏。" : "等待房主开始下一局。";

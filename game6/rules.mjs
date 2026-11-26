@@ -1,4 +1,4 @@
-export const ACTION_SECONDS = 15;
+export const ACTION_SECONDS = 30;
 export const REVEAL_MS = 2600;
 export const PLACE_ANIMATION_MS = 1200;
 export const CAPTURE_ANIMATION_MS = 1800;

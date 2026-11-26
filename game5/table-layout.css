@@ -13,3 +13,201 @@
 @container play (max-width:600px) {
   [data-play-layout="game5"] #players { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+#roomPanel #unoStage { order: 0; }
+.uno-invitation { display: none; }
+#roomPanel .uno-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 6px;
+}
+#roomPanel .table { grid-area: auto; grid-template-rows: auto auto; min-width: 0; padding: 8px; }
+#roomPanel .draw-pile { padding: 2px; justify-content: center; }
+#roomPanel .table-stage { min-height: 0; padding: 6px; }
+#roomPanel .table-stage .center { margin: 2px 0 6px; }
+#roomPanel .players-panel { grid-area: auto; min-width: 0; margin: 0; }
+#roomPanel .table-console { color: #352b28; background: #fff9ef; }
+#roomPanel .table-console .eyebrow { display: none; }
+#roomPanel .table-console .action-head { flex-direction: row; align-items: center; }
+#roomPanel .table-console .actions { margin-top: 4px; }
+#roomPanel .table-console .timer {
+  width: 86px;
+  flex-shrink: 0;
+  text-align: center;
+  color: #572580;
+  background: #f2e8fb;
+  border-radius: 8px;
+  padding: 3px 4px 8px;
+}
+#timerText, #colorTimer {
+  font-size: clamp(24px, 2.4vw, 36px);
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+#timerText[data-settling="true"], #colorTimer[data-settling="true"] { font-size: 13px; }
+#roomPanel[data-time-low="true"] .timer, #colorTimer[data-time-low="true"] { color: #9e241e; background: #ffebe5; }
+#roomPanel[data-time-low="true"] #timerBar { background: #bb302a; }
+.color-prompt { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#colorTimer { padding: 4px 8px; border-radius: 8px; color: #572580; background: #f2e8fb; }
+@media (min-width: 820px) and (orientation: landscape) {
+  body[data-play-layout="game5"] #roomPanel:has([data-play-reference][open]) {
+    grid-template: "game reference" minmax(0, 1fr) / minmax(0, 1fr) minmax(240px, 28%);
+  }
+  #roomPanel:has([data-play-reference][open]) #unoStage { grid-area: game; }
+  #roomPanel [data-play-reference][open] { grid-area: reference; }
+  #roomPanel [data-play-reference][open] > aside {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: calc(100% - 36px);
+  }
+}
+@media (max-width: 819px), (max-height: 540px) {
+  #roomPanel #players {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(106px, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding: 3px;
+  }
+  #roomPanel .table-stage :is(.draw-pile, .uno-card) { width: 64px; height: 84px; }
+  #roomPanel .table-console .hand { min-height: 0; padding: 4px 5px; }
+  #roomPanel .table-console .hand .uno-card { height: 80px; }
+  #roomPanel .table-console .action-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+  #roomPanel .table-console .action-panel .action-head { flex: 1; }
+  #roomPanel .table-console .action-panel .actions { margin: 0; }
+}
+@media (max-height: 540px) {
+  #roomPanel .uno-workspace { grid-template-columns: minmax(0,1fr); }
+  #roomPanel .table-console { grid-template-columns: minmax(0,1fr); }
+}
+@media (min-width: 820px) and (min-height: 541px) and (orientation: landscape) {
+  body[data-play-layout="game5"] { --uno-table-width: 1360px; }
+  body[data-play-layout="game5"] #siteHeader.in-room[data-play-header] {
+    width: 100%;
+    max-width: var(--uno-table-width);
+    margin-inline: auto;
+    padding-inline: 0;
+  }
+  #roomPanel #unoStage {
+    grid-template: "status status" auto "roster roster" auto "board controls" minmax(0, 1fr)
+                   / minmax(230px, 0.78fr) minmax(0, 1.22fr);
+    gap: 10px;
+    width: 100%;
+    max-width: var(--uno-table-width);
+    justify-self: center;
+    align-self: center;
+    height: min(100%, 560px);
+  }
+  #roomPanel #unoStage:has(#hand > :nth-child(13)) { height: 100%; }
+  #roomPanel .players-panel {
+    grid-area: roster;
+    padding: 4px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  #roomPanel #players {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 3px;
+  }
+  #roomPanel .player {
+    flex: 0 0 auto;
+    max-width: 210px;
+    padding: 5px 10px;
+    color: #342a2a;
+    background: #fff8eb;
+  }
+  #roomPanel .player.turn { background: #f7eaff; }
+  #players .player.shared-player-presence-anchor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    padding-bottom: 5px !important;
+  }
+  #players .player-name, #players .player-meta { grid-column: 1; }
+  #players .shared-player-presence-rail {
+    position: static !important;
+    grid-area: 1 / 2 / span 2;
+    align-self: center;
+    margin-left: 5px !important;
+  }
+  #roomPanel .player-name { gap: 10px; }
+  #roomPanel .mini-cards { display: none; }
+  #roomPanel .uno-workspace { scrollbar-gutter: auto; align-content: stretch; }
+  #roomPanel .table { grid-template-rows: auto 1fr; }
+  #roomPanel .table-stage :is(.draw-pile, .uno-card) {
+    width: clamp(70px, 7vw, 118px);
+    height: auto;
+    aspect-ratio: 5 / 7;
+  }
+  #roomPanel .table-console {
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+    align-content: stretch;
+    align-items: stretch;
+    max-height: none;
+    overflow: auto;
+    padding: clamp(10px, 1.2vw, 20px);
+    scrollbar-gutter: auto;
+  }
+  #roomPanel .action-panel {
+    border: 0;
+    border-bottom: 1px dashed #947b5e;
+    padding-bottom: 12px;
+  }
+  #roomPanel .hand-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #roomPanel .hand-panel.hidden { display: none; }
+  #roomPanel .hand {
+    --hand-card-width: clamp(68px, 6vw, 96px);
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns: repeat(auto-fill, var(--hand-card-width));
+    grid-auto-rows: calc(var(--hand-card-width) * 1.4);
+    gap: 10px;
+    align-content: start;
+    min-height: 0;
+    overflow: auto;
+    padding: 10px 5px;
+  }
+  #roomPanel .hand .uno-card { width: 100%; height: 100%; }
+
+  #roomPanel[data-phase="lobby"] #unoStage {
+    grid-template: "invitation" auto "status" auto "roster" auto / minmax(0, 1fr);
+    align-self: center;
+    justify-self: center;
+    width: min(800px, 100%);
+    height: auto;
+    overflow: auto;
+    padding: clamp(18px, 3vw, 42px);
+    border: 1px solid #715880;
+    border-radius: 20px;
+    background: linear-gradient(130deg, #382941, #251e2e);
+  }
+  #roomPanel[data-phase="lobby"] :is(.uno-workspace, .table-console) { display: none; }
+  #roomPanel[data-phase="lobby"] .uno-invitation {
+    grid-area: invitation;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: #fff9ef;
+  }
+  .uno-invitation h2 { margin: 0; font-size: clamp(24px, 2.3vw, 36px); }
+  .uno-invitation p { margin: 6px 0; color: #e2d6e5; }
+  #invitationCode {
+    padding: 8px 16px;
+    border-radius: 12px;
+    color: #382719;
+    background: #ffda83;
+    font: 800 clamp(24px, 2.5vw, 38px) monospace;
+    letter-spacing: .12em;
+    user-select: all;
+  }
+}

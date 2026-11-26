@@ -81,22 +81,22 @@
     <section class="game-layout hidden" id="roomPanel" data-play-room>
 <section data-play-workspace>
 <div class="notice" id="notice" data-play-status>等待玩家加入。</div>
-<div class="rows-workspace" data-play-board><div class="panel player-panel">
-          <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
-          <div class="player-list" id="playerList"></div>
-        </div><div class="panel reveal-panel hidden" id="revealPanel">
-          <div class="section-head">
-            <div><p class="eyebrow">REVEALED PLAYS</p><h2>本轮公开出牌</h2></div>
-            <span class="reveal-progress" id="revealProgress"></span>
-          </div>
-          <div class="revealed-plays" id="revealedPlays"></div>
-        </div><div class="panel board-panel" id="boardPanel">
+<div class="rows-workspace" data-play-board><div class="panel board-panel" id="boardPanel">
           <div class="section-head">
             <div><p class="eyebrow">CARD ROWS</p><h2>桌面牌列</h2></div>
             <div class="badges"><span id="roundBadge">第 0 局</span><span id="turnBadge">第 0 / 10 回合</span></div>
           </div>
 
           <div class="rows" id="rows"></div>
+        </div><div class="panel reveal-panel hidden" id="revealPanel">
+          <div class="section-head">
+            <div><p class="eyebrow">REVEALED PLAYS</p><h2>本轮公开出牌</h2></div>
+            <span class="reveal-progress" id="revealProgress"></span>
+          </div>
+          <div class="revealed-plays" id="revealedPlays"></div>
+        </div><div class="panel player-panel">
+          <div class="section-head"><h2>玩家</h2><span id="playerCountBadge">0 / 0</span></div>
+          <div class="player-list" id="playerList"></div>
         </div><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
         <svg class="presentation-trail-layer" aria-hidden="true">
           <defs><marker id="bullheadsTrailArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z"></path></marker></defs>
@@ -130,7 +130,7 @@
             <h3>开局与目标</h3>
             <p>支持 2～10 人。每局使用 1～104 号牌，每人获得 10 张手牌，并翻开 4 张牌建立四条牌列。每局进行 10 回合，牛头分跨局累计；有人达到 66 分或以上时整场结束，累计牛头最少者获胜，同分并列。</p>
             <h3>秘密选牌</h3>
-            <p>每回合所有玩家在 15 秒内秘密选择一张手牌。全部确认后，选牌会先同时公开，再由服务器按照牌面从小到大逐张结算。选牌超时或选择阶段掉线时，服务器会从该玩家手牌中随机选择。</p>
+            <p>每回合所有玩家在 30 秒内秘密选择一张手牌。全部确认后，选牌会先同时公开，再由服务器按照牌面从小到大逐张结算。选牌超时或选择阶段掉线时，服务器会从该玩家手牌中随机选择。</p>
             <h3>放牌与收列</h3>
             <p>牌应接在“末张小于它”的牌列中末张最大的一列。若放入后成为该列第六张牌，出牌者收走原有五张，新牌成为该列第一张；若出的牌小于所有牌列末张，玩家必须自行选择一列收走，选列超时或掉线时由服务器随机决定。</p>
             <h3>牛头分</h3>

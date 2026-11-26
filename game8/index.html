@@ -85,7 +85,12 @@
 <div class="market-workspace" data-play-board><section class="panel supply">
           <div class="section-head"><div><p class="eyebrow">POKÉ BALL SUPPLY</p><h2>精灵球供应</h2></div><span class="hint">实体球上限 10</span></div>
           <div id="tokens" class="tokens"></div>
-        </section><section class="special-row">
+        </section>
+        <div class="market-switch" role="group" aria-label="选择市场">
+          <button type="button" aria-controls="markets" aria-pressed="true">普通市场</button>
+          <button type="button" aria-controls="specialMarket" aria-pressed="false">稀有与传说</button>
+        </div>
+        <section class="special-row" id="specialMarket" hidden>
           <div class="market-group rare"><div class="special-deck"><b>稀有</b><span id="rareCount"></span></div><div id="rareMarket" class="cards single"></div></div>
           <div class="market-group legendary"><div class="special-deck"><b>传说／幻之</b><span id="legendCount"></span></div><div id="legendMarket" class="cards single"></div></div>
         </section><section id="markets" class="markets"></section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">

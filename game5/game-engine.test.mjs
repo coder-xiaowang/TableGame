@@ -17,6 +17,7 @@ function rig(state,{hands,deck=[],discard=card("top","red","number",5),currentIn
 
 test("server owns 108 cards and redacts deck plus every opponent hand",()=>{
   const state=readyState();
+  assert.equal(state.deadline,26000); // started at 1000 ms
   const cards=[...state.deck,...state.discard,...state.players.flatMap((player)=>player.hand)];
   assert.equal(cards.length,108);assert.equal(new Set(cards.map((item)=>item.id)).size,108);
   assert.equal(state.discard[0].type,"number");
@@ -31,7 +32,7 @@ test("a playable draw grants a fresh deadline and only that card may be played",
   const old=card("old","red","number",3);const drawn=card("drawn","red","number",9);
   rig(state,{hands:[[old],[card("other","blue","number",1)]],deck:[drawn]});
   engine.applyAction(state,"p1",{type:"draw"},{now:3000,random:()=>0});
-  assert.equal(state.drawnCardId,"drawn");assert.equal(state.deadline,18000);
+  assert.equal(state.drawnCardId,"drawn");assert.equal(state.deadline,28000);
   const view=engine.buildView(state,"p1");assert.deepEqual(view.playableCardIds,["drawn"]);assert.equal(view.permissions.canPass,true);
   assert.throws(()=>engine.applyAction(state,"p1",{type:"play",cardId:"old"},{now:3100}),/不能打出/);
   engine.applyAction(state,"p1",{type:"play",cardId:"drawn"},{now:3200});
@@ -120,7 +121,7 @@ test("kicking the active player returns the hidden hand to deck and follows dire
   const returned=state.players[1].hand.length;const deckBefore=state.deck.length;
   engine.removePlayer(state,"p1","p2",{now:3000,random:()=>0});
   assert.equal(state.players.length,2);assert.equal(state.players[state.currentIndex].id,"p1");
-  assert.equal(state.deck.length,deckBefore+returned);assert.equal(state.deadline,18000);
+  assert.equal(state.deck.length,deckBefore+returned);assert.equal(state.deadline,28000);
 });
 
 test("recycling preserves physical cards and keeps the top discard",()=>{
