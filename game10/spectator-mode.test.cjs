@@ -25,7 +25,6 @@ function openEvents(base, session) {
 }
 async function launch(options = {}) {
   const engine = await import("./server/game-engine.mjs");
-  await engine.initialize();
   const store = options.roomStore || createMemoryRoomStore();
   const server = startServer({ gameRoot:__dirname, sharedRoot:path.resolve(__dirname,"../shared"), engine, protocolVersion:3, defaultPort:0, spectatorsEnabled:true, spectatorLimit:10, roomStore:store });
   await new Promise((resolve) => server.once("listening",resolve));

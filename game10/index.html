@@ -66,7 +66,6 @@
           <p id="notice" class="notice">等待玩家加入房间</p>
           <div class="board-stage">
             <div id="board" class="mountain-board"></div>
-            <canvas id="diceCanvas" class="dice-canvas" aria-label="三维物理骰子投掷区域"></canvas>
           </div>
           <div class="timer-box"><div><span>行动时间</span><b id="timerText">--</b></div><div class="shared-timer-track"><div id="timerBar" class="shared-timer-bar"></div></div></div>
         </section><section id="resultPanel" class="result-panel panel hidden"><p class="eyebrow">SUMMIT REACHED</p><h2 id="winnerText">本局结束</h2><div id="resultList"></div><div id="resultActions" class="result-actions hidden"><button id="playAgainButton" class="primary" type="button">再来一局</button></div></section><div id="presentationEffects" class="presentation-effects" aria-live="polite" aria-atomic="true">
@@ -79,15 +78,15 @@
           </div>
         </div></div>
 <aside class="action-panel panel" data-play-controls>
-          <div class="dice-title"><span>四颗骰子</span><b id="diceTotal"></b></div>
-          <div id="diceArea" class="dice-area"><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span><span class="die empty">?</span></div>
+          <div class="dice-title"><span>骰盘</span><b id="diceHint"></b></div>
+          <div id="diceArea" class="dice-area" role="img" aria-label="等待掷骰"></div>
           <div id="actionArea" class="action-area"></div>
         </aside>
 </section><details data-play-reference><summary>玩家资料、规则与记录</summary>
 <aside class="side-panel panel">
           <div class="panel-title"><span>登山队</span><b id="playerCountBadge">0 / 3</b></div>
           <div id="playerList" class="player-list"></div>
-          <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>本回合</span></div>
+          <div class="legend"><span><i class="tent-dot"></i>已扎营</span><span><i class="runner-dot"></i>登山者</span><span><i class="footprint-key"></i>脚印是尚未扎营的步数</span></div>
           <details class="rules-card">
             <summary><span>详细攀登规则</span><span class="fold-hint">展开</span></summary>
             <div class="rule-details">
@@ -101,7 +100,7 @@
               <p>如果一次掷骰没有任何合法组合，玩家立即爆掉：本回合所有临时进度丢失，但此前已经扎营的永久进度不受影响。</p>
               <h3>倒计时与骰子结果</h3>
               <p>各操作阶段限时30秒：掷骰阶段超时自动掷骰，选择阶段超时采用第一项合法组合，抉择阶段超时自动扎营。</p>
-              <p>骰子随机种子和最终结果由服务器产生；浏览器只按相同种子复播物理动画，不能提交或修改骰面。</p>
+              <p>掷骰后，骰盘显示四颗骰子，点选路线即可按标明的步数攀登。</p>
             </div>
           </details>
           <div class="game-log">

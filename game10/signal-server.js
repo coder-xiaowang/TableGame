@@ -9,7 +9,6 @@ const databasePath = process.env.GAME10_DB_PATH
 
 import("./server/game-engine.mjs")
   .then(async (engine) => {
-    await engine.initialize();
     return startAuthoritativeGameServer({
       gameRoot: __dirname,
       sharedRoot: path.resolve(__dirname, "../shared"),

@@ -35,7 +35,7 @@ test("登山队侧栏按规则、记录和旁观排序，行动面板不再混�
   assert.doesNotMatch(html, /<details class="rules-card"[^>]*\sopen(?:\s|>)/);
   assert.ok(html.indexOf('id="logList"') < actionStart || html.indexOf('id="logList"') > actionEnd);
   assert.match(html, /各操作阶段限时30秒/);
-  assert.match(html, /浏览器只按相同种子复播物理动画/);
+  assert.match(html, /点选路线即可按标明的步数攀登/);
 });
 
 test("进入房间时展示标题工具且旁观组件不依赖身份横幅", () => {
@@ -58,7 +58,7 @@ test("移动端路线、吸附行动区和辅助侧栏依次展示", () => {
   assert.match(css, /\.rule-details \{ max-height:58vh; overflow:auto/);
 });
 
-test("权威演出层复用物理骰子并支持积压追赶", () => {
+test("骰盘展示权威骰面并支持积压追赶", () => {
   const html = read("index.html");
   const script = read("app.js");
   const css = read("styles.css");
@@ -66,8 +66,9 @@ test("权威演出层复用物理骰子并支持积压追赶", () => {
   assert.match(html, /id="presentationEffects"/);
   assert.match(html, /id="presentationTrail"/);
   assert.match(script, /createPresentationTimeline/);
-  assert.match(script, /presentation\?\.sync\(nextView\.presentationEvents\)/);
-  assert.match(script, /物理骰子已经负责掷骰与落定/);
+  assert.match(script, /presentationEvents\?\.filter/);
+  assert.doesNotMatch(html, /diceCanvas/);
+  assert.match(css, /prefers-reduced-motion:reduce\) \{ \.die\.landing \{ animation:none/);
   assert.match(script, /catchUpThreshold:2/);
   assert.match(script, /severeBacklogThreshold:5/);
   assert.match(css, /\.presentation-effects \{[^}]*pointer-events:none/);
@@ -80,11 +81,11 @@ test("权威视图按房间、玩家、山道、骰子、决策和演出分区�
   assert.match(script, /createGame10PartitionRenderer/);
   assert.match(script, /createGame10RenderModel/);
   assert.match(script, /room:renderRoom,status:renderStatus,players:renderPlayers/);
-  assert.match(script, /board:\(model\)=>renderBoard\(model\.view\),physics:\(model\)=>renderPhysicsDice\(model\.view\)/);
+  assert.match(script, /board:\(model\)=>renderBoard\(model\.view\),dice:renderDice/);
   assert.match(script, /spectatorUi\.render\(view\)/);
   assert.doesNotMatch(script, /function renderLegacy/);
   assert.match(script, /existing = new Map\(\[\.\.\.E\.playerList\.querySelectorAll/);
   assert.match(script, /existing = new Map\(\[\.\.\.E\.board\.querySelectorAll/);
-  assert.match(partitions, /"room", "status", "players", "board", "physics", "dice"/);
+  assert.match(partitions, /"room", "status", "players", "board", "dice"/);
   assert.match(partitions, /"decision", "log", "countdown", "result"/);
 });

@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { simulateDiceRollReady } from "./dice-physics.js";
 import { COLUMN_LENGTHS } from "./rules.js";
 import * as engine from "./server/game-engine.mjs";
 
-await engine.initialize();
 
 function readyLobby() {
   const state = engine.createLobby({
@@ -48,28 +46,28 @@ test("game10 server selects the first player and owns the action deadline", () =
   );
 });
 
-test("game10 server physics produces dice and legal public options", () => {
+test("server delivers dice and choices together to players and spectators", () => {
   const state = readyLobby();
   startWithHost(state);
-  engine.applyAction(state, "host", { type: "roll" }, { now: 200, random: () => 0.5 });
-  assert.equal(state.turnStage, "rolling");
-  assert.equal(state.pendingDice.length, 4);
-  assert.equal(state.dice.length, 0);
-  assert.ok(state.physicsSeed > 0);
-  assert.ok(state.revealAt > 200);
-  assert.deepEqual(state.pendingDice, simulateDiceRollReady(state.physicsSeed).results);
-
-  const publicRolling = engine.buildView(state, "p2");
-  assert.equal("pendingDice" in publicRolling, false);
-  assert.deepEqual(publicRolling.dice, []);
-  assert.equal(engine.handleTimeout(state, { now: state.revealAt }), true);
-  assert.equal(state.turnStage, "settled");
-  assert.equal(state.dice.length, 4);
-  assert.ok(state.options.length > 0);
-  const settledRevealAt = state.revealAt;
-  assert.equal(engine.handleTimeout(state, { now: settledRevealAt }), true);
+  const rolls = [2, 3, 4, 5];
+  engine.applyAction(state, "host", { type: "roll", dice: [6,6,6,6] }, {
+    now: 200, random: () => (rolls.shift() - 0.5) / 6
+  });
   assert.equal(state.turnStage, "choose");
-  assert.equal(state.deadline, settledRevealAt + engine.ACTION_SECONDS * 1000);
+  assert.equal(state.deadline, 200 + engine.ACTION_SECONDS * 1000);
+  for (const view of [engine.buildView(state, "p2"), engine.buildSpectatorView(state)]) {
+    assert.deepEqual(view.dice, [2,3,4,5]);
+    assert.deepEqual(view.options.map(option => option.moves), [[5,9],[6,8],[7,7]]);
+    assert.equal("pendingDice" in view, false);
+  }
+});
+
+test("a double advances only one step from a saved camp near the summit", () => {
+  const state = readyLobby();
+  startWithHost(state);
+  state.players[0].progress = { 4: 6 };
+  engine.applyAction(state, "host", { type: "roll" }, { now: 200, random: () => 0.25 });
+  assert.deepEqual(state.options.map(option => option.moves), [[4]]);
 });
 
 test("game10 choice and camp are validated and committed by the server", () => {
@@ -101,7 +99,7 @@ test("game10 timeout chooses, camps and rolls without a connected player", () =>
   assert.equal(state.currentIndex, 1);
   state.deadline = 1000;
   assert.equal(engine.handleTimeout(state, { now: 1000, random: () => 0.25 }), true);
-  assert.equal(state.turnStage, "rolling");
+  assert.equal(state.turnStage, "choose");
 });
 
 test("game10 bust discards temporary progress", () => {
@@ -176,8 +174,6 @@ test("game10 authoritative presentation follows roll, climb, camp and summit sta
   assert.equal(state.presentationEvents.at(-1).kind, "game-start");
 
   engine.applyAction(state, "host", { type: "roll" }, { now: 200, random: () => 0.5 });
-  assert.equal(state.presentationEvents.at(-1).kind, "roll-start");
-  engine.handleTimeout(state, { now: state.revealAt });
   assert.equal(state.presentationEvents.at(-1).kind, "dice-settled");
 
   state.turnStage = "choose";
@@ -198,14 +194,17 @@ test("game10 authoritative presentation follows roll, climb, camp and summit sta
 test("game10 presentation prioritizes bust and groups camp with summit claims", () => {
   const state = readyLobby();
   startWithHost(state, 100);
-  state.turnProgress = { 7: 2 };
+  state.players[0].progress = { 7: 1 };
+  state.turnProgress = { 7: 2, 9: 3 };
   state.turnStage = "settled";
   state.options = [];
   state.revealAt = 300;
   engine.handleTimeout(state, { now: 300 });
   const busted = state.presentationEvents.find((event) => event.kind === "turn-busted");
   assert.equal(busted.priority, 4);
-  assert.deepEqual(busted.columns, [7]);
+  assert.deepEqual(busted.columns, [7, 9]);
+  assert.deepEqual(busted.lostTrails, [{column:7,camp:1,top:2},{column:9,camp:0,top:3}]);
+  assert.deepEqual(state.players[0].progress, {7:1});
 
   state.currentIndex = 0;
   state.turnStage = "decision";

@@ -1,10 +1,12 @@
 [data-play-layout="game10"] .board-panel { min-width: 0; padding: 8px; overflow: visible; }
 [data-play-layout="game10"] .mountain-board { min-height: 460px; }
 [data-play-layout="game10"] .action-panel[data-play-controls] { grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); padding: 8px; }
-[data-play-layout="game10"] .dice-title { grid-column: 1 / -1; margin-bottom: 4px; }
-[data-play-layout="game10"] .dice-area { margin: 0; }
-[data-play-layout="game10"] .action-area { margin: 0; }
+[data-play-layout="game10"] .dice-title { grid-column: 1; grid-row: 1; margin: 0; padding: 0; gap: 8px; align-items: baseline; }
+[data-play-layout="game10"] .dice-area { grid-column: 1; grid-row: 2; margin: 0; }
+[data-play-layout="game10"] .action-area { grid-column: 2; grid-row: 1 / 3; margin: 0; align-content: center; }
 @container play (max-width:650px) {
   [data-play-layout="game10"] .action-panel[data-play-controls] { grid-template-columns: 1fr; }
+  [data-play-layout="game10"] .action-area { grid-column: 1; grid-row: 3; min-height: 0; grid-template-columns: repeat(auto-fit,minmax(min(92px,100%),1fr)); }
+  [data-play-layout="game10"] .choice-action { flex-direction: column; justify-content: center; gap: 2px; }
   [data-play-layout="game10"] .mountain-board { min-height: 410px; }
 }

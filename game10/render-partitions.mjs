@@ -1,7 +1,7 @@
 "use strict";
 
 const PARTITIONS = Object.freeze([
-  "room", "status", "players", "board", "physics", "dice",
+  "room", "status", "players", "board", "dice",
   "decision", "log", "countdown", "result"
 ]);
 const key = (value) => JSON.stringify(value);
@@ -33,10 +33,9 @@ export function createGame10RenderModel(view,{memberRole=view?.roomRole,roomCode
     status:key([memberRole,view.phase,view.currentIndex,current?.id||null,current?.name||"",view.turnStage,view.dice]),
     players:key([view.selfId,view.phase,view.currentIndex,permissions.canKick,
       players.map((player)=>[player.id,player.name,player.isHost,player.connected,player.color,player.claimed])]),
-    board:key([view.phase,view.turnProgress,view.closed,
+    board:key([view.phase,view.currentIndex,view.turnProgress,view.closed,
       players.map((player)=>[player.id,player.name,player.color,player.progress])]),
-    physics:key([view.phase,view.turnStage,view.rollId,view.physicsSeed,view.revealAt]),
-    dice:key([view.turnStage,view.dice]),
+    dice:key([roomCode,view.phase,view.rollId,view.dice,view.lastBust]),
     decision:decisionContext.key,
     log:key(view.logs||[]),
     countdown:key([view.phase,view.deadline||0]),

@@ -36,9 +36,8 @@ async function closeServer(server) {
   });
 }
 
-test("game10 authoritative server owns physical dice and turn permissions", async (context) => {
+test("game10 authoritative server owns dice results and turn permissions", async (context) => {
   const engine = await import("./server/game-engine.mjs");
-  await engine.initialize();
   const server = startAuthoritativeGameServer({
     gameRoot: path.resolve(__dirname),
     sharedRoot: path.resolve(__dirname, "../shared"),
@@ -117,12 +116,12 @@ test("game10 authoritative server owns physical dice and turn permissions", asyn
     clientId: nonActor.clientId,
     resumeToken: nonActor.resumeToken
   });
-  assert.equal(actorView.payload.view.turnStage, "rolling");
-  assert.ok(actorView.payload.view.physicsSeed > 0);
-  assert.ok(actorView.payload.view.revealAt > Date.now());
-  assert.equal("pendingDice" in actorView.payload.view, false);
-  assert.equal(otherView.payload.view.physicsSeed, actorView.payload.view.physicsSeed);
-  assert.equal(otherView.payload.view.revealAt, actorView.payload.view.revealAt);
+  assert.equal(actorView.payload.view.turnStage, "choose");
+  assert.equal(actorView.payload.view.dice.length, 4);
+  assert.ok(actorView.payload.view.options.length);
+  assert.ok(actorView.payload.view.deadline > Date.now());
+  assert.deepEqual(otherView.payload.view.dice, actorView.payload.view.dice);
+  assert.deepEqual(otherView.payload.view.options, actorView.payload.view.options);
   assert.deepEqual(otherView.payload.view.players, actorView.payload.view.players);
   assert.deepEqual(otherView.payload.view.turnProgress, actorView.payload.view.turnProgress);
   assert.equal(otherView.payload.view.permissions.canManage, nonActor.clientId === "host");

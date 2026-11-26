@@ -279,6 +279,69 @@ async function run() {
       assert.deepEqual(browser.errors, []);
       results.push({game:'game19', scenario:'seven-player ranged attack and hand clearance'});
     }
+    if (include('game10')) {
+      const roll = await room('game10', 2, state => { state.currentIndex = 0; });
+      await roll.begin();
+      await tap('[data-action="roll"]');
+      await until(() => evaluate("!!document.querySelector('[data-choice]')"), 'double ready to choose');
+      assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('#diceArea .die'), d => d.children.length)"), [2,2,2,2]);
+      assert.match(await evaluate("document.querySelector('[data-choice]').textContent"), /4 号线走 2 步/);
+      await tap('[data-choice="4-4"]');
+      await until(() => roll.state.turnProgress[4] === 2, 'double advances two steps');
+      results.push({game:'game10',scenario:'roll and choose a double in the tray'});
+
+      const camp = await room('game10', 2, state => {
+        state.currentIndex = 0;
+        state.players[0].progress = {7:2};
+        state.turnProgress = {7:4};
+        state.turnStage = 'choose';
+        state.dice = [3,4,4,5];
+        state.options = [{key:'7-9', pair:[7,9], moves:[7,9]}];
+      });
+      await camp.begin();
+      assert.equal(await evaluate("document.querySelector('[data-choice]').innerText.replace(/\\s+/g,' ')"), '7、9 号线 各走 1 步');
+      await tap('[data-choice="7-9"]');
+      const steps = column => evaluate(`Array.from(document.querySelectorAll('[data-column="${column}"] .trail-step'), cell => Number(cell.dataset.step))`);
+      await until(() => evaluate("document.querySelectorAll('.trail-step').length === 4"), 'footprints after choosing 7 and 9');
+      assert.deepEqual(await steps(7), [5,4,3]);
+      assert.deepEqual(await steps(9), [1]);
+      await delay(1200);
+      for (const [width,height] of [[390,844],[1024,768]]) {
+        await viewport(width,height);
+        await evaluate("document.querySelector('#board').scrollIntoView({block:'center',behavior:'instant'})");
+        const shot = await send('Page.captureScreenshot',{format:'png'});
+        fs.writeFileSync(path.join(output,`cantstop-footprints-${width}.png`),Buffer.from(shot.data,'base64'));
+      }
+      await tap('[data-action="stop"]');
+      await until(() => evaluate(`!document.querySelector('.trail-step') && !!document.querySelector('[data-column="7"] [data-step="5"] .camp')`), 'footprints become camp');
+      assert.deepEqual(camp.state.players[0].progress, {7:5,9:1});
+      assert.deepEqual(browser.errors, []);
+      results.push({game:'game10',scenario:'temporary footsteps from camp and from the base, then camp'});
+
+      const bust = await room('game10', 2, state => {
+        state.currentIndex = 0;
+        state.players[0].progress = {7:2};
+        state.turnProgress = {7:5,9:1,11:2};
+        state.turnStage = 'decision';
+        state.options = [];
+      });
+      await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+      try {
+        await bust.begin();
+        await until(() => evaluate("document.querySelectorAll('.trail-step').length === 6"), 'three active routes');
+        await tap('[data-action="roll"]');
+        await until(() => evaluate("document.querySelectorAll('.trail-retreat').length === 6"), 'bust retraces only the lost steps');
+        assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('#diceArea .die'), d => d.children.length)"), [2,2,2,2]);
+        assert.match(await evaluate("document.querySelector('#diceHint').textContent"), /7、9、11 号线/);
+        assert.deepEqual(await steps(7), []);
+        assert.deepEqual(bust.state.players[0].progress, {7:2});
+        await until(() => evaluate("!document.querySelector('.trail-retreat')"), 'retreat clears');
+        assert.deepEqual(browser.errors, []);
+      } finally {
+        await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+      }
+      results.push({game:'game10',scenario:'bust retreats to saved camp'});
+    }
     if (include('game13')) {
       const r = await room('game13', 4, state => {
         const index = state.deck.findIndex(card => card.power === 'swap');

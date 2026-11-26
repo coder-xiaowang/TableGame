@@ -70,7 +70,6 @@ test("game10 restores a chosen climb and action deduplication after restart", as
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tablegame-game10-restart-"));
   const filename = path.join(directory, "game10.sqlite");
   const engine = await import("./server/game-engine.mjs");
-  await engine.initialize();
   let running = null;
   context.after(async () => {
     if (running?.server.listening) await closeServer(running.server);

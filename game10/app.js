@@ -3,26 +3,21 @@
 import {
   bindRoomCodeInput, cleanPlayerName, createAuthoritativeRoomClient, createCountdown, createRoomEntryController,
   createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
-  renderCountdown, serverNow, setHidden, setModeVisibility
+  renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { COLUMN_LENGTHS } from "./rules.js";
-import { createDicePhysics, simulateDiceRoll } from "./dice-physics.js";
 import { createGame10PartitionRenderer, createGame10RenderModel } from "./render-partitions.mjs";
 
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 30;
 const $ = (id) => document.getElementById(id);
-const E = Object.fromEntries(["siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "diceCanvas", "timerText", "timerBar", "diceArea", "diceTotal", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton", "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"].map((id) => [id, $(id)]));
+const E = Object.fromEntries(["siteHeader", "connectionStatus", "roomHeaderTools", "setupPanel", "roomPanel", "hostModeButton", "guestModeButton", "hostSetup", "guestSetup", "hostNameInput", "guestNameInput", "playerCountSelect", "createRoomButton", "joinRoomButton", "roomCodeInput", "joinIntentField", "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "endGameButton", "playerCountBadge", "playerList", "phaseBadge", "turnLabel", "notice", "board", "timerText", "timerBar", "diceArea", "diceHint", "actionArea", "toggleLogButton", "logList", "resultPanel", "winnerText", "resultList", "resultActions", "playAgainButton", "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"].map((id) => [id, $(id)]));
 
 let mode = "host";
 let view = null;
-let dicePhysics = null;
-let dicePhysicsPromise = null;
-let activePhysicsRollId = 0;
 let spectatorUi = null;
 let presentation = null;
 let partitionRenderer = null;
-const simulationCache = new Map();
 const sessions = createSessionStore({ gameId: "cant-stop" });
 const countdown = createCountdown({ onTick(value) { renderCountdown({ textElement: E.timerText, barElement: E.timerBar }, value); } });
 const room = createAuthoritativeRoomClient({
@@ -30,7 +25,7 @@ const room = createAuthoritativeRoomClient({
   sessionStore: sessions,
   onStatus(status) { renderConnectionStatus(E.connectionStatus, status, room.snapshot().roomCode); },
   handlers: {
-    onView(nextView) { view = nextView; enterRoom(); render(); presentation?.sync(nextView.presentationEvents); },
+    onView(nextView) { view = nextView; enterRoom(); render(); presentation?.sync(nextView.presentationEvents?.filter(event => !["roll-start", "dice-settled"].includes(event.kind))); },
     onKicked() { spectatorUi?.handleSessionEnded("kicked"); },
     onRoomExpired() { spectatorUi?.handleSessionEnded("room_expired"); }
   }
@@ -119,15 +114,19 @@ function renderBoard(view) {
   </div>`;
   const routes = Object.entries(COLUMN_LENGTHS).map(([key, length]) => {
     const column = Number(key); const owner = view.players.find((player) => player.id === view.closed[column]);
+    const camp = view.players[view.currentIndex]?.progress[column] || 0;
+    const top = view.phase === "playing" && !owner ? view.turnProgress[column] || 0 : 0;
     const cells = Array.from({ length }, (_, index) => {
       const step = length - index;
       const drift = Math.round(Math.sin((column * 1.7 + step) * 1.35) * 7);
-      return `<div class="route-cell" style="--drift:${drift}px;--tilt:${(drift / 2).toFixed(1)}deg;--step:${index}">${markerHtml(view, column, step)}</div>`;
+      const footprint = step > camp && step <= top;
+      return `<div class="route-cell${footprint ? " trail-step" : ""}" data-step="${step}" style="--drift:${drift}px;--tilt:${(drift / 2).toFixed(1)}deg;--step:${index}">${markerHtml(view, column, step)}</div>`;
     }).join("");
     const summit = owner
       ? `<span class="claim-flag" style="--flag:${owner.color}" title="${escapeHtml(owner.name)}占领"><i></i></span>`
       : '<span class="summit-peak">◆</span>';
-    return `<div class="route ${owner ? "claimed" : ""}" data-column="${column}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
+    const label = `${column} 号路线${top > camp ? `，本回合 ${top - camp} 步尚未扎营` : ""}`;
+    return `<div class="route ${owner ? "claimed" : ""}" role="group" aria-label="${label}" data-column="${column}" style="--route:${length};--owner:${owner?.color || "transparent"}"><div class="summit">${summit}</div>${cells}<b><span>${column}</span></b></div>`;
   });
   let sceneryElement = E.board.querySelector(":scope > .mountain-scenery");
   if (!sceneryElement) {
@@ -140,7 +139,7 @@ function renderBoard(view) {
     const column = Number(Object.keys(COLUMN_LENGTHS)[index]);
     const contentKey = JSON.stringify([
       view.closed[column] || null,
-      view.turnProgress[column] || 0,
+      view.phase === "playing" ? view.turnProgress[column] || 0 : 0,
       view.turnProgress[column] ? [view.players[view.currentIndex]?.id,view.players[view.currentIndex]?.name,view.players[view.currentIndex]?.color] : null,
       view.players.map((player) => [player.id, player.name, player.color, player.progress[column] || 0])
     ]);
@@ -159,33 +158,6 @@ function renderBoard(view) {
     existing.delete(column);
   });
   existing.forEach((element) => element.remove());
-}
-function getSimulation(seed) {
-  const key = String(Number(seed) >>> 0);
-  if (!simulationCache.has(key)) simulationCache.set(key, simulateDiceRoll(Number(seed)));
-  return simulationCache.get(key);
-}
-function getDicePhysics() {
-  if (dicePhysics) return Promise.resolve(dicePhysics);
-  if (!dicePhysicsPromise) dicePhysicsPromise = createDicePhysics({ canvas:E.diceCanvas }).then((value) => (dicePhysics = value));
-  return dicePhysicsPromise;
-}
-function renderPhysicsDice(view) {
-  const visible = view.phase === "playing" && ["rolling", "settled"].includes(view.turnStage) && view.physicsSeed;
-  if (!visible) { activePhysicsRollId = 0; dicePhysics?.hide(); return; }
-  if (activePhysicsRollId === view.rollId) return;
-  activePhysicsRollId = view.rollId;
-  Promise.all([getDicePhysics(), getSimulation(view.physicsSeed)]).then(([physics, simulation]) => {
-    if (activePhysicsRollId !== view.rollId) return;
-    const elapsedMs = view.turnStage === "rolling"
-      ? Math.max(0, simulation.durationMs - Math.max(0, view.revealAt - serverNow()))
-      : simulation.durationMs;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) physics.renderFinal(simulation);
-    else physics.play(simulation, { elapsedMs });
-  }).catch((error) => {
-    E.diceCanvas.classList.remove("visible");
-    E.connectionStatus.title = `WebGL 骰子不可用：${error.message}`;
-  });
 }
 function renderRoom(model) {
   const { view, roomCode } = model;
@@ -209,8 +181,9 @@ function renderStatus(model) {
   else if (view.turnStage === "preparing") E.notice.textContent = `${current.name} 正在将骰子撒入投掷盘……`;
   else if (view.turnStage === "rolling") E.notice.textContent = `${current.name} 的骰子正在投掷盘中碰撞翻滚……`;
   else if (view.turnStage === "settled") E.notice.textContent = `骰子已经停稳：${view.dice.join("、")}`;
+  else if (view.turnStage === "decision") E.notice.textContent = "脚印是这回合走过的步数，扎营就能保住。";
   else if (!decisionContext.myTurn) E.notice.textContent = `等待 ${current.name} ${view.turnStage === "choose" ? "选择骰子组合" : view.turnStage === "decision" ? "继续攀登或扎营" : "掷骰子"}`;
-  else E.notice.textContent = { roll:"轮到你了，掷出四颗骰子开始攀登", choose:"选择一种可用的骰子组合", decision:"继续掷骰冒险，或扎营保住进度" }[view.turnStage] || "";
+  else E.notice.textContent = { roll:"轮到你了，掷出四颗骰子开始攀登", choose:"选择一种可用的骰子组合" }[view.turnStage] || "";
 }
 
 function renderPlayers(model) {
@@ -239,22 +212,42 @@ function renderPlayers(model) {
   existing.forEach((element) => element.remove());
 }
 
-function renderDice(model) {
-  const { view } = model;
-  const publicDice = ["preparing","rolling"].includes(view.turnStage) ? ["?","?","?","?"] : (view.dice.length ? view.dice : ["?","?","?","?"]);
-  while (E.diceArea.children.length < 4) E.diceArea.append(document.createElement("span"));
-  [...E.diceArea.children].forEach((dieElement,index) => {
-    if (index >= 4) return dieElement.remove();
-    const die=publicDice[index]; dieElement.className=`die ${die === "?" ? "empty" : ""}`; dieElement.textContent=die;
-  });
-  E.diceTotal.textContent = view.dice.length && view.turnStage !== "rolling" ? `总和 ${view.dice.reduce((sum,value)=>sum+value,0)}` : "";
+// Positions in a 3 × 3 face, from the top left.
+const PIPS = [[], [5], [1,9], [1,5,9], [1,3,7,9], [1,3,5,7,9], [1,3,4,6,7,9]];
+
+function renderDice({ view, roomCode }) {
+  const tray = E.diceArea;
+  const liveRoll = tray.dataset.room === roomCode && Number(tray.dataset.roll) < view.rollId;
+  tray.dataset.room = roomCode;
+  tray.dataset.roll = view.rollId;
+  const values = view.dice.length === 4 ? view.dice : [0,0,0,0];
+  tray.setAttribute("aria-label", values[0] ? `骰面 ${values.join("、")}` : "等待掷骰");
+  E.diceHint.textContent = view.lastBust || "";
+  tray.replaceChildren(...values.map((value, index) => {
+    const die = document.createElement("span");
+    die.className = value ? (liveRoll ? "die landing" : "die") : "die empty";
+    die.setAttribute("aria-hidden", "true");
+    die.style.setProperty("--index", index);
+    for (const position of PIPS[value]) {
+      const pip = document.createElement("i");
+      pip.style.gridArea = `${Math.ceil(position / 3)} / ${(position - 1) % 3 + 1}`;
+      die.append(pip);
+    }
+    return die;
+  }));
+}
+
+function routeChoice(option) {
+  const routes = [...new Set(option.moves)];
+  const distance = routes.length > 1 ? "各走 1 步" : `走 ${option.moves.length} 步`;
+  return `<button class="choice-action" data-choice="${option.key}"><span>${routes.join("、")} 号线</span><small>${distance}</small></button>`;
 }
 
 function renderDecision(model) {
   const { view, memberRole, decisionContext } = model;
   E.actionArea.innerHTML = "";
   if (decisionContext.myTurn && view.turnStage === "roll") E.actionArea.innerHTML = '<button class="primary big-action" data-action="roll">掷骰子</button>';
-  if (decisionContext.myTurn && view.turnStage === "choose") E.actionArea.innerHTML = view.options.map((option)=>`<button class="choice-action" data-choice="${option.key}"><span>${option.pair.join(" + ")}</span><small>推进 ${option.moves.join("、")}</small></button>`).join("");
+  if (decisionContext.myTurn && view.turnStage === "choose") E.actionArea.innerHTML = view.options.map(routeChoice).join("");
   if (decisionContext.myTurn && view.turnStage === "decision") E.actionArea.innerHTML = '<button class="primary big-action" data-action="roll">继续掷骰</button><button class="stop-action" data-action="stop">扎营收手</button>';
   if (memberRole === "spectator" && view.phase === "playing") E.actionArea.innerHTML = '<p class="muted spectator-action-note">旁观模式可查看公开骰子、路线和攀登进度，但不能投骰或选择路线。</p>';
   E.actionArea.querySelectorAll("[data-action]").forEach((button)=>{button.onclick=()=>submit({type:button.dataset.action});});
@@ -280,7 +273,7 @@ function renderResult(model) {
 
 partitionRenderer=createGame10PartitionRenderer({
   room:renderRoom,status:renderStatus,players:renderPlayers,
-  board:(model)=>renderBoard(model.view),physics:(model)=>renderPhysicsDice(model.view),dice:renderDice,
+  board:(model)=>renderBoard(model.view),dice:renderDice,
   decision:renderDecision,log:renderLog,countdown:renderTimer,result:renderResult
 });
 
@@ -321,9 +314,25 @@ function playPresentationEvent(event) {
   const source = presentationSource(event); const target = presentationTarget(event);
   source?.classList.add("presentation-source"); target?.classList.add("presentation-target");
   const routes = (event.columns || []).map(routeAnchor).filter(Boolean);
-  routes.forEach((element) => element.classList.add(event.kind === "turn-busted" ? "presentation-lost" : "presentation-route"));
+  const retreat = [];
+  if (event.kind === "turn-busted") {
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      for (const {column, camp, top} of event.lostTrails || []) {
+        const route = routeAnchor(column);
+        if (!route || view.closed[column] || view.turnProgress[column]) continue;
+        for (const cell of route.querySelectorAll(".route-cell")) {
+          const step = Number(cell.dataset.step);
+          if (step <= camp || step > top) continue;
+          cell.style.setProperty("--retreat-delay", `${(top - step) * Math.min(80, 500 / (top - camp))}ms`);
+          cell.classList.add("trail-retreat");
+          retreat.push(cell);
+        }
+      }
+    }
+  } else {
+    routes.forEach((element) => element.classList.add("presentation-route"));
+  }
   let token = null;
-  // 物理骰子已经负责掷骰与落定；演出层只强调状态，不再生成第二套骰子动画。
   if (!["roll-start", "dice-settled", "turn-start"].includes(event.kind)) {
     token = document.createElement("span");
     token.className = `presentation-token presentation-token-${event.kind}`;
@@ -337,7 +346,12 @@ function playPresentationEvent(event) {
   }
   return () => {
     source?.classList.remove("presentation-source"); target?.classList.remove("presentation-target");
-    routes.forEach((element) => element.classList.remove("presentation-route", "presentation-lost")); token?.remove();
+    routes.forEach((element) => element.classList.remove("presentation-route"));
+    retreat.forEach(cell => {
+      cell.classList.remove("trail-retreat");
+      cell.style.removeProperty("--retreat-delay");
+    });
+    token?.remove();
   };
 }
 

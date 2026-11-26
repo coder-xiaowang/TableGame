@@ -1,5 +1,4 @@
 import { applyMoves, commitTurn, completedColumns, rollOptions } from "../rules.js";
-import { initializeDicePhysicsSimulation, simulateDiceRollReady } from "../dice-physics.js";
 import {
   appendPresentationEvent, normalizePresentationState, validatePresentationState
 } from "../../shared/server/presentation-events.mjs";
@@ -25,10 +24,6 @@ export class GameRuleError extends Error {
     this.code = code;
     this.status = status;
   }
-}
-
-export async function initialize() {
-  await initializeDicePhysicsSimulation();
 }
 
 function cleanName(value, fallback = "玩家") {
@@ -118,7 +113,7 @@ function clearRoll(state) {
   state.pendingDice = [];
   state.options = [];
   state.revealAt = 0;
-  state.physicsSeed = 0;
+  state.lastBust = "";
   state.rollFromTimeout = false;
 }
 
@@ -139,35 +134,21 @@ function resetToLobby(state) {
   }
 }
 
-function randomSeed(random) {
-  return (Math.floor(Math.max(0, Math.min(0.999999999999, random())) * 0x100000000) >>> 0) || 1;
+function resolveDice(state, dice, now, fromTimeout) {
+  const player = currentPlayer(state);
+  state.dice = dice;
+  state.lastBust = "";
+  state.options = rollOptions(dice, state.turnProgress, Object.keys(state.closed).map(Number), 3, player.progress);
+  const text = `${player.name}${fromTimeout ? "超时，自动" : ""}掷出 ${dice.join("、")}`;
+  addLog(state, text, now);
+  publicEvent(state, { kind: "dice-settled", actorId: player.id, dice: [...dice], text }, now);
+  if (state.options.length) beginStage(state, "choose", now);
+  else bustTurn(state, now);
 }
 
 function startRoll(state, { now, random, fromTimeout = false }) {
-  const player = currentPlayer(state);
-  const seed = randomSeed(random);
-  let simulation;
-  try {
-    simulation = simulateDiceRollReady(seed);
-  } catch {
-    const fallback = Array.from({ length: 4 }, () => Math.floor(random() * 6) + 1);
-    simulation = { results: fallback, durationMs: 900 };
-    state.physicsSeed = 0;
-  }
-  state.turnStage = "rolling";
   state.rollId += 1;
-  state.rollFromTimeout = fromTimeout;
-  state.physicsSeed = state.physicsSeed === 0 ? 0 : seed;
-  if (simulation.frames) state.physicsSeed = seed;
-  state.dice = [];
-  state.pendingDice = [...simulation.results];
-  state.options = [];
-  state.deadline = 0;
-  state.revealAt = now + simulation.durationMs;
-  publicEvent(state, {
-    kind: "roll-start", actorId: player?.id,
-    text: `${player?.name || "玩家"}${fromTimeout ? "超时，自动" : ""}掷出四颗骰子`
-  }, now);
+  resolveDice(state, Array.from({ length: 4 }, () => Math.floor(random() * 6) + 1), now, fromTimeout);
 }
 
 function nextTurn(state, now) {
@@ -184,9 +165,15 @@ function bustTurn(state, now) {
   addLog(state, `${player.name} 无路可走，本回合攀登成果全部丢失`, now);
   publicEvent(state, {
     kind: "turn-busted", actorId: player.id, columns,
+    lostTrails: columns.map(column => ({ column, camp: player.progress[column] || 0, top: state.turnProgress[column] })),
     text: `${player.name} 爆掉了，临时进度全部丢失`
   }, now);
+  const dice = state.dice;
   nextTurn(state, now);
+  state.dice = dice;
+  state.lastBust = columns.length === 3
+    ? `${player.name} 失手 · 骰子接不上 ${columns.join("、")} 号线`
+    : `${player.name} 失手 · 没有可推进的路线`;
 }
 
 function chooseOption(state, key, { now, fromTimeout = false }) {
@@ -261,7 +248,7 @@ export function createLobby({ capacity, host }) {
     deadline: 0,
     revealAt: 0,
     rollId: 0,
-    physicsSeed: 0,
+    lastBust: "",
     rollFromTimeout: false,
     winnerId: null,
     logs: [],
@@ -391,17 +378,10 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
 export function handleTimeout(state, { now = Date.now(), random = Math.random } = {}) {
   if (state.phase !== "playing") return false;
   if (state.turnStage === "rolling" && state.revealAt && now >= state.revealAt) {
-    state.dice = [...state.pendingDice];
+    // Resolve a roll saved by the previous physics-based version.
+    const dice = state.pendingDice;
     state.pendingDice = [];
-    state.options = rollOptions(state.dice, state.turnProgress, Object.keys(state.closed).map(Number));
-    addLog(state, `${currentPlayer(state).name}${state.rollFromTimeout ? "超时，自动" : ""}掷出了 ${state.dice.join("、")}`, now);
-    publicEvent(state, {
-      kind: "dice-settled", actorId: currentPlayer(state).id, dice: [...state.dice],
-      text: `${currentPlayer(state).name} 掷出 ${state.dice.join("、")}`
-    }, now);
-    state.rollFromTimeout = false;
-    state.turnStage = "settled";
-    state.revealAt = now + 700;
+    resolveDice(state, dice, now, state.rollFromTimeout);
     return true;
   }
   if (state.turnStage === "settled" && state.revealAt && now >= state.revealAt) {
@@ -446,7 +426,7 @@ function buildPublicView(state, { selfId, permissions }) {
     deadline: state.deadline,
     revealAt: state.revealAt,
     rollId: state.rollId,
-    physicsSeed: state.physicsSeed,
+    lastBust: state.lastBust || "",
     winnerId: state.winnerId,
     logs: state.logs.map((entry) => ({ ...entry })),
     presentationEvents: state.presentationEvents.map((event) => structuredClone(event)),

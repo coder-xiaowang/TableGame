@@ -25,17 +25,18 @@ function canAdvance(column, progress, closedColumns) {
   return !closedColumns.includes(column) && (progress[column] || 0) < COLUMN_LENGTHS[column];
 }
 
-export function legalMoveOptions(pair, turnProgress = {}, closedColumns = [], maxRunners = 3) {
+export function legalMoveOptions(pair, turnProgress = {}, closedColumns = [], maxRunners = 3, permanentProgress = {}) {
   const active = new Set(Object.keys(turnProgress).filter((key) => turnProgress[key] > 0).map(Number));
+  const progress = { ...permanentProgress, ...turnProgress };
   const availableSlots = maxRunners - active.size;
   const [first, second] = pair;
   if (first === second) {
-    if (!canAdvance(first, turnProgress, closedColumns)) return [];
+    if (!canAdvance(first, progress, closedColumns)) return [];
     if (!active.has(first) && availableSlots <= 0) return [];
-    const remaining = COLUMN_LENGTHS[first] - (turnProgress[first] || 0);
+    const remaining = COLUMN_LENGTHS[first] - (progress[first] || 0);
     return [[first, ...(remaining > 1 ? [first] : [])]];
   }
-  const usable = [first, second].filter((column) => canAdvance(column, turnProgress, closedColumns));
+  const usable = [first, second].filter((column) => canAdvance(column, progress, closedColumns));
   const existing = usable.filter((column) => active.has(column));
   const fresh = usable.filter((column) => !active.has(column));
   const moves = [];
@@ -49,10 +50,10 @@ export function legalMoveOptions(pair, turnProgress = {}, closedColumns = [], ma
   return moves;
 }
 
-export function rollOptions(dice, turnProgress = {}, closedColumns = [], maxRunners = 3) {
+export function rollOptions(dice, turnProgress = {}, closedColumns = [], maxRunners = 3, permanentProgress = {}) {
   const options = [];
   for (const pair of dicePairings(dice)) {
-    for (const moves of legalMoveOptions(pair, turnProgress, closedColumns, maxRunners)) {
+    for (const moves of legalMoveOptions(pair, turnProgress, closedColumns, maxRunners, permanentProgress)) {
       const key = moves.join("-");
       if (!options.some((option) => option.key === key)) options.push({ key, pair, moves });
     }
