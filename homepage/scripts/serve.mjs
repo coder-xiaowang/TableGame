@@ -6,10 +6,13 @@ import { fileURLToPath } from "node:url";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDirectory, "..", "..");
 const port = Number(process.env.PORT || 4173);
+const host = process.env.PREVIEW_HOST || "127.0.0.1";
 const types = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".webp": "image/webp",
   ".json": "application/json; charset=utf-8",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -26,10 +29,26 @@ const server = http.createServer((request, response) => {
     response.writeHead(400).end("Bad request");
     return;
   }
-  if (pathname === "/") pathname = "/homepage/";
-  if (pathname.startsWith("/lobby/")) pathname = "/homepage" + pathname;
+  // Match the production homepage and lobby aliases. Also accept the old preview URL.
+  if (pathname === "/homepage" || pathname === "/homepage/index.html") pathname = "/";
+  if (pathname.startsWith("/homepage/")) pathname = pathname.slice("/homepage".length);
+  if (pathname.includes("\\") || pathname.split("/").some(part => part.startsWith("."))) {
+    response.writeHead(404).end("Not found");
+    return;
+  }
+  if (pathname === "/") pathname = "/homepage/index.html";
+  else if (["/styles.css", "/app.js"].includes(pathname) || /^\/(assets|notes|lobby)\//.test(pathname)) {
+    pathname = "/homepage" + pathname;
+  } else if (pathname !== "/index.html" && !pathname.startsWith("/tools/")) {
+    response.writeHead(404).end("Not found");
+    return;
+  }
   if (pathname.endsWith("/")) pathname += "index.html";
   const filename = path.resolve(root, `.${pathname}`);
+  if (!Object.hasOwn(types, path.extname(filename).toLowerCase())) {
+    response.writeHead(404).end("Not found");
+    return;
+  }
   if (filename !== root && !filename.startsWith(`${root}${path.sep}`)) {
     response.writeHead(403).end("Forbidden");
     return;
@@ -49,8 +68,8 @@ const server = http.createServer((request, response) => {
   });
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Homepage preview: http://127.0.0.1:${port}/homepage/`);
+server.listen(port, host, () => {
+  console.log(`Homepage preview: http://${host}:${port}/`);
   console.log("Press Ctrl+C to stop.");
 });
 

@@ -2,53 +2,6 @@
 
 const SITE_TIME_ZONE = "Asia/Shanghai";
 
-const modules = [
-  {
-    id: "tools",
-    icon: "⌁",
-    title: "实用工具",
-    description: "用拼豆图纸工坊制作图纸，或在拼图工坊里拼出喜欢的画面。",
-    href: "/tools/",
-    status: "online",
-    statusText: "已开放",
-    action: "打开工具箱",
-    theme: "sage"
-  },
-  {
-    id: "notes",
-    icon: "✎",
-    title: "随笔与记录",
-    description: "记下生活、想法，以及偶然遇见的小故事。",
-    href: "notes/",
-    status: "online",
-    statusText: "已开放",
-    action: "进入阅读",
-    theme: "blue"
-  },
-  {
-    id: "collection",
-    icon: "☆",
-    title: "收藏与分享",
-    description: "书、电影、音乐，还有值得反复回味的东西。",
-    href: "#roadmap",
-    status: "planned",
-    statusText: "筹备中",
-    action: "看看计划",
-    theme: "lavender"
-  },
-  {
-    id: "plans",
-    icon: "⌁",
-    title: "未来计划",
-    description: "慢慢搭建中，新的房间会陆续亮起灯来。",
-    href: "#roadmap",
-    status: "planned",
-    statusText: "筹备中",
-    action: "看看计划",
-    theme: "apricot"
-  }
-];
-
 const quotes = [
   { text: "且将新火试新茶，诗酒趁年华。", source: "苏轼《望江南·超然台作》" },
   { text: "山中何事？松花酿酒，春水煎茶。", source: "张可久《人月圆·山中书事》" },
@@ -77,26 +30,6 @@ function getShanghaiDateParts() {
   return Object.fromEntries(parts.map((part) => [part.type, part.value]));
 }
 
-function renderModules() {
-  const grid = document.querySelector("#moduleGrid");
-
-  for (const module of modules) {
-    const card = document.createElement("a");
-    card.className = `module-card theme-${module.theme}`;
-    card.href = module.href;
-    card.dataset.module = module.id;
-    card.innerHTML = `
-      <span class="module-status ${module.status}">${module.statusText}</span>
-      <span class="module-icon" aria-hidden="true">${module.icon}</span>
-      <strong>${module.title}</strong>
-      <span class="module-description">${module.description}</span>
-      <span class="module-action">${module.action} <span aria-hidden="true">→</span></span>
-      <span class="module-doodle" aria-hidden="true"></span>
-    `;
-    grid.append(card);
-  }
-}
-
 function renderDailyQuote(parts) {
   const dateKey = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
   let hash = 0;
@@ -108,60 +41,11 @@ function renderDailyQuote(parts) {
   const quote = quotes[Math.abs(hash) % quotes.length];
   document.querySelector("#dailyQuote").textContent = `“${quote.text}”`;
   document.querySelector("#quoteSource").textContent = `— ${quote.source}`;
-  document.querySelector("#dailyQuoteDate").textContent = `${String(parts.month).padStart(2, "0")} · ${String(parts.day).padStart(2, "0")}`;
-}
-
-function renderCalendar(parts) {
-  const year = Number(parts.year);
-  const month = Number(parts.month);
-  const day = Number(parts.day);
-  const firstDay = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const mondayOffset = (firstDay + 6) % 7;
-  const calendarDays = document.querySelector("#calendarDays");
-
-  document.querySelector("#calendarYear").textContent = year;
-  document.querySelector("#calendarMonth").textContent = `${String(month).padStart(2, "0")} 月`;
-  document.querySelector("#todayNumber").textContent = String(day).padStart(2, "0");
-  document.querySelector("#todayWeekday").textContent = parts.weekday;
-  document.querySelector("#footerYear").textContent = year;
-
-  for (let index = 0; index < mondayOffset; index += 1) {
-    const blank = document.createElement("span");
-    blank.className = "calendar-blank";
-    calendarDays.append(blank);
-  }
-
-  for (let date = 1; date <= daysInMonth; date += 1) {
-    const cell = document.createElement("span");
-    cell.textContent = date;
-    if (date === day) {
-      cell.className = "today";
-      cell.setAttribute("aria-current", "date");
-      cell.setAttribute("aria-label", `今天，${month}月${day}日`);
-    }
-    calendarDays.append(cell);
-  }
-}
-
-function setupNavigation() {
-  const button = document.querySelector("#menuButton");
-  const nav = document.querySelector("#siteNav");
-
-  button.addEventListener("click", () => {
-    const open = button.getAttribute("aria-expanded") === "true";
-    button.setAttribute("aria-expanded", String(!open));
-    nav.classList.toggle("open", !open);
-  });
-
-  nav.addEventListener("click", () => {
-    button.setAttribute("aria-expanded", "false");
-    nav.classList.remove("open");
-  });
+  const date = document.querySelector("#dailyQuoteDate");
+  date.dateTime = dateKey;
+  date.textContent = `${parts.month}月${parts.day}日 · ${parts.weekday}`;
 }
 
 const today = getShanghaiDateParts();
-renderModules();
 renderDailyQuote(today);
-renderCalendar(today);
-setupNavigation();
+document.querySelector("#footerYear").textContent = today.year;
