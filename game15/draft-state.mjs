@@ -3,6 +3,28 @@ export function draftContext(view, roomCode) {
     ? JSON.stringify([roomCode, view.selfId, view.gameNumber, view.turnId]) : null;
 }
 
+export function draftTileOrigins(originalTable, layout, originalHandIds) {
+  const originalMeld = new Map();
+  for (const meld of originalTable) {
+    for (const id of meld.tileIds) originalMeld.set(id, meld);
+  }
+  const currentMeldIds = new Set(layout.map(meld => meld.id));
+  const origins = new Map();
+  for (const meld of layout) {
+    // Empty melds disappear during edits. Recognize a rebuilt original meld,
+    // even when rack tiles have been inserted among the original tiles.
+    const tableIds = meld.tileIds.filter(id => !originalHandIds.has(id));
+    const first = originalMeld.get(tableIds[0]);
+    const rebuilt = first && !currentMeldIds.has(first.id) && first.kind === meld.kind
+      && first.tileIds.length === tableIds.length && first.tileIds.every((id, i) => id === tableIds[i]);
+    for (const id of meld.tileIds) {
+      if (originalHandIds.has(id)) origins.set(id, "rack");
+      else if (!rebuilt && originalMeld.get(id)?.id !== meld.id) origins.set(id, "meld");
+    }
+  }
+  return origins;
+}
+
 export function restoreDraft(saved, fresh) {
   if (!saved || saved.base !== fresh.base || !Array.isArray(saved.originalHandIds)
     || JSON.stringify([...saved.originalHandIds].sort()) !== JSON.stringify([...fresh.originalHandIds].sort())) return null;

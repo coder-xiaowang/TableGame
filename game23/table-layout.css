@@ -17,9 +17,39 @@
   display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
   gap: 9px; min-height: 0; justify-items: center; align-items: start;
 }
-[data-play-layout="game23"] .gallery .dream-card {
+[data-play-layout="game23"] .gallery-entry {
   width: 100%; max-width: clamp(108px,18dvh,164px);
 }
+[data-play-layout="game23"] .gallery-entry .dream-card { width: 100%; max-width: none; }
+.vote-tickets {
+  margin-top: 6px; color: #fff1cc; border: 1px solid #796786; border-radius: 9px;
+  background: #23203ce8;
+}
+.vote-tickets summary {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px 6px;
+  min-height: 40px; padding: 5px 4px; cursor: pointer; list-style: none;
+}
+.vote-tickets summary::-webkit-details-marker { display: none; }
+.vote-tickets summary:focus-visible { outline: 2px solid var(--gold); border-radius: 8px; }
+.ticket-tray { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 3px; min-width: 0; }
+.rabbit-ticket {
+  position: relative; display: inline-flex; max-width: 5.2em; min-width: 16px;
+  margin-top: 5px; padding: 1px 4px; border-radius: 6px 7px 7px 5px;
+  color: #2d2036; background: var(--ticket); font: 700 11px/1.4 system-ui,sans-serif;
+}
+.rabbit-ticket::before, .rabbit-ticket::after {
+  content: ""; position: absolute; top: -5px; left: 3px; width: 3px; height: 7px;
+  border-radius: 60%; transform: rotate(-18deg); background: var(--ticket);
+}
+.rabbit-ticket::after { left: 8px; transform: rotate(12deg); }
+.rabbit-ticket > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-count { white-space: nowrap; font-size: 11px; }
+.ticket-count::after { content: "▾"; margin-left: 3px; }
+.vote-tickets[open] .ticket-count::after { content: "▴"; }
+.voter-names { margin: 0; padding: 4px 6px; border-top: 1px solid #63556f; list-style: none; }
+.voter-names li { display: flex; align-items: baseline; gap: 4px; padding: 3px 0; font-size: 12px; }
+.voter-names small { flex: none; color: #cbbfd6; }
+.voter-names span { min-width: 0; overflow-wrap: anywhere; }
 [data-play-layout="game23"] .gallery .empty-gallery { grid-column: 1/-1; padding: 6px 12px; }
 [data-play-layout="game23"] .gallery .empty-gallery p { margin: 3px 0; }
 [data-play-layout="game23"] .room[data-exhibition] #handPanel { display: none; }
@@ -33,6 +63,7 @@
 [data-play-layout="game23"] .room[data-exhibition] #actionControls { grid-area: confirm; justify-content: end; }
 [data-play-layout="game23"] .room[data-exhibition] .timer { grid-area: timer; justify-self: end; }
 [data-play-layout="game23"] .gallery .own-card::after { left: 4px; right: auto; }
+[data-play-layout="game23"] .gallery .own-card:has(.owner-reveal)::after { content: none; }
 [data-play-layout="game23"] .room[data-exhibition] .clue-orbit {
   position: sticky; top: 0; z-index: 3; border-radius: 18px; background: #20203eef;
 }

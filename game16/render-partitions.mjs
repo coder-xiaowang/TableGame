@@ -3,6 +3,20 @@
 const PARTITIONS=Object.freeze(["room","status","deck","players","private","decision","log","countdown"]);
 const key=(value)=>JSON.stringify(value);
 
+export function courtDeclarations({ action, phase, challenge }) {
+  if (!action) return [];
+  const slips = [{ kind: "action", actorId: action.actorId, role: action.claimedRole }];
+  if (action.blockerId) slips.push({ kind: "block", actorId: action.blockerId, role: action.blockRole });
+  for (const slip of slips) {
+    if ((phase === "challengeAction" && slip.kind === "action") || (phase === "challengeBlock" && slip.kind === "block")) {
+      slip.stamp = "可质疑";
+    } else if (phase === "proveClaim" && challenge?.context === slip.kind && challenge.claimantId === slip.actorId) {
+      slip.stamp = "待举证";
+    }
+  }
+  return slips;
+}
+
 export function createGame16RenderModel(view,{memberRole=view?.roomRole,roomCode="",selectedAction=null,exchangeSelection=[]}={}){
   if(!view)return null;
   const players=Array.isArray(view.players)?view.players:[];

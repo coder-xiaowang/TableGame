@@ -11,7 +11,7 @@ import {
   renderConnectionStatus,
   setHidden
 } from "/shared/client/index.js";
-import { CATEGORIES, categoryScore } from "./rules.mjs";
+import { CATEGORIES, categoryScore, UPPER_BONUS_THRESHOLD } from "./rules.mjs";
 import { createGame3PartitionRenderer, createGame3RenderModel } from "./render-partitions.mjs";
 
 const PROTOCOL_VERSION = 3;
@@ -289,18 +289,46 @@ function renderScorecardPartition({ view, me, canScore }) {
       if (score != null) return `<td class="registered">${score}</td>`;
       if (!canScore || player.id !== view.selfId) return '<td class="unfilled" aria-label="未登记">—</td>';
       const preview = categoryScore(category.id, view.dice);
+      if (category.section === "upper" && player.totals.upper < UPPER_BONUS_THRESHOLD && preview > 0) {
+        const projected = player.totals.upper + preview;
+        const remaining = UPPER_BONUS_THRESHOLD - projected;
+        const result = remaining > 0 ? `差 ${remaining} 分` : "达标";
+        return `<td><button type="button" data-category="${category.id}" aria-label="${category.name}，可登记 ${preview} 分，填后上半区 ${projected} 分，${result}">+${preview}<span class="upper-projection"><span>填后 ${projected}</span> · <b>${result}</b></span></button></td>`;
+      }
       return `<td><button type="button" data-category="${category.id}" aria-label="${category.name}，可登记 ${preview} 分">+${preview}</button></td>`;
     }).join("");
     return `<tr data-score-row="${category.id}"><th scope="row">${category.name}<small>${category.help}</small></th>${cells}</tr>`;
   }
 
+  const upperCategories = CATEGORIES.filter(category => category.section === "upper");
+  function subtotal(player) {
+    const current = player.totals.upper;
+    const progress = points => Math.min(100, points * 100 / UPPER_BONUS_THRESHOLD);
+    let projected = current;
+    let note = "";
+    if (canScore && player.id === view.selfId && !player.totals.upperBonus) {
+      const available = upperCategories.filter(category => player.scorecard[category.id] == null);
+      // A single open upper box has one unambiguous projection for the subtotal.
+      if (available.length === 1) {
+        projected += categoryScore(available[0].id, view.dice);
+        if (projected > current) note = `<span class="subtotal-pencil">填${available[0].name} → ${projected}</span>`;
+      }
+    }
+    return `<b>${current}</b> / ${UPPER_BONUS_THRESHOLD}<span aria-hidden="true" class="subtotal-track" style="--ink:${progress(current)}%;--pencil:${progress(projected)}%"></span>${note}`;
+  }
   function summaryRow(label, field) {
-    return `<tr class="sheet-summary"><th scope="row">${label}</th>${players.map(player => `<td>${player.totals[field]}</td>`).join("")}</tr>`;
+    const cells = players.map(player => {
+      if (field === "upper") return `<td>${subtotal(player)}</td>`;
+      const value = player.totals[field];
+      if (field === "upperBonus" && value) return `<td><span class="bonus-stamp">+${value}</span></td>`;
+      return `<td>${value}</td>`;
+    }).join("");
+    return `<tr class="sheet-summary" data-summary="${field}"><th scope="row">${label}</th>${cells}</tr>`;
   }
 
   elements.scoreGrid.style.setProperty("--player-count", players.length);
   elements.scoreGrid.innerHTML = `<thead><tr><th scope="col">全桌计分表</th>${headers}</tr></thead>
-    <tbody>${CATEGORIES.filter(c => c.section === "upper").map(scoreRow).join("")}
+    <tbody>${upperCategories.map(scoreRow).join("")}
       ${summaryRow("上半区小计", "upper")}${summaryRow("上半区奖励", "upperBonus")}
     </tbody>
     <tbody>${CATEGORIES.filter(c => c.section === "lower").map(scoreRow).join("")}

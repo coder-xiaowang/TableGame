@@ -7,6 +7,7 @@ const http = require('node:http');
 const {once} = require('node:events');
 const start = require('../shared/server/start-authoritative-game-server');
 const {openBrowser, delay} = require('./lib/browser-session.cjs');
+const {yachtPosition,dynamitePosition} = require('./lib/score-and-judgment-fixtures.cjs');
 const {measure, checkSeatAccess} = require('./check-play-layout.cjs');
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'audit', 'play-interactions');
@@ -43,7 +44,7 @@ async function run() {
       createLobby(options) { state = engine.createLobby(options); return state; },
       applyAction(s, id, action, context) {
         const result = engine.applyAction(s,id,action,{...context,random:()=>0.314159});
-        if (action.type === 'start') {fixture(s);engine.validateState?.(s);}
+        if (action.type === 'start') {fixture(s,engine,context);engine.validateState?.(s);}
         if (expireNextAction) {s.deadline=context.now+80;expireNextAction=false;}
         if (name==='game4'&&s.phase==='handResult') s.deadline=context.now+60_000;
         state = s;
@@ -189,10 +190,41 @@ async function run() {
         assert.notEqual(farmer,-1);
         [hostHand[0],state.deck[farmer]] = [state.deck[farmer],hostHand[0]];
         for (const player of state.players.slice(1)) player.pigs.at(-1).dirty = true;
+        if (capacity === 2) {
+          const take = type => {
+            const index = state.deck.findIndex(card => card.type === type);
+            assert.notEqual(index,-1,type);
+            return state.deck.splice(index,1)[0];
+          };
+          const lightning = take('lightning');
+          state.deck.push(hostHand[1]);
+          hostHand[1] = lightning;
+          const [latched,grounded] = state.players[1].pigs.slice(-2);
+          latched.dirty = true;
+          latched.barn = take('barn'); latched.door = take('door');
+          grounded.barn = take('barn'); grounded.rod = take('rod');
+        }
       });
       await r.begin();
       const last = r.state.players.at(-1);
+      const pen = pig => `.pig[data-player="${last.id}"][data-pig="${pig.id}"]`;
+      if (capacity === 2) {
+        const [latched,grounded] = last.pigs.slice(-2);
+        await tap('#hand .type-lightning');
+        for (const [pig,part,eligible] of [[latched,'.pig-latch',true],[grounded,'.pig-rod',false]]) {
+          const selector=JSON.stringify(pen(pig));
+          const state=await evaluate(`(() => {
+            const pen=document.querySelector(${selector});
+            return [!!pen.querySelector('.pig-roof'),!!pen.querySelector('.pig-mud'),
+              !!pen.querySelector(${JSON.stringify(part)}),pen.classList.contains('targetable')];
+          })()`);
+          assert.deepEqual(state,[true,true,true,eligible]);
+        }
+      }
       await tap('#hand .type-farmer');
+      if (capacity === 2) {
+        assert.equal(await evaluate(`document.querySelector(${JSON.stringify(pen(last.pigs.at(-2)))}).classList.contains('targetable')`),false);
+      }
       await tap('.target-shortcut',`查看 ${last.name} 的可选小猪`);
       const target = `.pig.targetable[data-player="${last.id}"][data-pig="${last.pigs.at(-1).id}"]`;
       // Check the shortcut's own scroll result before tap() can scroll the target.
@@ -203,6 +235,10 @@ async function run() {
       })()`),'last farm target visible after shortcut');
       await tap(target);
       await until(() => !r.state.players.at(-1).pigs.at(-1).dirty,'last pig washed');
+      if (capacity === 2) {
+        const washedPen = pen(last.pigs.at(-1));
+        await until(() => evaluate(`!document.querySelector('${washedPen} .pig-mud') && !!document.querySelector('${washedPen} .pig-rod')`),'washed pig keeps its equipment');
+      }
       await r.check(`${capacity} farms, locate and wash last-seat farthest pig`);
     }
     if (include('game3')) {
@@ -245,6 +281,20 @@ async function run() {
       assert.deepEqual(await readScores(ones),['0','—','—','—','—','—']);
       await r.act(2,{type:'score',category:'chance'});
       await until(async ()=>(await readScores('[data-score-row="chance"]'))[2] === '10','spectator receives new score');
+      for (const subtotal of [50,51]) {
+        const scores = await room('game3',2,state=>yachtPosition(state,subtotal));
+        await scores.begin();
+        const pencil = '[data-category="sixes"] .upper-projection';
+        const hint = await evaluate(`document.querySelector('${pencil}').textContent`);
+        assert.ok(hint.includes('填后 '+(subtotal+12)) && hint.includes(subtotal===50?'差 1 分':'达标'));
+        assert.equal(await evaluate("document.querySelectorAll('.bonus-stamp').length"),0);
+        await tap('[data-category="sixes"]');
+        await until(()=>scores.state.players[0].scorecard.sixes===12,'six box registered');
+        const observer = scores.engine.buildSpectatorView(scores.state);
+        assert.equal(observer.players[0].totals.upperBonus,subtotal===50?0:35);
+        assert.equal(await evaluate("document.querySelectorAll('.bonus-stamp').length"),subtotal===50?0:1);
+        await scores.check('upper section '+subtotal+' plus two sixes');
+      }
     }
     if (include('game19')) {
       const r = await room('game19', 7, state => {
@@ -278,6 +328,21 @@ async function run() {
       assert.equal(r.state.pending.actorId, r.state.players[6].id);
       assert.deepEqual(browser.errors, []);
       results.push({game:'game19', scenario:'seven-player ranged attack and hand clearance'});
+      for(const rank of ['9','10']) {
+        const duel=await room('game19',4,dynamitePosition);
+        await duel.begin();
+        const owner=duel.state.players[0], life=owner.life;
+        assert.equal(duel.engine.buildView(duel.state,duel.state.players[1].id).pending.cards.length,0);
+        assert.equal(duel.engine.buildSpectatorView(duel.state).pending.cards.length,0);
+        const card=duel.state.pending.cards.find(c=>c.rank===rank);
+        await tap(`#actionButtons [data-judgment-choice="${card.id}"]`);
+        const slot='#judgmentSlot [data-judgment-result]';
+        const expected=rank==='9'?'3 点伤害':'传给';
+        await until(()=>evaluate(`document.querySelector('${slot}')?.textContent.includes('${expected}')`),'public result matches the chosen face');
+        assert.equal(duel.state.players[0].life,life-(rank==='9'?3:0));
+        assert.equal(duel.state.players[1].equipment.some(c=>c.type==='dynamite'),rank==='10');
+        await duel.check('Lucky Duke dynamite spades '+rank);
+      }
     }
     if (include('game10')) {
       const roll = await room('game10', 2, state => { state.currentIndex = 0; });
@@ -446,15 +511,56 @@ async function run() {
       await tap('.bid-choice:not([hidden]) button');
       await until(() => r.state.bidTokens.some(t => t.ownerId === r.sessions[0].clientId && t.pileId === target && t.amount === amount),'chosen pile and price recorded');
       await r.check('compare five lots and submit a higher bid');
+
+      const close = await room('game17',3,state => {
+        const host = state.players[0];
+        for (const company of ['nova','evergreen']) {
+          if (host.portfolio.some(card => card.companyId === company)) continue;
+          const index = state.marketDeck.findIndex(card => card.kind === 'stock' && card.companyId === company);
+          assert.notEqual(index,-1);
+          host.portfolio.push(state.marketDeck.splice(index,1)[0]);
+        }
+        Object.assign(state.stockPrices,{nova:10,evergreen:1});
+        state.closingLedger.openingPrices = {...state.stockPrices};
+        const offers = [['nova','up1'],['evergreen','down2'],['harbor','up2'],['apex','dividend'],['cloud','up4'],['aurora','down3']]
+          .map(([companyId,forecastId])=>({id:'info-'+companyId,companyId,forecastId}));
+        state.players.forEach((player,i)=>{player.privateInformation=[offers[i]];});
+        state.publicInformation=offers[3];state.hiddenInformation=offers.slice(4);
+        state.phase='selling';state.currentActorId=host.id;state.turnQueue=[host.id];
+      });
+      await close.begin();
+      await tap('#actionButtons button','确认卖出 / 不卖');
+      await until(()=>close.state.phase!=='selling','last seller confirmed');
+      while (close.state.phase==='dividend') {
+        const actor=close.state.players.findIndex(player=>player.id===close.state.currentActorId);
+        await close.act(actor,{type:'submitDividend',normal:0,split:0});
+      }
+      await until(()=>evaluate("document.querySelector('#closingTape')?.checkVisibility()"),'closing prices visible');
+      assert.equal(await evaluate("document.querySelectorAll('#closingTape [data-close-company]').length"),6);
+      for(const [company,stamp] of [['nova','拆股'],['evergreen','破产']]){
+        const row = `#closingTape [data-close-company="${company}"] .settlement-stamp`;
+        assert.match(await evaluate(`document.querySelector('${row}').textContent`),new RegExp(stamp));
+      }
+      assert.deepEqual(['nova','evergreen','harbor'].map(company=>close.state.stockPrices[company]),[6,5,7]);
+      assert.ok(await evaluate("document.querySelector('#holdingSettlement').checkVisibility()"));
+      await close.check('six closing prices, split and bankruptcy in one settlement');
     }
     if (include('game9')) {
       const r = await room('game9',7,state => {
         state.currentIndex = 0;
         state.players[1].chips += state.players[0].chips - 1;
         state.players[0].chips = 1;
+        const rest = Array.from({length:33}, (_, i) => i + 3).filter(card => ![18,19,20].includes(card));
+        state.removed = rest.splice(0,9);
+        state.deck = rest;
+        state.players[0].cards = [18,20];
+        state.activeCard = 19;
       });
       await r.begin();
       const pass = '[data-action="pass"]';
+      assert.match(await evaluate("document.querySelector('#myCards .preview-card').textContent"), /19/);
+      assert.deepEqual(r.state.players[0].cards, [18,20]);
+      assert.equal(await evaluate("document.querySelector('#myCardScore').textContent"), '38');
       await checkFirstScreen([pass,'[data-action="take"]']);
       assert.match(await evaluate(`document.querySelector('${pass}').textContent`),/你有 1 枚/);
       await tap(pass);
@@ -463,6 +569,9 @@ async function run() {
       assert.match(await evaluate(`document.querySelector('${pass}').textContent`),/你有 0 枚/);
       await tap('[data-action="take"]');
       await until(() => evaluate(`document.querySelector('${pass}').textContent.includes('你有 7 枚')`),'collected chips available');
+      assert.deepEqual(r.state.players[0].cards, [18,19,20]);
+      assert.equal(await evaluate("document.querySelector('#myCardScore').textContent"), '18');
+      assert.equal(await evaluate("document.querySelectorAll('#myCards .preview-card').length"), 0);
       await r.check('last chip spent, refusal disabled, pot collected');
     }
     if (include('game6')) {
@@ -473,11 +582,37 @@ async function run() {
         const pile = piles.find(cards => cards.includes(lowest));
         const index = pile.indexOf(lowest);
         [pile[index], piles[0][0]] = [piles[0][0], pile[index]];
+        // Represent the second turn, with four cards in row 1 and five in row 4.
+        state.turn = 2;
+        const previous = state.players.map(player => player.hand.pop());
+        state.rows[0].push(...previous.splice(0,3));
+        state.rows[3].push(...previous.splice(0,4));
+        state.rows[1].push(previous.pop());
+        state.rows[2].push(...previous);
+        for (const row of state.rows) row.sort((a,b) => a-b);
       });
       await r.begin();
       const card = r.state.players[0].hand[0];
       const before = await evaluate("window.__firstRow = document.querySelector('[data-row]'); document.querySelectorAll('#rows .row-label').length");
       assert.equal(before, 4);
+      const {rowBullheads} = await import('../game6/rules.mjs');
+      const rowPoints = rowBullheads(r.state.rows[3]);
+      assert.equal(await evaluate("document.querySelectorAll('#rows [data-row=\"0\"] > .row-slot-empty').length"), 1);
+      assert.equal(await evaluate("document.querySelectorAll('#rows [data-row=\"3\"] > .row-slot-empty').length"), 0);
+      const warning = await evaluate("document.querySelector('#rows [data-row=\"3\"].is-full .row-warning').textContent");
+      assert.match(warning, /再接就收/);
+      assert.ok(warning.includes(rowPoints+' 牛头'));
+      for (const [width,height] of [[320,568],[1024,768],[390,844]]) {
+        await viewport(width,height);
+        const fits = await evaluate(`(() => {
+          const row = document.querySelector('#rows .is-full');
+          const cards = [...row.querySelectorAll('.number-card')].map(card => card.getBoundingClientRect());
+          const sign = row.querySelector('.row-warning').getBoundingClientRect();
+          return cards.length === 5 && cards.every(card => card.width > 0)
+            && cards[4].right <= sign.left + 1 && sign.right <= row.getBoundingClientRect().right + 1;
+        })()`);
+        assert.ok(fits, 'five cards and the penalty fit at width '+width);
+      }
       await tap(`#hand [data-card="${card}"]`);
       for (let i = 1; i < 10; i++) await r.act(i, {type:'selectCard', card:r.state.players[i].hand[0]});
       await until(() => evaluate("!!document.querySelector('#rows .choice')"), 'host can choose a row');
@@ -493,6 +628,7 @@ async function run() {
       const captured = [...r.state.rows[3]];
       await tap('#rows [data-row="3"]');
       await until(() => captured.every(c => r.state.players[0].captured.includes(c)), 'row captured');
+      assert.equal(r.state.players[0].score, rowPoints);
       await r.check('ten players select and collect a row');
     }
     if (include('game8')) {
@@ -516,7 +652,8 @@ async function run() {
       }
       await until(() => evaluate("document.querySelectorAll('#gallery [data-display-id]').length === 8"), 'gallery open');
       assert.ok(await evaluate("!document.querySelector('#gallery .empty-gallery') && !document.querySelector('#handPanel').checkVisibility()"));
-      const choice = '#gallery .dream-card.selectable';
+      const decoy = r.state.displayCards.find(entry=>entry.ownerId===r.sessions[2].clientId);
+      const choice = `#gallery .dream-card.selectable[data-display-id="${decoy.displayId}"]`;
       await tap(choice+' .zoom-card');
       assert.ok(await evaluate("document.querySelector('#cardPreview').open"));
       await tap('#closePreviewButton');
@@ -525,6 +662,22 @@ async function run() {
       await tap('[data-action="submit-vote"]');
       await until(() => r.state.votes[r.state.players[0].id] === target, 'selected vote sealed');
       await r.check('eight paintings, preview and confirm vote');
+      const answer = r.state.displayCards.find(entry=>entry.ownerId===r.state.storytellerId);
+      for (const i of [2,3,4,5,6]) {
+        await r.act(i,{type:'submitVote',displayId:i===2?answer.displayId:target});
+      }
+      assert.equal(await evaluate("document.querySelectorAll('#gallery .vote-tickets').length"),0);
+      assert.equal(r.engine.buildSpectatorView(r.state).roundResult,null);
+      await r.act(7,{type:'submitVote',displayId:target});
+      const frame = `#gallery [data-gallery-id="${target}"]`;
+      await until(()=>evaluate(`!!document.querySelector('${frame} .vote-tickets')`),'vote tickets after reveal');
+      await tap(frame+' .vote-tickets summary');
+      const voterNames=await evaluate(`Array.from(document.querySelectorAll('${frame} .voter-names li > span'),label=>label.textContent.trim())`);
+      assert.deepEqual(voterNames,[0,3,4,5,6,7].map(i=>r.state.players[i].name));
+      await tap(frame+' .zoom-card');
+      assert.ok(await evaluate("document.querySelector('#cardPreview').open"));
+      await tap('#closePreviewButton');
+      await r.check('six named votes under a decoy painting');
     }
     if (include('game')) {
       const table = await room('game',8);
@@ -559,13 +712,29 @@ async function run() {
       if (!include(name)) continue;
       const r=await room(name,count,s=>{
         if(name==='game23')s.storytellerId=s.players[0].id;
-        if(name==='game11')s.teams.white.keywords=['桥','天文望远镜','自动气象观测站','北极光'];
+        if(name==='game11'){
+          s.teams.white.keywords=['桥','天文望远镜','自动气象观测站','北极光'];
+          s.round=3;
+          s.records=[
+            {round:1,team:'black',code:[2,3,1],clues:['铁轨','车票','石头']},
+            {round:1,team:'white',code:[2,1,4],clues:['星群','沙漠','土壤']},
+            {round:2,team:'black',code:[4,1,2],clues:['松树','远山','站台']}
+          ];
+        }
       });
       await r.begin();await until(()=>evaluate(`!!document.querySelector(${JSON.stringify(selector)})&&!document.querySelector(${JSON.stringify(selector)}).closest('.hidden')`),'editable turn');
       await keyboardCheck(selector,name);
       await r.post('/api/join',{roomCode:r.code,clientId:'draft-observer',name:'观察员',intent:'spectate'});await delay(150);
       assert.ok(await evaluate(`document.querySelector(${JSON.stringify(selector)}).value.includes('触屏输入草稿')`),`${name}: background SSE preserves input`);
       if (name === 'game11') {
+        await tap('#notebookPanel > summary');
+        await tap('#notebookPanel button[data-team="black"][data-number="2"]');
+        const entries=await evaluate("Array.from(document.querySelectorAll('#notebookEntries li'), e=>e.textContent)");
+        assert.equal(entries.length,2);
+        assert.ok(entries.some(entry=>entry.includes('1')&&entry.includes('铁轨')));
+        assert.ok(entries.some(entry=>entry.includes('2')&&entry.includes('站台')));
+        assert.ok(await evaluate("document.querySelector('#clue1').value.includes('触屏输入草稿')"));
+        await tap('#notebookPanel > summary');
         for (const [w,h,columns] of [[390,844,2],[1440,900,4]]) {
           await viewport(w,h);
           const rows = await evaluate(`(() => {
@@ -722,11 +891,25 @@ async function run() {
       });
       await crowded.begin();
       const extra=crowded.state.players[0].hand[0].id;
+      const moved=crowded.state.table[0].tiles.at(-1).id;
+      const tile=id=>`#table [data-tile-id="${id}"]`;
+      const origin=id=>evaluate(`document.querySelector('${tile(id)}')?.dataset.draftOrigin || null`);
       await tap(`#hand [data-tile-id="${extra}"]`);
       await tap('[data-drop-meld="9"]');
       await until(()=>crowded.state.turnEdited,'dense board edit acknowledged');
+      assert.equal(await origin(extra),'rack');
+      await tap(tile(moved));await tap('[data-drop-meld="9"]');
+      assert.equal(await origin(moved),'meld');
+      await crowded.reload();
+      assert.equal(await origin(extra),'rack');
+      assert.equal(await origin(moved),'meld');
+      assert.equal(await evaluate("document.querySelectorAll('#table [data-draft-origin]').length"),2);
+      assert.ok(crowded.engine.buildSpectatorView(crowded.state).table[0].tiles.some(t=>t.id===moved));
+      await tap(tile(moved));await tap('[data-drop-meld="0"]');
+      assert.equal(await origin(moved),null);
       await tap('#actionButtons button','确认并公布牌桌');
       await until(()=>crowded.state.table[9].tiles.some(t=>t.id===extra),'last group extended');
+      await until(()=>evaluate("document.querySelectorAll('#table [data-draft-origin]').length === 0"),'private marks clear on commit');
       await crowded.check('extend last of ten groups from rack');
     }
     if (include('game16')) {
@@ -747,6 +930,18 @@ async function run() {
       await r.act(1,{type:'declareAction',actionType:'foreignAid'});await r.check('block response');
       await tap('#actionButtons button','声明公爵并阻挡');await until(()=>r.state.phase==='challengeBlock','block challenged');
       await r.act(1,reaction('pass'));await r.act(2,reaction('pass'));await r.check('block resolved');
+      const actor = r.state.players[2], defender = r.state.players[0];
+      await r.act(2,{type:'declareAction',actionType:'steal',targetId:defender.id});
+      await r.act(0,reaction('pass'));await r.act(1,reaction('pass'));
+      await tap('#actionButtons button','声明船长并阻挡');
+      await until(()=>r.state.phase==='challengeBlock','second captain can be challenged');
+      const claim = '#declarationSlips [data-declaration="action"]';
+      const block = '#declarationSlips [data-declaration="block"][aria-current="true"]';
+      assert.ok(await evaluate(`document.querySelector('${claim}').textContent.includes(${JSON.stringify(actor.name)})`));
+      assert.ok(await evaluate(`document.querySelector('${block}').textContent.includes(${JSON.stringify(defender.name)})`));
+      await r.act(2,reaction('challenge'));
+      await until(()=>evaluate(`document.querySelector('${block}')?.textContent.includes('待举证')`),'challenge addresses blocker during proof');
+      await r.check('two captain claims with the blocker proving');
     }
     if (include('game22')) {
       const r=await room('game22',5,s=>{

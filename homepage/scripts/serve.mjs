@@ -27,6 +27,7 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (pathname === "/") pathname = "/homepage/";
+  if (pathname.startsWith("/lobby/")) pathname = "/homepage" + pathname;
   if (pathname.endsWith("/")) pathname += "index.html";
   const filename = path.resolve(root, `.${pathname}`);
   if (filename !== root && !filename.startsWith(`${root}${path.sep}`)) {

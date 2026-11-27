@@ -1,3 +1,4 @@
+export const UPPER_BONUS_THRESHOLD = 63;
 export const CATEGORIES = Object.freeze([
   { id: "ones", name: "一点", help: "所有一点骰子之和", section: "upper", face: 1 },
   { id: "twos", name: "二点", help: "所有二点骰子之和", section: "upper", face: 2 },
@@ -67,7 +68,7 @@ export function totals(player) {
   const lower = CATEGORIES
     .filter((category) => category.section === "lower")
     .reduce((sum, category) => sum + (scorecard[category.id] || 0), 0);
-  const upperBonus = upper >= 63 ? 35 : 0;
+  const upperBonus = upper >= UPPER_BONUS_THRESHOLD ? 35 : 0;
   const yahtzeeBonus = Number(player?.yahtzeeBonus) || 0;
   return {
     upper,

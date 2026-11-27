@@ -48,6 +48,18 @@ function createSqliteRoomStore({ filename }) {
   `);
   const deleteRoom = database.prepare("DELETE FROM rooms WHERE room_code = ?");
   const healthCheck = database.prepare("SELECT 1 AS ok");
+  let analytics;
+
+  function atomic(operation) {
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      operation();
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
 
   return {
     kind: "sqlite",
@@ -60,11 +72,20 @@ function createSqliteRoomStore({ filename }) {
         snapshot: JSON.parse(row.snapshot)
       }));
     },
-    saveRoom(roomCode, snapshot) {
-      saveRoom.run(String(roomCode), JSON.stringify(snapshot), Date.now());
+    enableAnalytics(game) {
+      analytics = require("./match-analytics.cjs").matchAnalytics(database, game);
+    },
+    saveRoom(roomCode, snapshot, cause) {
+      const save = () => saveRoom.run(String(roomCode), JSON.stringify(snapshot), Date.now());
+      if (!analytics) return void save();
+      atomic(() => { save(); analytics.save(String(roomCode), snapshot, cause); });
     },
     deleteRoom(roomCode) {
-      deleteRoom.run(String(roomCode));
+      if (!analytics) return void deleteRoom.run(String(roomCode));
+      atomic(() => {
+        analytics.expire(String(roomCode), Date.now());
+        deleteRoom.run(String(roomCode));
+      });
     },
     check() {
       return healthCheck.get().ok === 1;

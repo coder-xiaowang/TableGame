@@ -6,6 +6,16 @@ const PARTITIONS = Object.freeze([
 ]);
 const key = (value) => JSON.stringify(value);
 
+export function notebookEntries(records, team, number) {
+  const entries = [];
+  for (const record of records) {
+    if (record.team !== team) continue;
+    const position = record.code.indexOf(number);
+    if (position >= 0) entries.push({ round: record.round, clue: record.clues[position] });
+  }
+  return entries.reverse();
+}
+
 function canGuess(view) {
   const role = view?.permissions?.guessRole;
   return view?.phase === "guess"

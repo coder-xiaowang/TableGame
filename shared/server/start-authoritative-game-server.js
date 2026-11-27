@@ -70,6 +70,10 @@ module.exports = function startAuthoritativeGameServer({
   const resolvedGameRoot = path.resolve(gameRoot);
   const resolvedSharedRoot = path.resolve(sharedRoot);
   const store = roomStore || createMemoryRoomStore();
+  if (process.env.TABLEGAME_ANALYTICS === "1") {
+    const listed = require("./analytics-games.cjs").find(game => game.directory === path.basename(resolvedGameRoot));
+    if (listed) store.enableAnalytics?.(listed.id);
+  }
   if (!store.loadRooms || !store.saveRoom || !store.deleteRoom) {
     throw new TypeError("roomStore must implement loadRooms, saveRoom and deleteRoom");
   }
@@ -107,8 +111,8 @@ module.exports = function startAuthoritativeGameServer({
     };
   }
 
-  function persistRoom(roomCode, room) {
-    store.saveRoom(roomCode, snapshotRoom(room));
+  function persistRoom(roomCode, room, cause) {
+    store.saveRoom(roomCode, snapshotRoom(room), cause);
   }
 
   function restoreRoom(roomCode, snapshot) {
@@ -426,6 +430,8 @@ module.exports = function startAuthoritativeGameServer({
   function safeFile(root, relativePath) {
     const resolved = path.resolve(root, relativePath);
     if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+    const parts = path.relative(root, resolved).split(path.sep);
+    if (parts.some(part => part.startsWith(".")) || /\.(?:sqlite|db)(?:-(?:wal|shm|journal))?$/i.test(resolved)) return null;
     return resolved;
   }
 
@@ -525,7 +531,7 @@ module.exports = function startAuthoritativeGameServer({
       if (isPlayer(member)) room.lastPlayerActivityAt = now;
       if (changed || !wasConnected) {
         room.version += 1;
-        try { persistRoom(roomCode, room); }
+        try { persistRoom(roomCode, room, "presence"); }
         catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
       }
       broadcastViews(roomCode, room);
@@ -551,7 +557,7 @@ module.exports = function startAuthoritativeGameServer({
         if (isPlayer(closingMember)) room.lastPlayerActivityAt = now;
         if (presenceChanged || isPlayer(closingMember) || isSpectator(closingMember)) {
           room.version += 1;
-          try { persistRoom(roomCode, room); }
+          try { persistRoom(roomCode, room, "presence"); }
           catch (error) { console.error(`Room ${roomCode} presence persistence failed:`, error); }
           broadcastViews(roomCode, room);
         }
@@ -593,7 +599,7 @@ module.exports = function startAuthoritativeGameServer({
         lastPlayerActivityAt: Date.now(),
         allowSpectators: true
       };
-      persistRoom(roomCode, room);
+      persistRoom(roomCode, room, "create");
       rooms.set(roomCode, room);
       return sendJson(response, 200, {
         roomCode,
@@ -941,7 +947,7 @@ module.exports = function startAuthoritativeGameServer({
         updatedAt: now,
         lastPlayerActivityAt: now
       };
-      persistRoom(roomCode, candidate);
+      persistRoom(roomCode, candidate, "action:" + data.action.type);
       room.state = nextState;
       room.members = nextMembers;
       room.version = candidate.version;
@@ -1136,7 +1142,7 @@ module.exports = function startAuthoritativeGameServer({
         updatedAt: now,
         lastPlayerActivityAt: now
       };
-      persistRoom(roomCode, candidate);
+      persistRoom(roomCode, candidate, "kick");
       room.state = nextState;
       room.members = nextMembers;
       push(roomCode, targetId, { kind: "kicked" });

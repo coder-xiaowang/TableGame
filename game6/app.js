@@ -6,7 +6,7 @@ import {
   setModeVisibility
 } from "/shared/client/index.js";
 import {
-  ACTION_SECONDS, CAPTURE_ANIMATION_MS, PLACE_ANIMATION_MS, REVEAL_MS, TURN_END_MS, bullheads, rowBullheads
+  ACTION_SECONDS, CAPTURE_ANIMATION_MS, PLACE_ANIMATION_MS, REVEAL_MS, ROW_LIMIT, TURN_END_MS, bullheads, rowBullheads
 } from "./rules.mjs";
 import { createGame6PartitionRenderer, createGame6RenderModel } from "./render-partitions.mjs";
 
@@ -121,10 +121,14 @@ async function kickPlayer(playerId) {
   catch (error) { alert(`移出失败：${error.message}`); }
 }
 
+function bullheadMarks(points, compact) {
+  return compact && points > 1 ? `🐂×${points}` : "🐂".repeat(points);
+}
+
 function cardHtml(number, options={}) {
   const points = bullheads(number);
-  const classes = ["number-card",points >= 5 ? "danger-card" : "",options.selected ? "selected" : ""].filter(Boolean).join(" ");
-  const marks = options.row && points > 1 ? `🐂×${points}` : "🐂".repeat(points);
+  const classes = ["number-card",points >= 5 ? "danger-card" : "",options.selected ? "selected" : "",options.ending ? "row-ending" : ""].filter(Boolean).join(" ");
+  const marks = bullheadMarks(points, options.row);
   const content = `<strong>${number}</strong><small>${marks}</small>`;
   if (!options.button) return `<div class="${classes}">${content}</div>`;
   return `<button class="${classes}" data-card="${number}" ${options.disabled ? "disabled" : ""}>${content}</button>`;
@@ -174,18 +178,25 @@ function renderRows(model) {
     }
     const animation = current.animation?.rowIndex === index ? current.animation : null;
     const capture = animation?.type === "captureAndPlace";
+    const full = row.length === ROW_LIMIT;
     const key = JSON.stringify([row, capture && animation.playerId, capture && animation.points]);
     if (node.dataset.contentKey !== key) {
       const points = rowBullheads(row);
-      node.innerHTML = `<div class="row-label"><b>第${index + 1}列</b><span>${row.length}/5 张</span><strong>${points} 牛头</strong></div>${row.map(card => cardHtml(card, {row: true})).join("")}`;
-      if (capture) node.insertAdjacentHTML("beforeend", `<div class="capture-preview">${escapeHtml(playerName(animation.playerId))} 收列<br><b>+${animation.points} 🐂</b></div>`);
+      const cards = row.map((card, i) => cardHtml(card, {row: true, ending: i === row.length - 1})).join("");
+      const slots = '<span class="row-slot-empty" aria-hidden="true"></span>'.repeat(ROW_LIMIT - row.length);
+      node.innerHTML = `<div class="row-label"><b>第${index + 1}列</b><span>${row.length}/${ROW_LIMIT} 张</span>${full ? "" : `<strong>${points} 牛头</strong>`}</div>${cards}${slots}`;
+      if (capture) {
+        node.insertAdjacentHTML("beforeend", `<div class="capture-preview"><span>${escapeHtml(playerName(animation.playerId))} 收列</span><b>+${animation.points} 牛头</b></div>`);
+      } else if (full) {
+        node.insertAdjacentHTML("beforeend", `<div class="row-warning"><span>再接就收</span><strong>${points} 牛头</strong></div>`);
+      }
       node.dataset.contentKey = key;
     }
-    node.className = ["card-row", canChoose && "choice", animation && "animation-target", capture && "will-capture"].filter(Boolean).join(" ");
+    node.className = ["card-row", full && "is-full", canChoose && "choice", animation && "animation-target", capture && "will-capture"].filter(Boolean).join(" ");
     if (canChoose) {
       node.setAttribute("role", "button");
       node.tabIndex = 0;
-      node.setAttribute("aria-label", `收走第${index + 1}列，末张 ${row.at(-1)}，${node.querySelector(".row-label strong").textContent}`);
+      node.setAttribute("aria-label", `收走第${index + 1}列，末张 ${row.at(-1)}，${rowBullheads(row)} 牛头`);
     } else {
       node.removeAttribute("role");
       node.removeAttribute("tabindex");
@@ -264,26 +275,20 @@ function playPlacementAnimation() {
     .find((element) => element.dataset.animationSource === `${animation.playerId}:${animation.card}`)
     ?.querySelector(".number-card");
   const targetRow = E.rows.querySelector(`[data-row="${animation.rowIndex}"]`);
-  if (!source || !targetRow) return;
+  const landing = targetRow?.querySelector(animation.type === "captureAndPlace" ? ".number-card" : ".row-slot-empty");
+  if (!source || !landing) return;
   const sourceBox = source.getBoundingClientRect();
-  const cards = targetRow.querySelectorAll(":scope > .number-card");
-  const lastCard = cards[cards.length-1];
-  const rowBox = targetRow.getBoundingClientRect();
-  const lastBox = lastCard?.getBoundingClientRect();
-  const targetLeft = animation.type === "captureAndPlace"
-    ? rowBox.left + Math.min(rowBox.width - sourceBox.width - 12,44)
-    : Math.min(rowBox.right-sourceBox.width-12,(lastBox?.right || rowBox.left+44)+8);
-  const targetTop = rowBox.top + (rowBox.height-sourceBox.height)/2;
+  const destination = landing.getBoundingClientRect();
   const total = Math.max(1,animation.endsAt-animation.startedAt);
   const remaining = Math.max(0,animation.endsAt-serverNow());
   const progress = Math.max(0,Math.min(1,1-remaining/total));
-  const deltaX = targetLeft-sourceBox.left;
-  const deltaY = targetTop-sourceBox.top;
-  const flying = document.createElement("div");
-  flying.className = `number-card flying-card table-animation-card ${bullheads(animation.card) >= 5 ? "danger-card" : ""}`;
-  flying.innerHTML = `<strong>${animation.card}</strong><small>${"🐂".repeat(bullheads(animation.card))}</small>`;
+  const deltaX = destination.left-sourceBox.left;
+  const deltaY = destination.top-sourceBox.top;
+  const flying = source.cloneNode(true);
+  flying.classList.add("flying-card","table-animation-card");
+  flying.querySelector("small").textContent = bullheadMarks(bullheads(animation.card), true);
   Object.assign(flying.style,{
-    left:`${sourceBox.left}px`,top:`${sourceBox.top}px`,
+    left:`${sourceBox.left}px`,top:`${sourceBox.top}px`,width:`${destination.width}px`,height:`${destination.height}px`,
     transform:`translate(${deltaX*progress}px,${deltaY*progress}px) rotate(${progress*3}deg)`,
     transitionDuration:`${remaining}ms`
   });
@@ -307,7 +312,7 @@ function playCaptureCollection(animation, targetRow, progress, remaining) {
     const deltaY = destination.top+destination.height/2-start.top-start.height/2;
     clone.classList.add("capture-flying-card","table-animation-card");
     Object.assign(clone.style,{
-      left:`${start.left}px`,top:`${start.top}px`,
+      left:`${start.left}px`,top:`${start.top}px`,width:`${start.width}px`,height:`${start.height}px`,
       opacity:String(1-progress*.85),
       transform:`translate(${deltaX*progress}px,${deltaY*progress}px) scale(${1-progress*.72}) rotate(${(index-2)*progress*5}deg)`,
       transitionDuration:`${remaining}ms`,transitionDelay:`${Math.min(index*35,remaining/5)}ms`

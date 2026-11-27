@@ -1,4 +1,22 @@
 [data-play-layout="game17"] .market-board { min-height: 0; }
+#closingTape {
+  width: 100%; margin: 8px 0 12px; border-collapse: collapse;
+  color: #263c36; background: #faf6e9; font-variant-numeric: tabular-nums;
+}
+#closingTape th, #closingTape td { padding: 5px clamp(4px,1.1vw,14px); text-align: left; }
+#closingTape thead { background: #e7dfc8; font-size: .75rem; }
+#closingTape tbody tr + tr { border-top: 1px dotted #b4ac91; }
+#closingTape tbody th { border-left: 4px solid var(--company); }
+#closingTape td:last-child { font-weight: 700; }
+.settlement-stamp {
+  display: inline-block; margin-inline: 3px; padding: 1px 4px; border: 1px solid currentColor;
+  border-radius: 2px; color: #396149; white-space: nowrap; font-size: .75rem; letter-spacing: .08em;
+}
+.settlement-stamp.bankruptcy { color: #8c3932; }
+.settlement-stamp.dividend { color: #705522; }
+#holdingSettlement { margin: 5px 0; padding: 4px 8px; border-left: 3px solid #ac9256; background: #f7f3e6; }
+#holdingSettlement h3 { margin: 0; font-size: .8rem; }
+#holdingSettlement ul { margin: 3px 0 0; padding: 0; list-style: none; font-size: .8rem; line-height: 1.5; }
 [data-play-layout="game17"] .players-panel { margin-top: 8px; }
 [data-play-layout="game17"] #controlDock .action-zone { padding: 0; }
 [data-play-layout="game17"] .portfolio-details { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 5px; }

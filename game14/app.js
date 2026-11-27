@@ -167,15 +167,19 @@ function cardHtml(card) {
 function pigHtml(player, pig, index, legalKeys) {
   const key = `${player.id}:${pig.id}`;
   const targetable = legalKeys.has(key);
-  const protections = [
-    pig.hasBarn ? '<span title="猪舍">⌂ 猪舍</span>' : "",
-    pig.hasDoor ? '<span title="封门">▣ 封门</span>' : "",
-    pig.hasRod ? '<span title="避雷针">↟ 避雷针</span>' : ""
-  ].filter(Boolean).join("");
-  return `<button class="pig ${pig.dirty ? "dirty" : "clean"} ${targetable ? "targetable" : ""} ${pig.completelySafe ? "safe" : ""}" data-player="${escapeHtml(player.id)}" data-pig="${escapeHtml(pig.id)}" type="button" ${targetable ? "" : "disabled"}>
-    <span class="pig-face">${pig.dirty ? "🐷" : "🐖"}</span>
-    <b>小猪 ${index + 1}</b><small>${pig.dirty ? "脏小猪" : "干净小猪"}${pig.completelySafe ? " · 完全安全" : ""}</small>
-    <span class="protections">${protections || "露天"}</span>
+  const state = pig.dirty ? "脏小猪" : "干净小猪";
+  const equipment = [pig.hasDoor && "封门", pig.hasRod && "避雷针"].filter(Boolean).join(" · ");
+  const shelter = pig.hasBarn ? "猪舍" : "露天";
+  const label = [player.name, `小猪 ${index + 1}`, state, shelter, equipment, pig.completelySafe && "完全安全"].filter(Boolean).join("，");
+  return `<button class="pig ${pig.dirty ? "dirty" : "clean"} ${targetable ? "targetable" : ""} ${pig.completelySafe ? "safe" : ""}" data-player="${escapeHtml(player.id)}" data-pig="${escapeHtml(pig.id)}" type="button" aria-label="${escapeHtml(label)}" ${targetable ? "" : "disabled"}>
+    <span class="pig-pen" aria-hidden="true">
+      ${pig.hasBarn ? '<i class="pig-roof"></i>' : ""}
+      ${pig.hasRod ? '<i class="pig-rod"></i>' : ""}
+      <span class="pig-face">${pig.dirty ? '<i class="pig-mud"></i>' : ""}<i class="pig-snout"></i></span>
+      ${pig.hasDoor ? '<i class="pig-latch"></i>' : ""}
+    </span>
+    <b>小猪 ${index + 1}</b><small>${pig.completelySafe ? "脏猪 · 安全" : state}</small>
+    <span class="protections">${equipment || shelter}</span>
   </button>`;
 }
 

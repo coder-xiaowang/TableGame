@@ -50,7 +50,7 @@ function dreamArtwork(card,{eager=false}={}){
 }
 
 function preview(card){E.previewArt.innerHTML=dreamArtwork(card,{eager:true});if(typeof E.cardPreview.showModal==="function")E.cardPreview.showModal();else E.cardPreview.setAttribute("open","");}
-function cardHtml(card,{displayId="",ownerId=null,selectable=false,selected=false,own=false,answer=false,votes=0,compact=false}={}){const owner=ownerId?nameOf(ownerId):"";return `<article class="dream-card ${selectable?"selectable":""} ${selected?"selected":""} ${own?"own-card":""} ${answer?"answer":""}" data-card-id="${escapeHtml(card.id)}" data-display-id="${escapeHtml(displayId)}"><button class="card-choice" type="button" aria-label="${selectable?"选择":"查看"}梦境画面">${dreamArtwork(card)}${displayId?`<span class="slot-number">${escapeHtml(displayId.replace("display_",""))}</span>`:""}${owner?`<span class="owner-reveal">${escapeHtml(owner)}的画面</span>`:""}${votes?`<span class="vote-count">${votes}票</span>`:""}</button><button class="zoom-card" type="button" aria-label="放大查看">⌕</button></article>`;}
+function cardHtml(card,{displayId="",ownerId=null,selectable=false,selected=false,own=false,answer=false}={}){const owner=ownerId?nameOf(ownerId):"";return `<article class="dream-card ${selectable?"selectable":""} ${selected?"selected":""} ${own?"own-card":""} ${answer?"answer":""}" data-card-id="${escapeHtml(card.id)}" data-display-id="${escapeHtml(displayId)}"><button class="card-choice" type="button" aria-label="${selectable?"选择":"查看"}梦境画面">${dreamArtwork(card)}${displayId?`<span class="slot-number">${escapeHtml(displayId.replace("display_",""))}</span>`:""}${owner?`<span class="owner-reveal">${escapeHtml(owner)}的画面</span>`:""}</button><button class="zoom-card" type="button" aria-label="放大查看">⌕</button></article>`;}
 
 function fillCounts(select){select.innerHTML=Array.from({length:6},(_,index)=>`<option value="${index+3}" ${index===3?"selected":""}>${index+3}</option>`).join("");}
 
@@ -68,7 +68,72 @@ function renderStage(model){
   E.clueLabel.textContent=view.clue?.mode==="voice"?"VOICE CLUE · 语音线索":"THE UNSPOKEN CLUE";E.clueText.textContent=clueCopy();if(view.phase==="playersChoosing")E.progressText.textContent=`${view.submissionCount}/${view.requiredSubmissions}份回应已封存`;else if(view.phase==="voting")E.progressText.textContent=`${view.voteCount}/${view.players.length-1}枚兔子印记已封存`;else if(["resolution","discussion"].includes(view.phase))E.progressText.textContent=view.roundResult.allOrNone?(view.roundResult.correctVoters.length?"线索太清晰：所有人都找到了":"线索太遥远：没有人找到"):"恰到好处：只有部分旅人找到";else E.progressText.textContent="梦境正在等待";}
 function nodeFromHtml(html){const template=document.createElement("template");template.innerHTML=html.trim();return template.content.firstElementChild;}
 function bindGalleryCard(node,entry){node.querySelector(".zoom-card").onclick=(event)=>{event.stopPropagation();preview(entry.card);};node.querySelector(".card-choice").onclick=()=>{if(view.permissions.canVote&&!view.ownDisplayIds.includes(entry.displayId))updateDraft({voteId:entry.displayId});else preview(entry.card);};}
-function renderGallery(model){const current=model.view;if(!current.displayCards.length){const emptyKey=`${current.phase}:${current.phase==="playersChoosing"}`;if(E.gallery.dataset.emptyKey!==emptyKey){E.gallery.innerHTML=`<div class="empty-gallery"><b>${current.phase==="lobby"?"画廊仍是一片安静的云":"所有画面都还封存在私人画匣中"}</b><p>${current.phase==="playersChoosing"?"只显示完成数量，不会透露是谁选择了哪幅画面。":"等待下一次公开展览。"}</p></div>`;E.gallery.dataset.emptyKey=emptyKey;}return;}E.gallery.querySelector(".empty-gallery")?.remove();delete E.gallery.dataset.emptyKey;const voteCounts={};if(current.roundResult)Object.values(current.roundResult.votes).forEach((id)=>{voteCounts[id]=(voteCounts[id]||0)+1;});const existing=new Map([...E.gallery.querySelectorAll("[data-display-id]")].map((node)=>[node.dataset.displayId,node])),retained=new Set();current.displayCards.forEach((entry,index)=>{const selectable=current.permissions.canVote&&!current.ownDisplayIds.includes(entry.displayId),own=current.ownDisplayIds.includes(entry.displayId),answer=current.roundResult?.storytellerDisplayId===entry.displayId,votes=voteCounts[entry.displayId]||0,contentKey=JSON.stringify([entry.card,entry.ownerId,own,answer,votes]);let node=existing.get(entry.displayId);if(!node||node.dataset.contentKey!==contentKey){const replacement=nodeFromHtml(cardHtml(entry.card,{displayId:entry.displayId,ownerId:entry.ownerId,selectable,selected:draft.voteId===entry.displayId,own,answer,votes}));replacement.dataset.contentKey=contentKey;bindGalleryCard(replacement,entry);if(node)node.replaceWith(replacement);node=replacement;}retained.add(entry.displayId);node.classList.toggle("selectable",selectable);node.classList.toggle("selected",draft.voteId===entry.displayId);const at=E.gallery.children[index];if(at!==node)E.gallery.insertBefore(node,at||null);});[...E.gallery.querySelectorAll("[data-display-id]")].forEach((node)=>{if(!retained.has(node.dataset.displayId))node.remove();});}
+const TICKET_COLORS = ["#f9bbab", "#a6dbe2", "#cfb8f1", "#e8d18e", "#b8dcaa", "#fcbed9", "#b8c5ff", "#edbb8e"];
+
+function voteTicketsHtml(voters) {
+  if (!voters.length) return "";
+  const tokens = voters.map(({ name, seat }) => {
+    const letters = Array.from(name);
+    const label = letters.length > 4 ? `${letters[0]}…${letters.at(-1)}` : name;
+    return `<span class="rabbit-ticket" style="--ticket:${TICKET_COLORS[seat]}" title="${escapeHtml(name)}"><span>${escapeHtml(label)}</span></span>`;
+  }).join("");
+  const names = voters.map(({ name, seat }) =>
+    `<li><small>${seat + 1} 席</small><span>${escapeHtml(name)}</span></li>`
+  ).join("");
+  return `<details class="vote-tickets"><summary aria-label="查看 ${voters.length} 位投票者"><span class="ticket-tray" aria-hidden="true">${tokens}</span><span class="ticket-count">${voters.length} 票</span></summary><ul class="voter-names">${names}</ul></details>`;
+}
+
+function renderGallery({ view: current }) {
+  if (!current.displayCards.length) {
+    if (E.gallery.dataset.emptyKey !== current.phase) {
+      E.gallery.innerHTML = `<div class="empty-gallery"><b>${current.phase === "lobby" ? "画廊仍是一片安静的云" : "所有画面都还封存在私人画匣中"}</b><p>${current.phase === "playersChoosing" ? "只显示完成数量，不会透露是谁选择了哪幅画面。" : "等待下一次公开展览。"}</p></div>`;
+      E.gallery.dataset.emptyKey = current.phase;
+    }
+    return;
+  }
+  E.gallery.querySelector(".empty-gallery")?.remove();
+  delete E.gallery.dataset.emptyKey;
+
+  const ballots = new Map();
+  if (current.roundResult) {
+    current.players.forEach(({ id, name }, seat) => {
+      const choice = current.roundResult.votes[id];
+      if (!choice) return;
+      if (!ballots.has(choice)) ballots.set(choice, []);
+      ballots.get(choice).push({ name, seat });
+    });
+  }
+
+  const existing = new Map([...E.gallery.children].map(node => [node.dataset.galleryId, node]));
+  current.displayCards.forEach((entry, index) => {
+    const own = current.ownDisplayIds.includes(entry.displayId);
+    const answer = current.roundResult?.storytellerDisplayId === entry.displayId;
+    const voters = ballots.get(entry.displayId) || [];
+    const ownerName = entry.ownerId && nameOf(entry.ownerId);
+    const contentKey = JSON.stringify([entry.card, ownerName, own, answer, voters]);
+    let item = existing.get(entry.displayId);
+    if (!item) {
+      item = document.createElement("div");
+      item.className = "gallery-entry";
+      item.dataset.galleryId = entry.displayId;
+    }
+    if (item.dataset.contentKey !== contentKey) {
+      item.innerHTML = cardHtml(entry.card, { displayId: entry.displayId, ownerId: entry.ownerId, own, answer,
+        selectable: current.permissions.canVote && !own }) + voteTicketsHtml(voters);
+      bindGalleryCard(item, entry);
+      item.dataset.contentKey = contentKey;
+    }
+    const card = item.querySelector(".dream-card");
+    const selectable = current.permissions.canVote && !own;
+    card.classList.toggle("selectable", selectable);
+    card.classList.toggle("selected", draft.voteId === entry.displayId && !current.roundResult);
+    card.querySelector(".card-choice").setAttribute("aria-label", `${selectable ? "选择" : "查看"}梦境画面`);
+    const at = E.gallery.children[index];
+    if (at !== item) E.gallery.insertBefore(item, at || null);
+    existing.delete(entry.displayId);
+  });
+  existing.forEach(node => node.remove());
+}
 function toggleHandCard(id,max){const selected=new Set(draft.selected);if(selected.has(id))selected.delete(id);else{if(selected.size>=max)selected.clear();selected.add(id);}updateDraft({selected:[...selected]});}
 function bindHandCard(node,card){node.querySelector(".zoom-card").onclick=(event)=>{event.stopPropagation();preview(card);};node.querySelector(".card-choice").onclick=()=>{const canSelect=view.permissions.canTell||view.permissions.canSubmitDecoys,max=view.permissions.canTell?1:view.decoyCount;canSelect?toggleHandCard(card.id,max):preview(card);};}
 function renderHand(model){const current=model.view,memberRole=model.memberRole;setHidden(E.handPanel,memberRole==="spectator");if(memberRole==="spectator")return;const canSelect=current.permissions.canTell||current.permissions.canSubmitDecoys,max=current.permissions.canTell?1:current.decoyCount;if(!current.hand.length){if(!E.hand.querySelector(".empty-hand"))E.hand.innerHTML='<span class="empty-hand">画匣尚未发放</span>';}else{E.hand.querySelector(".empty-hand")?.remove();const existing=new Map([...E.hand.querySelectorAll("[data-card-id]")].map((node)=>[node.dataset.cardId,node])),retained=new Set();current.hand.forEach((card,index)=>{let node=existing.get(card.id);if(!node){node=nodeFromHtml(cardHtml(card,{selectable:canSelect,selected:draft.selected.includes(card.id),compact:true}));bindHandCard(node,card);}retained.add(card.id);node.classList.toggle("selectable",canSelect);node.classList.toggle("selected",draft.selected.includes(card.id));const at=E.hand.children[index];if(at!==node)E.hand.insertBefore(node,at||null);});[...E.hand.querySelectorAll("[data-card-id]")].forEach((node)=>{if(!retained.has(node.dataset.cardId))node.remove();});}E.selectionStatus.textContent=current.mySubmittedCardIds.length?"选择已由服务器封存":canSelect?`已选择 ${draft.selected.length}/${max}`:`手牌 ${current.hand.length}/${current.handSize}`;}

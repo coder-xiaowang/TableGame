@@ -22,7 +22,8 @@ const E = Object.fromEntries([
   "spectatorSettingButton", "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList",
   "startGameButton", "restartGameButton", "endGameButton", "notice", "roundNumber", "roundTotal", "deckCount", "stockTicker", "informationPanel", "stockpiles",
   "players", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "privateZone", "myCash", "myInformation", "myPortfolio", "toggleLogButton", "logList",
-  "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText"
+  "presentationEffects", "presentationTrail", "presentationAnnouncement", "presentationLabel", "presentationText",
+  "marketTitle", "marketEdition", "closingTape", "holdingSettlement"
 ].map((id) => [id, $(id)]));
 
 let mode = "host"; let view = null; let spectatorUi = null; let presentation = null; let actionDraft = null; let partitionRenderer = null;
@@ -72,7 +73,7 @@ async function kickPlayer(playerId) {
 
 const playerAnchor = (id) => id ? E.players.querySelector(`[data-player-id="${CSS.escape(String(id))}"]`) : null;
 const pileAnchor = (id) => id ? E.stockpiles.querySelector(`[data-pile-id="${CSS.escape(String(id))}"]`) : null;
-const companyAnchor = (id) => id ? E.stockTicker.querySelector(`[data-company-id="${CSS.escape(String(id))}"]`) : null;
+const companyAnchor = (id) => id ? (E.closingTape.hidden ? E.stockTicker : E.closingTape).querySelector(`[data-company-id="${CSS.escape(String(id))}"]`) : null;
 function presentationLabel(kind) {
   return ({ "round-start": "新一轮开市", "supply-turn": "配置供给", "supply-place": "供给入场", "bidding-start": "公开竞价", "bid-turn": "等待报价", bid: "最新报价", "stockpiles-resolved": "交易交割", "market-action-turn": "市场行动", "market-action": "干预行情", "selling-start": "卖出阶段", "sell-turn": "等待卖出", sale: "成交回报", "information-reveal-start": "内幕揭晓", "information-reveal": "行情公开", "price-move": "股价异动", "dividend-turn": "分红申报", dividend: "分红到账", "round-review": "本轮收盘", "game-result": "最终收盘", "timeout-default": "系统托管" })[kind] || "交易动态";
 }
@@ -116,6 +117,28 @@ function infoCard(pair, label) {
 
 function renderTicker() {
   E.roundNumber.textContent = String(view.round); E.roundTotal.textContent = String(view.totalRounds); E.deckCount.textContent = String(view.deckCount);
+  const tape = view.closingTape;
+  E.closingTape.hidden = !tape;
+  setHidden(E.stockTicker, Boolean(tape));
+  E.marketTitle.textContent = tape ? "收盘行情单" : "实时行情";
+  E.marketEdition.textContent = tape ? "CLOSING PRICES" : "LIVE MARKET";
+  if (tape) {
+    E.closingTape.tBodies[0].innerHTML = COMPANIES.map(company => {
+      const opening = tape.openingPrices[company.id];
+      const close = view.stockPrices[company.id];
+      const delta = close - opening;
+      const events = tape.events.filter(event => event.companyId === company.id);
+      const reset = events.some(event => event.kind === "split" || event.kind === "bankruptcy");
+      let movement = "";
+      if (Number.isInteger(opening) && !reset) {
+        movement = delta === 0 ? "持平" : `${delta > 0 ? "↑" : "↓"}${Math.abs(delta)}`;
+      }
+      const labels = {split:"拆股", bankruptcy:"破产", dividend:"分红"};
+      const stamps = events.map(event => `<b class="settlement-stamp ${event.kind}">${labels[event.kind]}</b>`).join("");
+      return `<tr data-close-company="${company.id}" data-company-id="${company.id}" style="--company:${company.color}"><th scope="row">${company.name}</th><td>${Number.isInteger(opening) ? "$" + opening : "—"}</td><td><b>$${close}</b></td><td>${movement}${stamps}</td></tr>`;
+    }).join("");
+    return;
+  }
   const existing = new Map([...E.stockTicker.querySelectorAll(":scope > [data-company-id]")].map((node) => [node.dataset.companyId, node]));
   COMPANIES.forEach((item, index) => {
     let node = existing.get(item.id);
@@ -344,7 +367,24 @@ function renderActions(memberRole) {
 }
 
 function groupStocks(cards) { return COMPANIES.map((item) => ({ item, count: cards.filter((card) => card.companyId === item.id).length })).filter((entry) => entry.count); }
+function renderHoldingSettlement(entries) {
+  E.holdingSettlement.hidden = entries.length === 0;
+  E.holdingSettlement.querySelector("ul").innerHTML = entries.map(entry => {
+    let text;
+    if (entry.kind === "split") {
+      const effects = [];
+      if (entry.converted) effects.push(`${entry.converted} 股拆为 ${entry.converted * 2} 股`);
+      if (entry.payout) effects.push(`再次拆股派付 ${money(entry.payout)}`);
+      text = effects.join("，");
+    } else if (entry.kind === "bankruptcy") text = `破产 · ${entry.shares} 股清零`;
+    else if (entry.kind === "dividend") text = `申报 ${entry.shares} 股，分红 ${money(entry.payout)}`;
+    else text = `${entry.shares} 股市值 ${entry.change > 0 ? "+" : "−"}${money(Math.abs(entry.change))}`;
+    return `<li><b>${company(entry.companyId).short}</b> ${text}</li>`;
+  }).join("");
+}
+
 function renderPrivate(memberRole) {
+  renderHoldingSettlement(memberRole === "spectator" ? [] : view.holdingSettlement || []);
   setHidden(E.privateZone, memberRole === "spectator"); if (memberRole === "spectator") return;
   const self = view.players.find((player) => player.id === view.selfId); E.myCash.textContent = money(self?.cash);
   E.myInformation.innerHTML = self?.privateInformation.length ? self.privateInformation.map((pair) => infoCard(pair, "我的内幕")).join("") : '<span class="muted">本轮暂无内幕信息</span>';

@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createGame16PartitionRenderer,createGame16RenderModel} from "./render-partitions.mjs";
+import {courtDeclarations,createGame16PartitionRenderer,createGame16RenderModel} from "./render-partitions.mjs";
 
 const clone=(value)=>structuredClone(value);
+test("行动和阻挡双方都声称船长时，待质疑和待举证跟随公开声明", () => {
+  const view = { phase:"challengeAction", action:{type:"steal", actorId:"甲", targetId:"乙", claimedRole:"captain"} };
+  const actor = { kind:"action", actorId:"甲", role:"captain" };
+  const blocker = { kind:"block", actorId:"乙", role:"captain" };
+  assert.deepEqual(courtDeclarations(view), [{...actor, stamp:"可质疑"}]);
+  view.phase = "proveClaim";
+  view.challenge = {context:"action", claimantId:"甲"};
+  assert.deepEqual(courtDeclarations(view), [{...actor, stamp:"待举证"}]);
+  view.phase = "block";
+  view.challenge = null;
+  assert.deepEqual(courtDeclarations(view), [actor]);
+  Object.assign(view.action, {blockerId:"乙", blockRole:"captain"});
+  view.phase = "challengeBlock";
+  assert.deepEqual(courtDeclarations(view), [actor, {...blocker, stamp:"可质疑"}]);
+  view.phase = "proveClaim";
+  view.challenge = {context:"block", claimantId:"乙"};
+  assert.deepEqual(courtDeclarations(view), [actor, {...blocker, stamp:"待举证"}]);
+  view.phase = "loseInfluence";
+  view.challenge = null;
+  assert.deepEqual(courtDeclarations(view), [actor, blocker]);
+  assert.deepEqual(courtDeclarations({phase:"action",action:null}), []);
+});
 const player=(id,overrides={})=>({id,name:id,isHost:id==="p1",connected:true,coins:2,eliminated:false,influences:[{id:`${id}-1`,role:id==="p1"?"duke":null,revealed:false},{id:`${id}-2`,role:id==="p1"?"captain":null,revealed:false}],...overrides});
 function baseView(){return{selfId:"p1",roomRole:"player",phase:"challengeAction",capacity:3,currentPlayerId:"p2",deckCount:9,deadline:5000,winnerId:null,
   action:{type:"tax",actorId:"p2",targetId:null},reaction:{id:"r1",kind:"challengeAction",eligibleIds:["p1","p3"],passedIds:[]},challenge:null,loss:null,exchange:null,proofOptions:[],moments:[],logs:[],players:[player("p1"),player("p2"),player("p3")],

@@ -148,6 +148,16 @@ button.danger { color: #a52a1d; border-color: #e4ada4; background: #fff0ed; }
 .card-run { display: flex; padding-right: 6px; }
 .small-number-card { position: relative; display: grid; place-items: center; width: 41px; height: 57px; border: 3px solid white; border-radius: 6px; color: white; background: var(--coral); box-shadow: 0 3px 8px rgb(0 0 0 / 14%); font: 900 1rem "Arial Black"; }
 .small-number-card.linked { margin-left: -17px; color: #4f4a41; background: var(--yellow); }
+.my-area .card-runs { align-items: flex-start; }
+.my-area .card-run { flex-wrap: wrap; max-width: 100%; gap: 3px; padding: 0; }
+.my-area .small-number-card.linked { margin-left: 0; }
+.run-preview { max-width: 100%; }
+.preview-card {
+  align-content: center; gap: 2px; border: 2px dashed #26674f;
+  color: #185740; background: #eff5e9; box-shadow: none;
+}
+.preview-card small { font: 650 .63rem/1 system-ui, sans-serif; }
+.run-preview-note { margin: 5px 0 0; color: #315841; font-size: .76rem; }
 
 .result-panel { display: grid; gap: 18px; border-top: 7px solid var(--yellow); }
 .result-panel h2 { margin: 0; font: 900 clamp(1.6rem, 4vw, 2.7rem) "Arial Black"; color: var(--green); }

@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createGame11PartitionRenderer, createGame11RenderModel } from "./render-partitions.mjs";
+import { createGame11PartitionRenderer, createGame11RenderModel, notebookEntries } from "./render-partitions.mjs";
 
 const clone=(value)=>structuredClone(value);
+
+test("便笺按传讯队和揭晓编号找提示，最新轮次在前", () => {
+  const records = [
+    { round: 1, team: "black", code: [4,2,1], clues: ["帆船","潮汐","山峰"] },
+    { round: 2, team: "white", code: [2,1,4], clues: ["苹果","稻穗","星辰"] },
+    { round: 2, team: "black", code: [3,1,2], decodeGuess: [2,3,1], clues: ["紫色","纸张","海岸"] }
+  ];
+  assert.deepEqual(notebookEntries(records, "black", 2), [{ round: 2, clue: "海岸" }, { round: 1, clue: "潮汐" }]);
+  assert.deepEqual(notebookEntries(records, "white", 3), []);
+});
 const player=(id,team,seat,overrides={})=>({id,name:id,isHost:id==="p1",connected:true,team,seat,...overrides});
 function baseView(){return {
   selfId:"p1",roomRole:"player",phase:"clue",capacity:4,round:2,turnTeam:"white",encryptorId:"p1",

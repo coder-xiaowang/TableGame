@@ -158,23 +158,36 @@ function submit(action) {
   });
 }
 
-function cardRunsHtml(cards) {
+function cardRunsHtml(cards, previewCard = null) {
   if (!cards?.length) return '<p class="muted">还没有拿牌</p>';
+  const sorted = [...cards];
+  if (previewCard !== null) sorted.push(previewCard);
   const runs = [];
-  for (const card of [...cards].sort((a, b) => a - b)) {
+  for (const card of sorted.sort((a, b) => a - b)) {
     const last = runs.at(-1);
     if (last && card === last.at(-1) + 1) last.push(card);
     else runs.push([card]);
   }
-  return runs.map((run) => `<div class="card-run">${run.map((card, index) =>
-    `<span class="small-number-card ${index ? "linked" : "scoring"}">${card}</span>`).join("")}</div>`).join("");
+  return runs.map(run => {
+    const faces = run.map((card, index) => {
+      if (card === previewCard) {
+        return `<span class="small-number-card preview-card">${card}<small>待拿</small></span>`;
+      }
+      // The first owned card after the gap still scores until the offer is taken.
+      const scoresNow = index === 0 || run[index - 1] === previewCard;
+      return `<span class="small-number-card ${scoresNow ? "scoring" : "linked"}">${card}</span>`;
+    }).join("");
+    const row = `<div class="card-run">${faces}</div>`;
+    if (!run.includes(previewCard)) return row;
+    return `<div class="run-preview">${row}<p class="run-preview-note">若拿下 ${previewCard}，这组只计 <b>${run[0]}</b> 分</p></div>`;
+  }).join("");
 }
 
 function createVisualTestView(playerCount) {
   const distributions = playerCount === 7
     ? [8, 4, 3, 3, 2, 2, 2]
     : [9, 4, 3, 3, 3, 2];
-  const cardPool = [3, 4, 5, 8, 9, 10, 14, 18, 19, 22, 23, 24, 27, 29, 30, 31, 33, 35, 6, 12, 16, 20, 25, 28];
+  const cardPool = [3, 4, 5, 8, 9, 10, 18, 20, 14, 22, 23, 24, 27, 29, 30, 31, 33, 35, 6, 12, 16, 26, 25, 28];
   let offset = 0;
   const players = distributions.map((count, index) => {
     const cards = cardPool.slice(offset, offset + count).sort((a, b) => a - b);
@@ -195,7 +208,7 @@ function createVisualTestView(playerCount) {
     phase: "playing",
     capacity: playerCount,
     currentIndex: 2,
-    activeCard: 26,
+    activeCard: 19,
     pot: 6,
     deckCount: 7,
     deadline: serverNow() + ACTION_SECONDS * 1000,
@@ -321,7 +334,7 @@ function renderPrivateArea(model) {
   E.myChips.textContent = me?.chips ?? "?";
   E.myCardScore.textContent = String(me?.cardScore ?? 0);
   E.myNetScore.textContent = me?.chips == null ? "?" : String(me.cardScore - me.chips);
-  E.myCards.innerHTML = cardRunsHtml(me?.cards);
+  E.myCards.innerHTML = cardRunsHtml(me?.cards, model.previewCard);
   const ownChipLabel = [...E.playerList.querySelectorAll("[data-player-id]")]
     .find((element) => element.dataset.playerId === String(current.selfId))
     ?.querySelector("[data-player-chips]");

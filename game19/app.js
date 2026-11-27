@@ -6,12 +6,37 @@ import {
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
 import { createGame19PartitionRenderer, createGame19RenderModel } from "./render-partitions.mjs";
-import { CARD_META } from "./rules.mjs";
+import { CARD_META, isBarrelSuccess, isDynamiteHit, isJailSuccess } from "./rules.mjs";
 import { sideColumnSlots } from "/shared/client/stable-seat-layout.js";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_MS = { turnStart: 20000, draw: 20000, drawChoice: 20000, kitChoice: 20000, judgmentChoice: 20000, play: 75000, defense: 15000, duel: 12000, dying: 15000, discardExcess: 25000, generalStore: 20000 };
 const SUIT = { spades: "♠", hearts: "♥", clubs: "♣", diamonds: "♦" };
+const JUDGMENTS = {
+  dynamite: { label: "炸药", rule: "♠ 2–9 爆炸", matches: isDynamiteHit, hit: "爆炸", miss: "未爆炸" },
+  jail: { label: "监狱", rule: "♥ 越狱", matches: isJailSuccess, hit: "正常行动", miss: "跳过回合" },
+  barrel: { label: "木桶", rule: "♥ 视为闪", matches: isBarrelSuccess, hit: "算作 1 张闪", miss: "继续防御" }
+};
+function judgmentFace(card) {
+  const symbol = SUIT[card.suit];
+  const red = card.suit === "hearts" || card.suit === "diamonds";
+  return `<b class="judgment-face${red ? " red-suit" : ""}">${symbol}${escapeHtml(String(card.rank))}</b>`;
+}
+function renderJudgmentSlot() {
+  const slot = $("judgmentSlot");
+  const records = view.recentJudgments || [];
+  const pending = view.pending?.type === "judgmentChoice" ? view.pending : null;
+  const active = pending || records.at(-1);
+  slot.hidden = !active;
+  if (!active) { slot.replaceChildren(); return; }
+  const rule = JUDGMENTS[active.purpose];
+  const previous = pending ? records.at(-1) : records.at(-2);
+  const priorText = previous ? `<small class="prior-judgment">上次 · ${escapeHtml(name(previous.actorId))} · ${JUDGMENTS[previous.purpose].label} ${SUIT[previous.suit]}${escapeHtml(String(previous.rank))} · ${escapeHtml(previous.result)}</small>` : "";
+  const face = pending ? '<b class="judgment-face card-back" aria-label="等待翻牌">?</b>' : judgmentFace(active);
+  const caption = pending ? "等待选牌" : "最近判定";
+  const result = pending ? "幸运公爵选牌中" : escapeHtml(active.result);
+  slot.innerHTML = `<div class="judgment-slip">${face}<div><small>${caption} · ${escapeHtml(name(active.actorId))}</small><div class="judgment-rule">${rule.label} · ${rule.rule}</div><strong data-judgment-result>${result}</strong></div></div>${priorText}`;
+}
 const CARD = {
   bang:["砰！","对射程内一名玩家开枪"],missed:["闪！","躲避砰！"],beer:["啤酒","回复1点生命"],cat_balou:["拆除","弃掉目标一张牌"],stagecoach:["驿马车","摸2张牌"],duel:["决斗","轮流打出砰！"],general_store:["杂货店","所有人依次选牌"],gatling:["加特林","攻击其他所有玩家"],indians:["印第安人！","其他玩家打出砰！"],panic:["抢劫","取得距离1玩家的一张牌"],saloon:["酒馆","所有玩家回复1点"],wells_fargo:["富国银行","摸3张牌"],barrel:["木桶","红桃判定躲避砰！"],dynamite:["炸药","黑桃2至9爆炸"],scope:["瞄准镜","攻击距离-1"],mustang:["野马","被攻击距离+1"],jail:["监狱","非红桃跳过回合"],volcanic:["火山手枪","射程1，可连续砰！"],schofield:["斯科菲尔德","射程2"],remington:["雷明顿","射程3"],rev_carabine:["卡宾枪","射程4"],winchester:["温彻斯特","射程5"]
 };
@@ -140,9 +165,20 @@ function renderActions(role){
   if(view.permissions.canDraw){E.actionTitle.textContent="摸牌阶段";addButton("从牌库摸2张",()=>submit({type:"draw"}),"primary");return;}
   if(view.permissions.canChooseDraw){E.actionTitle.textContent="选择摸牌方式";addButton("正常摸2张",()=>submit({type:"chooseDraw",mode:"deck"}),"primary");if(own().characterId==="pedro_ramirez"&&view.discardTop)addButton("取得弃牌顶 + 摸1张",()=>submit({type:"chooseDraw",mode:"discard"}));if(own().characterId==="jesse_jones")for(const p of view.players.filter((p)=>p.alive&&p.id!==view.selfId&&p.handCount))addButton(`从${p.name}随机抽1张`,()=>submit({type:"chooseDraw",mode:"steal",targetId:p.id}));return;}
   if(view.permissions.canChooseKit){E.actionTitle.textContent="基特·卡尔森：从三张中选两张";const picked=new Set();for(const card of view.pending.cards){const b=addButton(`${card.rank}${SUIT[card.suit]} ${cardName(card.type)}`,()=>{picked.has(card.id)?picked.delete(card.id):picked.add(card.id);b.classList.toggle("primary",picked.has(card.id));confirm.disabled=picked.size!==2;});}const confirm=addButton("确认选择",()=>submit({type:"chooseKit",cardIds:[...picked]}),"primary");confirm.disabled=true;return;}
-  if(view.permissions.canChooseJudgment){E.actionTitle.textContent=`幸运公爵：选择${view.pending.purpose==="dynamite"?"炸药":view.pending.purpose==="jail"?"监狱":"木桶"}判定`;for(const card of view.pending.cards)addButton(`${card.rank}${SUIT[card.suit]} · ${cardName(card.type)}`,()=>submit({type:"chooseJudgment",cardId:card.id}),"primary");return;}
+  if(view.permissions.canChooseJudgment){
+    const rule = JUDGMENTS[view.pending.purpose];
+    E.actionTitle.textContent = `幸运公爵 · 选择${rule.label}判定牌`;
+    E.actionHint.textContent = rule.rule;
+    for(const card of view.pending.cards) {
+      const button = addButton("",()=>submit({type:"chooseJudgment",cardId:card.id}),"judgment-choice");
+      button.dataset.judgmentChoice = card.id;
+      const consequence = rule.matches(card) ? rule.hit : rule.miss;
+      button.innerHTML = `${judgmentFace(card)}<span>${escapeHtml(cardName(card.type))}<b>${consequence}</b></span>`;
+    }
+    return;
+  }
   if(view.permissions.canPlay){const card=own()?.hand.find((item)=>item.id===selectedCardId);E.actionTitle.textContent=card?`准备使用：${cardName(card.type)}`:"轮到你行动";E.actionHint.textContent=card?CARD[card.type]?.[1]:"点击下方手牌选择，或直接结束回合。";if(card)targetButtons(card);addButton("结束回合",()=>submit({type:"endTurn"}),"danger");renderSid();return;}
-  if(view.phase==="defense"&&view.pending?.actorId===view.selfId){const expected=view.pending.sourceType==="indians"?"bang":"missed";E.actionTitle.textContent=view.pending.sourceType==="indians"?"印第安人来袭":"枪声逼近";for(const card of responseCards(expected))addButton(`打出${cardName(card.type)}`,()=>submit({type:"respond",cardId:card.id}),"primary");if(view.pending.sourceType==="bang"&&(own().characterId==="jourdonnais"||own().equipment.some((c)=>c.type==="barrel")))addButton("尝试木桶判定",()=>submit({type:"useBarrel"}));addButton("承受伤害",()=>submit({type:"takeHit"}),"danger");return;}
+  if(view.phase==="defense"&&view.pending?.actorId===view.selfId){const expected=view.pending.sourceType==="indians"?"bang":"missed";E.actionTitle.textContent=view.pending.sourceType==="indians"?"印第安人来袭":"枪声逼近";for(const card of responseCards(expected))addButton(`打出${cardName(card.type)}`,()=>submit({type:"respond",cardId:card.id}),"primary");if(view.permissions.canUseBarrel)addButton("尝试木桶判定",()=>submit({type:"useBarrel"}));addButton("承受伤害",()=>submit({type:"takeHit"}),"danger");return;}
   if(view.phase==="duel"&&view.pending?.actorId===view.selfId){E.actionTitle.textContent="决斗：打出一张【砰！】";for(const card of responseCards("bang"))addButton(`打出${cardName(card.type)}`,()=>submit({type:"respond",cardId:card.id}),"primary");addButton("认输并受伤",()=>submit({type:"takeHit"}),"danger");return;}
   if(view.phase==="dying"){E.actionTitle.textContent=`${name(view.pending.actorId)} 濒死，需要啤酒`;for(const card of own().hand.filter((c)=>c.type==="beer"))addButton(`用啤酒救援`,()=>submit({type:"useBeer",cardId:card.id}),"primary");if(view.permissions.canResolveOwnDying){renderSid();addButton("放弃救援",()=>submit({type:"giveUp"}),"danger");}return;}
   if(view.permissions.canDiscard){E.actionTitle.textContent=`手牌超限：弃掉${view.pending.count}张`;const picked=new Set();for(const card of own().hand){const b=addButton(cardName(card.type),()=>{picked.has(card.id)?picked.delete(card.id):picked.add(card.id);b.classList.toggle("primary",picked.has(card.id));confirm.disabled=picked.size!==view.pending.count;});}const confirm=addButton("确认弃牌",()=>submit({type:"discardCards",cardIds:[...picked]}),"danger");confirm.disabled=true;return;}
@@ -154,7 +190,12 @@ function renderSid(){if(own()?.characterId!=="sid_ketchum"||own().hand.length<2)
 function renderHand(role){setHidden(E.privateZone,role==="spectator");if(role==="spectator")return;const self=own();E.selfSummary.textContent=self?`${self.characterName||"未分配角色"} · ${self.role?ROLE[self.role]:""} · ${self.life}/${self.maxLife}生命`:"";E.myHand.innerHTML=self?.hand.map((card)=>cardHtml(card,{selectable:view.permissions.canPlay,selected:card.id===selectedCardId})).join("")||'<p class="muted">暂无手牌</p>';E.myHand.querySelectorAll("[data-card]").forEach((button)=>button.onclick=()=>{selectedCardId=button.dataset.card;selectedTargetId=null;render();});}
 function renderRoom(){setHidden(E.hostTools,!view.permissions.canManage);setHidden(E.startGameButton,!view.permissions.canStart);setHidden(E.restartGameButton,!view.permissions.canRestart);setHidden(E.endGameButton,!view.permissions.canEnd);E.startGameButton.disabled=view.players.length!==view.capacity||view.players.some((p)=>!p.connected);E.roomPlayerCountSelect.value=String(view.capacity);E.roomPlayerCountSelect.disabled=!view.permissions.canSetCapacity;}
 function renderStatus(model){E.controlDock.dataset.role=model.memberRole;E.notice.textContent=view.phase==="lobby"?`等待玩家：${view.players.length}/${view.capacity}`:`第 ${view.turn} 回合 · ${name(view.currentPlayerId)} 行动`;}
-function renderTable(){E.centerMoment.textContent=view.winner?.text||(view.phase==="lobby"?"酒馆尚未响起枪声":view.logs[0]?.text||`${name(view.currentPlayerId)} 的回合`);E.deckCount.textContent=view.deckCount;E.discardTop.innerHTML=view.discardTop?`<b>${escapeHtml(cardName(view.discardTop.type))}</b><span>${escapeHtml(view.discardTop.rank+SUIT[view.discardTop.suit])}</span>`:"<b>—</b><span>弃牌堆</span>";}
+function renderTable(){
+  E.centerMoment.textContent=view.winner?.text||(view.phase==="lobby"?"酒馆尚未响起枪声":view.logs[0]?.text||`${name(view.currentPlayerId)} 的回合`);
+  E.deckCount.textContent=view.deckCount;
+  E.discardTop.innerHTML=view.discardTop?`<b>${escapeHtml(cardName(view.discardTop.type))}</b><span>${escapeHtml(view.discardTop.rank+SUIT[view.discardTop.suit])}</span>`:"<b>—</b><span>弃牌堆</span>";
+  renderJudgmentSlot();
+}
 function renderLog(){E.logList.innerHTML=view.logs.map((item)=>`<div class="log-item">${escapeHtml(item.text)}</div>`).join("")||'<p class="muted">暂无记录</p>';}
 function renderCountdownPartition(){if(view.deadline)countdown.start(view.deadline,PHASE_MS[view.phase]||20000);else{countdown.stop();E.timerText.textContent="--";E.timerBar.style.width="0";}}
 partitionRenderer=createGame19PartitionRenderer({room:renderRoom,status:renderStatus,table:renderTable,players:renderPlayers,private:(model)=>renderHand(model.memberRole),decision:(model)=>renderActions(model.memberRole),log:renderLog,countdown:renderCountdownPartition});

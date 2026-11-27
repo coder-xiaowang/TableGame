@@ -59,7 +59,8 @@ export function createGame23RenderModel(view, {
       ]),
       gallery: key([
         view.phase, permissions.canVote, view.displayCards || [], view.ownDisplayIds || [],
-        view.roundResult, draft.voteId || ""
+        view.roundResult, view.roundResult ? players.map(player => [player.id, player.name]) : null,
+        draft.voteId || ""
       ]),
       hand: key([
         memberRole, permissions.canTell, permissions.canSubmitDecoys,

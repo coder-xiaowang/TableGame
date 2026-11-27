@@ -6,7 +6,7 @@ import {
   setModeVisibility
 } from "/shared/client/index.js";
 import { isValidCode, validateClues } from "./rules.js";
-import { createGame11PartitionRenderer, createGame11RenderModel } from "./render-partitions.mjs";
+import { createGame11PartitionRenderer, createGame11RenderModel, notebookEntries } from "./render-partitions.mjs";
 
 const PROTOCOL_VERSION = 3;
 const CLUE_SECONDS = 150;
@@ -16,6 +16,9 @@ const $ = (id) => document.getElementById(id);
 const ids = ["masthead","connectionStatus","roomHeaderTools","setupPanel","roomPanel","hostModeButton","guestModeButton","hostSetup","guestSetup","hostNameInput","guestNameInput","playerCountSelect","createRoomButton","joinRoomButton","roomCodeInput","joinIntentField","roomCodeDisplay","seatActionButton","spectatorSettingButton","spectatorPanel","spectatorCountBadge","spectatorList","phaseBadge","roundText","timerWrap","timerText","timerBar","hostTools","startGameButton","endGameButton","notice","lobbyArea","gameArea","myTeamBadge","keywordRack","secretCode","operationTitle","encryptorName","clueComposer","clue1","clue2","clue3","submitCluesButton","clueDisplay","guessComposer","guessRoleText","guess1","guess2","guess3","submitGuessButton","waitingText","whiteScore","blackScore","historyList","resultPanel","winnerText","finalKeywords","finalRecords"];
 const E = Object.fromEntries(ids.map((id) => [id, $(id)]));
 const TEAM_NAME = { white: "白队", black: "黑队" };
+const archive = $("archives");
+const notebookIndex = $("notebookIndex");
+let notebookChoice = null;
 
 let mode = "host";
 let view = null;
@@ -130,6 +133,11 @@ function codeText(code) { return code?.length ? code.join(" - ") : "未提交"; 
 function renderRoom(model) {
   const current=model.view,lobby=current.phase==="lobby",ended=current.phase==="ended";
   E.roomCodeDisplay.textContent=model.roomCode;
+  setHidden(archive, lobby);
+  if (lobby) {
+    notebookChoice = null;
+    for (const section of archive.querySelectorAll("details")) section.open = false;
+  }
   setHidden(E.hostTools,!current.permissions?.canManage);
   setHidden(E.lobbyArea,!lobby);setHidden(E.gameArea,lobby||ended);setHidden(E.resultPanel,!ended);
   setHidden(E.startGameButton,!current.permissions?.canStart);E.startGameButton.disabled=!canStartView(current);
@@ -205,7 +213,24 @@ function statusText(current) {
   return "";
 }
 
+function renderNotebook(records) {
+  const first = records[0];
+  const { team, number } = notebookChoice || { team: first?.team || "white", number: first?.code[0] || 1 };
+  for (const button of notebookIndex.querySelectorAll("button")) {
+    const selected = button.dataset.team === team && Number(button.dataset.number) === number;
+    button.setAttribute("aria-pressed", String(selected));
+  }
+
+  const entries = notebookEntries(records, team, number);
+  $("notebookTitle").textContent = `${TEAM_NAME[team]} · ${number} 号 · ${entries.length} 条提示`;
+  $("notebookEntries").innerHTML = entries.map(({round, clue}) =>
+    `<li><span>第 ${round} 轮</span><b>${escapeHtml(clue)}</b></li>`
+  ).join("");
+  $("notebookEmpty").hidden = entries.length > 0;
+}
+
 function renderHistory(current) {
+  renderNotebook(current.records);
   E.historyList.innerHTML = [...current.records].reverse().map((record) => `<article class="record ${record.team}"><div class="record-head"><span>第 ${record.round} 轮 · ${TEAM_NAME[record.team]}传讯</span><span>${codeText(record.code)}</span></div><div class="record-clues">${record.clues.map((clue,index) => `<span>${index+1}. ${escapeHtml(clue)} → ${record.code[index]}</span>`).join("")}</div><div class="record-result">己方 ${codeText(record.decodeGuess)} ${record.miscommunicated ? "✕ 误传" : "✓"}　/　对方 ${record.round === 1 ? "首轮不拦截" : codeText(record.interceptGuess)+(record.intercepted ? " ✓ 截获" : " ✕")}</div></article>`).join("") || "<p>提示公开后，推理档案会记录在这里。</p>";
 }
 
@@ -213,7 +238,7 @@ function renderResult(current) {
   const names = current.outcome.winners.map((team) => TEAM_NAME[team]);
   E.winnerText.textContent = names.length === 2 ? "最终裁决仍然平手，双方共同获胜" : `${names[0]}完成截码任务`;
   E.finalKeywords.innerHTML = ["white","black"].map((team) => `<div><b>${TEAM_NAME[team]}</b><p>${current.teams[team].keywords.map((word,index) => `${index+1}. ${escapeHtml(word)}`).join("　")}</p></div>`).join("");
-  E.finalRecords.innerHTML = `共完成 ${current.records.length} 次传讯，全部密码与提示已在上方档案公开。`;
+  E.finalRecords.textContent = `共完成 ${current.records.length} 次传讯，可在下方档案回看。`;
 }
 
 function renderHistoryPartition(model) { renderHistory(model.view); }
@@ -301,5 +326,19 @@ E.submitGuessButton.onclick = () => {
   if (!isValidCode(code)) return alert("三位密码不能包含重复数字。");
   submit({type:"guess",code});
 };
+for (const [team, name] of Object.entries(TEAM_NAME)) {
+  const row = document.createElement("div");
+  row.className = "notebook-tabs";
+  row.innerHTML = `<strong>${name}</strong>` + [1,2,3,4].map(number =>
+    `<button type="button" data-team="${team}" data-number="${number}" aria-label="${name} ${number} 号" aria-pressed="false">${number}</button>`
+  ).join("");
+  notebookIndex.append(row);
+}
+notebookIndex.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button || !view) return;
+  notebookChoice = {team: button.dataset.team, number: Number(button.dataset.number)};
+  renderNotebook(view.records);
+});
 populateCodeSelects();
 room.checkServer().then((config) => spectatorUi.applyConfig(config)).catch(()=>{});

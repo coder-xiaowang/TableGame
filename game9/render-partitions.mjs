@@ -20,6 +20,10 @@ export function createGame9RenderModel(view, { memberRole = view?.roomRole, room
   if (!view) return null;
   const players = Array.isArray(view.players) ? view.players : [];
   const me = players.find((player) => player.id === view.selfId) || null;
+  const previewCard = memberRole === "player" && view.phase === "playing"
+    && Number.isInteger(view.activeCard)
+    && me?.cards.some(card => Math.abs(card - view.activeCard) === 1)
+    ? view.activeCard : null;
   const current = players[view.currentIndex] || null;
   const myTurn = memberRole === "player" && view.phase === "playing" && current?.id === view.selfId;
   const permissions = view.permissions || {};
@@ -32,6 +36,7 @@ export function createGame9RenderModel(view, { memberRole = view?.roomRole, room
     memberRole,
     roomCode,
     me,
+    previewCard,
     current,
     myTurn,
     keys: {
@@ -57,7 +62,7 @@ export function createGame9RenderModel(view, { memberRole = view?.roomRole, room
         view.activeCard, view.pot, me?.chips ?? null
       ]),
       privateArea: key([
-        memberRole, view.selfId, me?.chips ?? null, me?.cardScore ?? null, me?.cards || []
+        memberRole, view.selfId, me?.chips ?? null, me?.cardScore ?? null, me?.cards || [], previewCard
       ]),
       log: key((view.logs || []).map((entry) => [entry.id, entry.text, entry.at])),
       countdown: key([view.phase, view.deadline || 0]),

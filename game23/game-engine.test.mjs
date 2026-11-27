@@ -37,15 +37,22 @@ test("authoritative flow hides submissions and reveals owners only at resolution
   assert.equal(spectator.hand.length, 0);
   assert.ok(spectator.displayCards.every((entry) => entry.ownerId === null));
   const storytellerDisplay = state.displayCards.find((entry) => entry.ownerId === teller.id).displayId;
+  const expectedVotes = {};
   others.forEach((player, index) => {
     let target = storytellerDisplay;
     if (index === others.length - 1) target = state.displayCards.find((entry) => entry.ownerId !== player.id && entry.ownerId !== teller.id).displayId;
     applyAction(state, player.id, { type: "submitVote", displayId: target }, { now: 4000 + index, random: fixedRandom });
+    expectedVotes[player.id] = target;
+    if (index < others.length - 1) {
+      assert.equal(buildView(state, player.id).roundResult, null);
+      assert.equal(buildSpectatorView(state).roundResult, null);
+    }
   });
   assert.equal(state.phase, "resolution");
   const resolved = buildSpectatorView(state);
   assert.ok(resolved.displayCards.every((entry) => entry.ownerId));
-  assert.ok(resolved.roundResult.votes);
+  assert.deepEqual(resolved.roundResult.votes, expectedVotes);
+  assert.deepEqual(buildView(state, teller.id).roundResult.votes, expectedVotes);
 });
 
 test("three-player round requires two distinct decoys and blocks voting for either own card", () => {

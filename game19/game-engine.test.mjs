@@ -27,6 +27,72 @@ function moveCardTo(state, type, target) {
   throw new Error(`Missing ${type}`);
 }
 
+test("幸运公爵候选判定保密，炸药临界点和随后监狱的结果向全桌公开", () => {
+  const state = lobby();
+  engine.applyAction(state, "p1", { type: "start" }, { now: 1, random: () => 0.25 });
+  const actor = enterPlay(state);
+  actor.characterId = "lucky_duke";
+  actor.life = 4;
+  const next = state.players[(state.currentIndex + 1) % state.players.length];
+  const delayedCard = moveCardTo(state, "dynamite", []);
+  moveCardTo(state, "jail", actor.equipment);
+  const cards = [state.deck.pop(), state.deck.pop()];
+  Object.assign(cards[0], { suit: "spades", rank: "9" });
+  Object.assign(cards[1], { suit: "spades", rank: "10" });
+  state.phase = "judgmentChoice";
+  state.pending = { id: "test-dynamite", type: "judgmentChoice", actorId: actor.id, purpose: "dynamite", cards, context: { delayedCard } };
+  assert.deepEqual(engine.buildView(state, actor.id).pending.cards.map((card) => card.id), cards.map((card) => card.id));
+  assert.deepEqual(engine.buildView(state, next.id).pending.cards, []);
+  assert.deepEqual(engine.buildSpectatorView(state).pending.cards, []);
+  const legacy = engine.serializeState(state);
+  delete legacy.recentJudgments;
+  for (const [idx, expected] of [[0, "爆炸 · 3 点伤害"], [1, `未爆炸 · 传给 ${next.name}`]]) {
+    const game = engine.restoreState(legacy);
+    assert.deepEqual(engine.buildSpectatorView(game).recentJudgments, []);
+    const choose = (cardId) => engine.applyAction(game, actor.id, effect(game, { type: "chooseJudgment", cardId }), { now: 4, random: () => 0.25 });
+    choose(cards[idx].id);
+    assert.equal(game.players[game.currentIndex].life, idx === 0 ? 1 : 4);
+    assert.equal(game.players.find((p) => p.id === next.id).equipment.some((card) => card.id === delayedCard.id), idx === 1);
+    assert.equal(game.pending.purpose, "jail");
+    const judgment = engine.buildSpectatorView(game).recentJudgments[0];
+    assert.deepEqual(judgment, { actorId: actor.id, turn: game.turn, purpose: "dynamite", rank: cards[idx].rank, suit: "spades", result: expected });
+    const jailCard = game.pending.cards[0];
+    jailCard.suit = idx === 0 ? "clubs" : "hearts";
+    choose(jailCard.id);
+    const records = engine.buildSpectatorView(engine.restoreState(engine.serializeState(game))).recentJudgments;
+    assert.deepEqual(records.map((record) => record.purpose), ["dynamite", "jail"]);
+    assert.equal(records[1].result, idx === 0 ? "越狱失败 · 跳过回合" : "越狱成功 · 正常行动");
+    assert.equal(game.players[game.currentIndex].id, idx === 0 ? next.id : actor.id);
+  }
+});
+
+test("双闪防御中首次木桶成功计入进度，第二次判定区分成功与失败", () => {
+  const state = lobby();
+  engine.applyAction(state, "p1", { type: "start" }, { now: 1, random: () => 0.25 });
+  const attacker = enterPlay(state), defender = state.players.find((p) => p.id !== attacker.id);
+  attacker.characterId = "slab_the_killer";
+  defender.characterId = "jourdonnais";
+  moveCardTo(state, "winchester", attacker.equipment);
+  moveCardTo(state, "barrel", defender.equipment);
+  const bang = moveCardTo(state, "bang", attacker.hand);
+  engine.applyAction(state, attacker.id, { type: "playCard", cardId: bang.id, targetId: defender.id }, { now: 4, random: () => 0.25 });
+  const roll = (game, suit) => {
+    game.deck.at(-1).suit = suit;
+    assert.equal(engine.buildView(game, defender.id).permissions.canUseBarrel, true);
+    engine.applyAction(game, defender.id, effect(game, { type: "useBarrel" }), { now: 5, random: () => 0.25 });
+  };
+  roll(state, "hearts");
+  assert.equal(state.pending.played, 1);
+  for (const [suit, expected, phase] of [["hearts", "成功闪避", "play"], ["clubs", "未闪避 · 继续防御", "defense"]]) {
+    const game = engine.restoreState(engine.serializeState(state));
+    roll(game, suit);
+    assert.deepEqual(engine.buildSpectatorView(game).recentJudgments.map((record) => record.result), ["抵消 1 张 · 还需 1 张闪", expected]);
+    assert.equal(game.phase, phase);
+    assert.equal(engine.buildView(game, defender.id).permissions.canUseBarrel, false);
+    engine.validateState(game);
+  }
+});
+
 test("基础版配置含16名角色、80张唯一牌和正确身份人数", () => {
   const deck = createDeck();
   assert.equal(CHARACTERS.length, 16);

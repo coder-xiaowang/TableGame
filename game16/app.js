@@ -5,8 +5,9 @@ import {
   createPresentationTimeline, createSessionStore, createSpectatorUi, escapeHtml, renderConnectionStatus,
   renderCountdown, setHidden, setModeVisibility
 } from "/shared/client/index.js";
-import { createGame16PartitionRenderer, createGame16RenderModel } from "./render-partitions.mjs";
+import { courtDeclarations, createGame16PartitionRenderer, createGame16RenderModel } from "./render-partitions.mjs";
 import { courtSeatSlots } from "./court-seat-layout.mjs";
+import { actionLabel, roleLabel } from "./rules.mjs";
 
 const PROTOCOL_VERSION = 3;
 const PHASE_TIMER_MS = { action: 45000, challengeAction: 18000, block: 18000, challengeBlock: 18000, proveClaim: 15000, loseInfluence: 20000, exchange: 30000 };
@@ -17,7 +18,7 @@ const E = Object.fromEntries([
   "roomCodeDisplay", "hostTools", "roomPlayerCountSelect", "spectatorSettingButton",
   "seatActionButton", "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "restartGameButton", "endGameButton",
   "notice", "courtPanel", "courtCenter", "courtEffects", "momentTrail", "momentAnnouncement", "momentLabel", "momentText", "deckCount", "seatBoundary", "players", "galleryRail", "leftCourtRail", "rightCourtRail", "throneRail", "controlDock", "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar",
-  "privateZone", "coinCount", "myInfluences", "toggleLogButton", "logList"
+  "privateZone", "coinCount", "myInfluences", "toggleLogButton", "logList", "declarationSlips"
 ].map((id) => [id, $(id)]));
 
 const ROLE_META = {
@@ -286,7 +287,23 @@ function renderExchange() {
   E.actionButtons.lastElementChild.disabled = exchangeSelection.size !== view.exchange.keepCount;
 }
 
+function renderDeclarations() {
+  const slips = courtDeclarations(view);
+  E.declarationSlips.hidden = !slips.length;
+  E.declarationSlips.innerHTML = slips.map(({ kind, actorId, role, stamp }) => {
+    const isAction = kind === "action";
+    const action = actionLabel(view.action.type);
+    const target = isAction && view.action.targetId ? ` → ${nameOf(view.action.targetId)}` : "";
+    return `<li data-declaration="${kind}"${stamp ? ' aria-current="true"' : ""}>
+      <div class="declaration-caption"><span>${isAction ? "行动" : "阻挡"}</span>${stamp ? `<b>${stamp}</b>` : ""}</div>
+      <strong>${escapeHtml(nameOf(actorId))}${role ? ` · 宣称${escapeHtml(roleLabel(role))}` : ""}</strong>
+      <small>${escapeHtml(isAction ? action + target : "阻挡" + action)}</small>
+    </li>`;
+  }).join("");
+}
+
 function renderActions(memberRole) {
+  renderDeclarations();
   E.actionButtons.innerHTML = ""; E.actionHint.textContent = "";
   const action = view.action; const current = nameOf(view.currentPlayerId);
   const reactionAction = (type, extra = {}) => ({ type, ...extra, reactionId: view.reaction?.id, reactionKind: view.reaction?.kind });
@@ -301,7 +318,7 @@ function renderActions(memberRole) {
   if (view.permissions.canDeclareAction) return renderActionChoice();
   if (view.permissions.canRespond) {
     if (view.phase === "challengeAction") {
-      E.actionTitle.textContent = `是否质疑 ${nameOf(action.actorId)}？`; E.actionHint.textContent = `${nameOf(action.actorId)} 宣称角色并选择“${actionName(action.type)}”。`;
+      E.actionTitle.textContent = `是否质疑 ${nameOf(action.actorId)}？`;
       addButton("提出质疑", () => submitReaction("challenge"), "danger"); addButton("相信 / 放弃质疑", () => submitReaction("pass")); return;
     }
     if (view.phase === "block") {
@@ -309,7 +326,7 @@ function renderActions(memberRole) {
       const roles = action.type === "foreignAid" ? ["duke"] : action.type === "assassinate" ? ["contessa"] : ["captain", "ambassador"];
       roles.forEach((role) => addButton(`声明${ROLE_META[role].label}并阻挡`, () => submitReaction("block", { role }), "warn")); addButton("不阻挡", () => submitReaction("pass")); return;
     }
-    E.actionTitle.textContent = `是否质疑 ${nameOf(action.blockerId)} 的阻挡？`; E.actionHint.textContent = `${nameOf(action.blockerId)} 声称自己是${ROLE_META[action.blockRole]?.label}。`;
+    E.actionTitle.textContent = `是否质疑 ${nameOf(action.blockerId)} 的阻挡？`;
     addButton("质疑阻挡", () => submitReaction("challenge"), "danger"); addButton("接受阻挡", () => submitReaction("pass")); return;
   }
   if (view.permissions.canProve) {
@@ -325,7 +342,7 @@ function renderActions(memberRole) {
   if (view.permissions.canExchange && view.exchange) return renderExchange();
   const phaseText = { challengeAction: "等待其他玩家决定是否质疑", block: "等待合法玩家决定是否阻挡", challengeBlock: "等待其他玩家回应阻挡", proveClaim: `等待 ${nameOf(view.challenge?.claimantId)} 证明角色`, loseInfluence: `等待 ${nameOf(view.loss?.playerId)} 选择失去的影响力`, exchange: `等待 ${nameOf(view.exchange?.playerId || action?.actorId)} 完成秘密交换` };
   E.actionTitle.textContent = phaseText[view.phase] || `等待 ${current} 行动`;
-  E.actionHint.textContent = action ? `当前行动：${nameOf(action.actorId)} 的“${actionName(action.type)}”${action.targetId ? `，目标 ${nameOf(action.targetId)}` : ""}。` : "观察局势，准备你的下一次声明。";
+  if (!action) E.actionHint.textContent = "观察局势，准备你的下一次声明。";
 }
 
 function renderPrivate(memberRole) {

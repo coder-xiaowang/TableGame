@@ -6,6 +6,30 @@
 .table-workspace .player-seat.responding::after { position: static; display: block; margin-top: 4px; }
 .table-workspace .table-centerpiece { border-radius: 24px; }
 
+#judgmentSlot {
+  max-width: 310px; margin: 7px auto 0; padding: 6px 8px;
+  border: 1px solid #ab8756; border-radius: 6px; text-align: left;
+  background: #f8e7bf; color: #392315;
+}
+.judgment-slip, .table-workspace button.judgment-choice {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+}
+.judgment-face {
+  display: inline-grid; place-items: center; flex: 0 0 42px; height: 48px;
+  border: 1px solid #897457; border-radius: 5px; background: #fffaf0; color: #282823;
+  box-shadow: 1px 2px 0 #79593966; font: bold 21px Georgia,serif; white-space: nowrap;
+}
+.judgment-face.red-suit { color: #a02b23; }
+.judgment-face.card-back { color: #fbe9c1; background: repeating-linear-gradient(45deg,#703525 0 3px,#844430 3px 5px); }
+.judgment-slip small, .prior-judgment { font-size: 11px; color: #644a32; }
+.judgment-rule { font-size: 13px; font-weight: 650; }
+[data-judgment-result] { display: block; color: #7a2d1a; font-size: 15px; overflow-wrap: anywhere; }
+.prior-judgment { display: block; margin-top: 4px; padding-top: 3px; border-top: 1px dashed #baa073; overflow-wrap: anywhere; }
+.table-workspace button.judgment-choice {
+  padding: 6px; text-align: left; color: #402719; background: #f7e8c7; border-color: #b6925e;
+}
+.judgment-choice span b { display: block; }
+
 @container tabletop (max-width: 640px) {
   .table-workspace .control-dock.table-dock {
     grid-auto-rows: max-content;

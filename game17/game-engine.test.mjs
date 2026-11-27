@@ -114,6 +114,19 @@ test("拆股、再次拆股奖励和破产均由服务端结算", () => {
   actor.actionCards = [bust]; state.actionQueue = [{ ownerId: actor.id, cardId: bust.id, actionType: "bust" }]; state.phase = "marketAction"; state.currentActorId = actor.id; state.stockPrices[companyId] = 1;
   applyAction(state, actor.id, { type: "playMarketAction", companyId }, { now: 4002, random });
   assert.equal(state.stockPrices[companyId], 5); assert.equal(actor.splitPortfolio.filter((card) => card.companyId === companyId).length, 0); assert.equal(validateState(state), true);
+  assert.equal(buildView(state, actor.id).closingTape, null);
+  state.phase = "roundReview";
+  const restored = restoreState(serializeState(state));
+  const close = buildView(restored, actor.id);
+  const watched = buildSpectatorView(restored);
+  assert.deepEqual(close.closingTape.events.map(event => event.kind), ["split", "split", "bankruptcy"]);
+  assert.deepEqual(close.holdingSettlement, [
+    {companyId, kind:"split", converted:1, payout:0}, {companyId, kind:"split", converted:0, payout:10000},
+    {companyId, kind:"bankruptcy", shares:2}
+  ]);
+  assert.deepEqual(watched.closingTape, close.closingTape);
+  assert.deepEqual(watched.holdingSettlement, []);
+  assert.deepEqual(buildView(restored, state.players[1].id).holdingSettlement, []);
 });
 
 test("拆股牌可卖一股转回普通区，分红可以只公开部分持股", () => {
@@ -127,6 +140,28 @@ test("拆股牌可卖一股转回普通区，分红可以只公开部分持股",
   const beforeDividend = actor.cash;
   applyAction(state, actor.id, { type: "submitDividend", normal: 1, split: 0 }, { now: 4200, random });
   assert.equal(actor.cash, beforeDividend + 2000); assert.ok(state.logs.some((entry) => entry.text.includes("公开 1 股"))); assert.equal(validateState(state), true);
+  assert.deepEqual(buildView(state, actor.id).holdingSettlement.at(-1), {companyId, kind:"dividend", shares:1, payout:2000});
+});
+
+test("收盘显示实际开盘价与收盘价，换轮清空，旧存档不猜测开盘价", () => {
+  const random = rng(88);
+  const state = makeGame(3, random);
+  const opening = { ...state.stockPrices };
+  while (state.phase !== "roundReview") advance(state, random, state.deadline - 1);
+  const closed = buildSpectatorView(state);
+  assert.deepEqual(closed.closingTape.openingPrices, opening);
+  assert.deepEqual(closed.stockPrices, state.stockPrices);
+  assert.ok(closed.closingTape.events.some(event => event.kind === "dividend"));
+  const legacy = serializeState(state);
+  delete legacy.closingLedger;
+  for (const p of legacy.players) delete p.holdingSettlement;
+  const oldView = buildView(restoreState(legacy), "p1");
+  assert.deepEqual(oldView.closingTape.openingPrices, {});
+  assert.deepEqual(oldView.holdingSettlement, []);
+  advance(state, random, state.deadline);
+  assert.deepEqual(state.closingLedger.openingPrices, closed.stockPrices);
+  assert.equal(buildSpectatorView(state).closingTape, null);
+  assert.deepEqual(state.players[0].holdingSettlement, []);
 });
 
 test("市场供给演出公开落点但不泄露暗牌内容", () => {

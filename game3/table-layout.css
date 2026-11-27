@@ -25,6 +25,31 @@
   width: 100%; min-height: 44px; padding: 4px; border: 1px solid #8cb4a5;
   color: #195843; background: #eaf6ef; font-weight: 800;
 }
+.score-sheet .upper-projection,
+.score-sheet .subtotal-pencil {
+  display: block; margin-top: 2px; color: #605443;
+  font: italic 500 12px/1.25 Georgia, "Songti SC", serif;
+}
+.upper-projection span, .upper-projection b { display: inline-block; }
+.upper-projection b { font-weight: 600; }
+.subtotal-track {
+  display: block; height: 5px; max-width: 90px; margin: 4px auto 0;
+  overflow: hidden; border-right: 2px solid #594e40; border-radius: 2px;
+  background: #d3d9cd;
+}
+.subtotal-track::before {
+  content: ""; display: block; width: var(--pencil); height: 100%;
+  background: repeating-linear-gradient(-45deg, #907b5e 0 1px, transparent 1px 4px);
+}
+.subtotal-track::after {
+  content: ""; display: block; width: var(--ink); height: 100%;
+  margin-top: -5px; background: #376357;
+}
+.score-sheet .bonus-stamp {
+  display: inline-block; padding: 1px 7px; transform: rotate(-4deg);
+  border: 2px double #9e492c; border-radius: 3px; color: #883d26;
+  font: bold 15px/1.2 Georgia, serif;
+}
 [data-play-layout="game3"] .game-panel[data-play-controls] { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
 [data-play-layout="game3"] .game-heading { grid-column: 1 / -1; margin: 0; }
 [data-play-layout="game3"] .dice-tray { min-height: 0; padding: 8px; gap: 6px; grid-template-columns: repeat(5,minmax(36px,65px)); }

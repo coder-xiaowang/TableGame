@@ -23,7 +23,7 @@ export function createGame17RenderModel(view,{memberRole=view?.roomRole,roomCode
       permissions.canManage,permissions.canStart,permissions.canRestart,permissions.canEnd,permissions.canSetCapacity]),
     status:key([memberRole,view.phase,view.round,view.totalRounds,view.currentPlayerId,players.length,view.capacity,
       players.map((player)=>[player.id,player.name])]),
-    ticker:key([view.round,view.totalRounds,view.deckCount,view.stockPrices]),
+    ticker:key([view.round,view.totalRounds,view.deckCount,view.stockPrices,view.closingTape]),
     information:key([view.phase,view.publicInformation,view.revealedInformation,view.hiddenInformationCount,view.finalScores,
       players.map((player)=>[player.id,player.name])]),
     stockpiles:key([view.phase,view.stockpiles,view.bidTokens,players.map((player)=>[player.id,player.name])]),
@@ -31,7 +31,7 @@ export function createGame17RenderModel(view,{memberRole=view?.roomRole,roomCode
       players.map((player)=>[player.id,player.name,player.isHost,player.connected,player.cash,player.portfolioCount,player.splitPortfolioCount,player.debts])]),
     decision:key([memberRole,view.phase,view.round,view.currentPlayerId,view.winnerIds,decisionPermissions,decisionFacts,
       players.map((player)=>[player.id,player.name])]),
-    private:key([memberRole,view.selfId,self?.cash,self?.privateInformation,self?.portfolio,self?.splitPortfolio]),
+    private:key([memberRole,view.selfId,self?.cash,self?.privateInformation,self?.portfolio,self?.splitPortfolio,view.holdingSettlement]),
     log:key(view.logs||[]),
     countdown:key([view.phase,view.deadline||0])
   }};

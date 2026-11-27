@@ -101,11 +101,13 @@ function credit(player, amount, state, now) {
 }
 
 function resetPlayer(player) {
+  player.holdingSettlement = [];
   player.cash = 0; player.debts = []; player.portfolio = []; player.splitPortfolio = [];
   player.supplyHand = []; player.privateInformation = []; player.actionCards = [];
 }
 
 function resetToLobby(state, now = Date.now()) {
+  state.closingLedger = null;
   state.round = 0; state.totalRounds = 0; state.firstPlayerIndex = 0; state.marketDeck = []; state.discard = [];
   state.stockPrices = Object.fromEntries(COMPANIES.map((company) => [company.id, STARTING_PRICE]));
   state.stockpiles = []; state.publicInformation = null; state.hiddenInformation = []; state.revealedInformation = [];
@@ -119,11 +121,22 @@ function resolvePriceMove(state, companyId, amount, now, reason, sceneId = null)
   const company = companyById(companyId);
   const previousPrice = state.stockPrices[companyId];
   const result = movePrice(state.stockPrices[companyId], amount);
+  const ledger = state.closingLedger;
+  if (ledger && !result.events.length) {
+    for (const player of state.players) {
+      const shares = sharesHeld(player, companyId);
+      if (shares) player.holdingSettlement.push({ companyId, kind: "move", shares, change: shares * (result.price - previousPrice) * 1000 });
+    }
+  }
   for (const event of result.events) {
+    if (ledger) ledger.events.push({ companyId, kind: event.type });
     if (event.type === "split") {
       for (const player of state.players) {
         const newlySplit = player.portfolio.filter((card) => card.companyId === companyId);
         const alreadySplit = player.splitPortfolio.filter((card) => card.companyId === companyId);
+        if (ledger && (newlySplit.length || alreadySplit.length)) {
+          player.holdingSettlement.push({ companyId, kind: "split", converted: newlySplit.length, payout: alreadySplit.length * SECOND_SPLIT_PAYOUT });
+        }
         if (alreadySplit.length) credit(player, alreadySplit.length * SECOND_SPLIT_PAYOUT, state, now);
         player.portfolio = player.portfolio.filter((card) => card.companyId !== companyId);
         player.splitPortfolio.push(...newlySplit);
@@ -133,6 +146,8 @@ function resolvePriceMove(state, companyId, amount, now, reason, sceneId = null)
     }
     if (event.type === "bankruptcy") {
       for (const player of state.players) {
+        const shares = sharesHeld(player, companyId);
+        if (ledger && shares) player.holdingSettlement.push({ companyId, kind: "bankruptcy", shares });
         const lost = [...player.portfolio.filter((card) => card.companyId === companyId), ...player.splitPortfolio.filter((card) => card.companyId === companyId)];
         if (lost.length) addLog(state, `${player.name} 因破产失去 ${lost.length} 张${company.short}持股。`, now);
         state.discard.push(...lost);
@@ -166,6 +181,8 @@ function pairInformation(random) {
 
 function beginRound(state, now, random) {
   state.round += 1;
+  state.closingLedger = { openingPrices: { ...state.stockPrices }, events: [] };
+  for (const player of state.players) player.holdingSettlement = [];
   state.publicInformation = null; state.hiddenInformation = []; state.revealedInformation = [];
   state.stockpiles = Array.from({ length: stockpileCount(state.players.length) }, (_, index) => ({ id: `pile_${index + 1}`, cards: [] }));
   state.supplyQueue = []; state.bidTokens = []; state.bidQueue = []; state.actionQueue = []; state.turnQueue = [];
@@ -396,6 +413,7 @@ function processMovement(state, now, random) {
     const forecast = forecastById(pair.forecastId);
     present(state, { kind: "information-reveal", priority: 4, text: `${companyById(pair.companyId).name} 行情揭晓：${forecast.label}`, companyId: pair.companyId, forecastId: pair.forecastId, forecastLabel: forecast.label, source: pair.source, ownerId: pair.source === "player" ? pair.ownerId : null }, now, sceneId);
     if (forecast.kind === "dividend") {
+      if (state.closingLedger) state.closingLedger.events.push({ companyId: pair.companyId, kind: "dividend" });
       state.pendingDividend = { companyId: pair.companyId, pair, queue: orderedPlayers(state).filter((player) => sharesHeld(player, pair.companyId) > 0).map((player) => player.id) };
       if (!state.pendingDividend.queue.length) { state.pendingDividend = null; continue; }
       return openNextDividend(state,now, random, sceneId);
@@ -420,6 +438,7 @@ function submitDividend(state, actor, action, now, random) {
   const splitOwned = actor.splitPortfolio.filter((card) => card.companyId === pending.companyId).length;
   if (normal > normalOwned || split > splitOwned) throw new GameRuleError("dividend_exceeds_holding", "公开数量超过实际持股。", 409);
   const shares = normal + split * 2; const payout = shares * DIVIDEND_PER_SHARE;
+  if (state.closingLedger && payout) actor.holdingSettlement.push({ companyId: pending.companyId, kind: "dividend", shares, payout });
   credit(actor, payout, state, now); pending.queue.shift();
   addLog(state, shares ? `${actor.name} 公开 ${shares} 股并领取 ${cashText(payout)} 分红。` : `${actor.name} 放弃公开持股和本次分红。`, now);
   const sceneId = newScene(state);
@@ -591,9 +610,12 @@ function permissionsFor(state, viewer) {
 }
 
 function publicView(state, viewer = null) {
+  const closed = state.phase === "roundReview" || state.phase === "ended";
   return {
     selfId: viewer?.id || null, phase: state.phase, capacity: state.capacity, round: state.round, totalRounds: state.totalRounds,
     supplyBatch: state.supplyBatch,
+    closingTape: closed ? clone(state.closingLedger || { openingPrices: {}, events: [] }) : null,
+    holdingSettlement: closed && viewer ? clone(viewer.holdingSettlement || []) : [],
     firstPlayerId: state.players[state.firstPlayerIndex]?.id || null, currentPlayerId: state.currentActorId, deadline: state.deadline,
     deckCount: state.marketDeck.length, stockPrices: clone(state.stockPrices), publicInformation: clone(state.publicInformation),
     revealedInformation: state.revealedInformation.map(clone), hiddenInformationCount: state.hiddenInformation.length,

@@ -297,23 +297,47 @@ function beginJudgment(state, owner, purpose, context, now, random) {
 function finishJudgment(state, owner, purpose, cards, cardId, context, now, random) {
   const chosen = cards.find((card) => card.id === String(cardId)); fail(!chosen, "invalid_judgment_card", "请选择一张判定牌。");
   for (const card of cards) discard(state, card);
+  function record(result) {
+    const previous = state.recentJudgments?.at(-1);
+    const chained = previous?.actorId === owner.id && previous.turn === state.turn && (
+      (previous.purpose === "dynamite" && purpose === "jail") ||
+      (previous.purpose === "barrel" && purpose === "barrel" && context.defense.barrelUses > 1)
+    );
+    const judgment = { actorId: owner.id, turn: state.turn, purpose, rank: chosen.rank, suit: chosen.suit, result };
+    state.recentJudgments = chained ? [previous, judgment] : [judgment];
+  }
   log(state, `${owner.name} 的${purpose === "dynamite" ? "炸药" : purpose === "jail" ? "监狱" : "木桶"}判定为 ${chosen?.rank || "?"}${chosen ? ({spades:"♠",hearts:"♥",clubs:"♣",diamonds:"♦"})[chosen.suit] : ""}。`, now);
   publicEvent(state, { kind: "judgment", actorId: owner.id, cardType: chosen.type, text: `${owner.name} 的${purpose === "dynamite" ? "炸药" : purpose === "jail" ? "监狱" : "木桶"}判定：${chosen.rank}${({spades:"♠",hearts:"♥",clubs:"♣",diamonds:"♦"})[chosen.suit]}` }, now);
   if (purpose === "dynamite") {
-    if (isDynamiteHit(chosen)) { discard(state, context.delayedCard); return applyDamage(state, owner, 3, null, now, random, { type: "turnStart", playerId: owner.id }); }
+    if (isDynamiteHit(chosen)) {
+      record("爆炸 · 3 点伤害");
+      discard(state, context.delayedCard); return applyDamage(state, owner, 3, null, now, random, { type: "turnStart", playerId: owner.id });
+    }
     const next = state.players[findNextAliveIndex(state, state.players.indexOf(owner))];
-    if (equipment(next, "dynamite")) discard(state, context.delayedCard); else next.equipment.push(context.delayedCard);
+    if (equipment(next, "dynamite")) {
+      record("未爆炸 · 下家已有炸药，弃置");
+      discard(state, context.delayedCard);
+    } else {
+      record(`未爆炸 · 传给 ${next.name}`);
+      next.equipment.push(context.delayedCard);
+    }
     return continueTurnStart(state, owner.id, now, random);
   }
   if (purpose === "jail") {
-    if (!isJailSuccess(chosen)) { log(state, `${owner.name} 未能越狱，本回合跳过。`, now); return nextTurn(state, now, random); }
+    if (!isJailSuccess(chosen)) { record("越狱失败 · 跳过回合"); log(state, `${owner.name} 未能越狱，本回合跳过。`, now); return nextTurn(state, now, random); }
+    record("越狱成功 · 正常行动");
     return beginDraw(state, owner, now, random);
   }
-  const defense = context.defense; state.pending = newPending(state, { ...defense, id: undefined });
+  const defense = context.defense;
   if (isBarrelSuccess(chosen)) {
     defense.played += 1;
-    if (defense.played >= defense.needed) { const resume = defense.resume; if (resume?.type === "play") finishPlayedCard(state, defense.card); return resumeFlow(state, resume, now, random); }
-  }
+    if (defense.played >= defense.needed) {
+      record("成功闪避");
+      const resume = defense.resume; if (resume?.type === "play") finishPlayedCard(state, defense.card); return resumeFlow(state, resume, now, random);
+    }
+    record(`抵消 1 张 · 还需 ${defense.needed - defense.played} 张闪`);
+  } else record("未闪避 · 继续防御");
+  state.pending = newPending(state, defense);
   setPhase(state, "defense", now, RESPONSE_SECONDS);
 }
 function continueTurnStart(state, playerId, now, random) {
@@ -487,7 +511,7 @@ function resolveDefense(state, actor, action, now, random) {
   if (action.type === "useBarrel") {
     fail(pending.sourceType !== "bang", "barrel_not_available", "本次攻击不能使用木桶。");
     fail(!equipment(actor, "barrel") && !hasCharacter(actor, "jourdonnais"), "barrel_not_available", "你没有可用的木桶能力。");
-    const availableUses = Number(Boolean(equipment(actor, "barrel"))) + Number(hasCharacter(actor, "jourdonnais"));
+    const availableUses = barrelLimit(actor);
     fail(pending.barrelUses >= availableUses, "barrel_already_used", "本次攻击可用的木桶判定已经用完。"); pending.barrelUses += 1;
     publicEvent(state, { kind: "barrel", actorId: actor.id, targetId: pending.sourceId, cardType: "barrel", text: `${actor.name} 尝试用【木桶】闪避` }, now);
     return beginJudgment(state, actor, "barrel", { defense: clone(pending) }, now, random);
@@ -607,6 +631,7 @@ export function applyAction(state, actorId, action, { now = Date.now(), random =
 }
 
 function resetMatchToLobby(state) {
+  state.recentJudgments = [];
   state.phase = "lobby"; state.pending = null; state.winner = null; state.deadline = 0; state.deck = []; state.discard = []; state.currentIndex = 0; state.turn = 0;
   for (const player of state.players) Object.assign(player, { role: null, characterId: null, life: 0, maxLife: 0, hand: [], equipment: [], alive: true, bangPlayed: 0 });
 }
@@ -632,6 +657,7 @@ export function handleTimeout(state, { now = Date.now(), random = Math.random } 
 export function getDeadline(state) { return Number(state.deadline) || 0; }
 
 function publicCard(card, visible = true) { return visible ? { ...card, name: cardName(card.type) } : { id: null, type: null, hidden: true }; }
+function barrelLimit(actor) { return Number(Boolean(equipment(actor, "barrel"))) + Number(hasCharacter(actor, "jourdonnais")); }
 function publicPending(state, viewer) {
   const p = state.pending; if (!p) return null;
   if (p.type === "kitChoice") return { id: p.id, type: p.type, actorId: p.actorId, cards: viewer?.id === p.actorId ? p.cards.map((card) => publicCard(card)) : [] };
@@ -651,6 +677,7 @@ function permissions(state, viewer) {
     canManage: Boolean(viewer?.isHost), canKick: Boolean(viewer?.isHost), canSetCapacity: Boolean(viewer?.isHost && state.phase === "lobby"), canStart: Boolean(viewer?.isHost && state.phase === "lobby"), canEnd: Boolean(viewer?.isHost && state.phase !== "lobby"), canRestart: Boolean(viewer?.isHost && state.phase === "ended"),
     canDraw: state.phase === "draw" && current(state)?.id === id, canChooseDraw: state.phase === "drawChoice" && state.pending?.actorId === id, canChooseKit: state.phase === "kitChoice" && state.pending?.actorId === id,
     canChooseJudgment: state.phase === "judgmentChoice" && state.pending?.actorId === id,
+    canUseBarrel: Boolean(viewer && state.phase === "defense" && state.pending?.actorId === id && state.pending.sourceType === "bang" && (state.pending.barrelUses || 0) < barrelLimit(viewer)),
     canPlay: state.phase === "play" && current(state)?.id === id, canRespond: ["defense", "duel"].includes(state.phase) && state.pending?.actorId === id,
     canSaveDying: state.phase === "dying" && Boolean(viewer?.alive), canResolveOwnDying: state.phase === "dying" && state.pending?.actorId === id,
     canOrderEliminationDiscard: state.phase === "eliminationDiscard" && state.pending?.actorId === id,
@@ -660,6 +687,7 @@ function permissions(state, viewer) {
 function publicView(state, viewer = null) {
   const ended = state.phase === "ended";
   return {
+    recentJudgments: clone(state.recentJudgments || []),
     selfId: viewer?.id || null, phase: state.phase, capacity: state.capacity, deadline: state.deadline, turn: state.turn, currentPlayerId: current(state)?.id || null,
     deckCount: state.deck.length, discardTop: state.discard.length ? publicCard(state.discard[state.discard.length - 1]) : null, discardCount: state.discard.length,
     players: state.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, connected: player.connected, alive: player.alive, life: player.life, maxLife: player.maxLife, role: player.role === ROLES.SHERIFF || player.id === viewer?.id || ended || !player.alive ? player.role : null, characterId: player.characterId, characterName: character(player)?.name || null, characterText: character(player)?.text || null, handCount: player.hand.length, hand: player.id === viewer?.id || ended ? player.hand.map((card) => publicCard(card)) : player.hand.map(() => publicCard(null, false)), equipment: player.equipment.map((card) => publicCard(card)), distance: viewer?.alive && player.alive && player.id !== viewer.id ? livingDistance(state, viewer.id, player.id) : null })),

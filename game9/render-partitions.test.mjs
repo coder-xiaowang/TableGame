@@ -138,3 +138,27 @@ test("游戏结束会更新并显示结算分区", () => {
   assert.ok(changed.includes("result"));
   assert.equal(h.dom.resultVisible, true);
 });
+
+test("连号预览跟随公开牌，等待时保留，收牌和转为旁观时清除", () => {
+  const view = baseView();
+  view.players[0].cards = [18,20];
+  view.currentIndex = 2;
+  const h = harness();
+  view.activeCard = 25;
+  h.draw(view);
+  assert.equal(createGame9RenderModel(view).previewCard, null);
+  for (const card of [17, 19, 21]) {
+    view.activeCard = card;
+    assert.ok(h.draw(view).includes("privateArea"));
+    assert.equal(createGame9RenderModel(view).previewCard, card);
+    assert.deepEqual(view.players[0].cards, [18,20]);
+  }
+  assert.equal(createGame9RenderModel(view, {memberRole: "spectator"}).previewCard, null);
+  view.players[0].cards.push(21);
+  view.activeCard = 30;
+  assert.ok(h.draw(view).includes("privateArea"));
+  assert.equal(createGame9RenderModel(view).previewCard, null);
+  view.activeCard = 19;
+  view.phase = "ended";
+  assert.equal(createGame9RenderModel(view).previewCard, null);
+});

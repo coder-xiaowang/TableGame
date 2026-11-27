@@ -12,20 +12,42 @@
 [data-play-layout="game6"] .badges { flex-direction: row; flex-wrap: wrap; }
 [data-play-layout="game6"] .rows { gap: 5px; margin-top: 0; }
 [data-play-layout="game6"] .card-row {
-  gap: clamp(3px, 1vw, 10px); min-height: 52px; padding: 4px 6px;
+  display: grid;
+  grid-template-columns: clamp(36px, 5vw, 54px) repeat(5, minmax(0, 58px)) minmax(51px, 1fr);
+  gap: clamp(2px, .65vw, 8px); min-height: 52px; padding: 4px 6px;
 }
 [data-play-layout="game6"] .row-label {
-  display: grid; flex: 0 0 54px; line-height: 1.2; font-size: 12px;
+  display: grid; line-height: 1.2; font-size: 12px;
 }
 [data-play-layout="game6"] .row-label span { font-size: 10px; }
 [data-play-layout="game6"] .row-label strong { color: var(--red); }
-[data-play-layout="game6"] .card-row .number-card {
-  flex: 0 1 54px; min-width: 0; height: clamp(40px, 6dvh, 58px); border-radius: 7px;
+[data-play-layout="game6"] .card-row :is(.number-card, .row-slot-empty) {
+  width: 100%; min-width: 0; height: clamp(40px, 6dvh, 58px); border-radius: 7px;
 }
+[data-play-layout="game6"] .row-slot-empty {
+  border: 1px dashed #a5b3a0;
+  background: #dce5d636;
+  box-shadow: inset 0 1px 3px #354f3d13;
+}
+[data-play-layout="game6"] .card-row.is-full:not(.animation-target) { background: #f6e9d4; }
+[data-play-layout="game6"] .row-warning,
+[data-play-layout="game6"] .capture-preview {
+  position: static; justify-self: start; display: grid; align-content: center;
+  box-sizing: border-box; min-width: 0; max-width: 100%; margin: 0;
+  padding: 3px; border-radius: 5px; font-size: 11px; line-height: 1.25; text-align: center;
+}
+[data-play-layout="game6"] .row-warning {
+  border: 1px solid #ab7c50; color: #533419; font-weight: 700;
+  background: linear-gradient(170deg, #f3d7a3, #e7c58f);
+  box-shadow: inset 0 1px #ffedc9, 0 2px #b48755;
+}
+[data-play-layout="game6"] .capture-preview span {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+[data-play-layout="game6"] :is(.row-warning strong, .capture-preview b) { font-size: 12px; }
 [data-play-layout="game6"] .card-row .number-card strong { font-size: 19px; align-self: start; }
 [data-play-layout="game6"] .card-row .number-card small { bottom: 1px; }
-[data-play-layout="game6"] .card-row .number-card:last-of-type { border-color: var(--green); background: #edf7e9; }
-[data-play-layout="game6"] .capture-preview { position: absolute; right: 4px; top: 1px; padding: 2px 6px; }
+[data-play-layout="game6"] .card-row .row-ending { border-color: var(--green); background: #edf7e9; }
 @media (min-width: 880px), (min-width: 650px) and (max-height: 540px) {
   [data-play-layout="game6"] .rows { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }

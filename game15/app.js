@@ -19,7 +19,7 @@ import {
 import { COLOR_LABELS, COLORS, validateMeld } from "./rules.mjs";
 import { createGame15PartitionRenderer, createGame15RenderModel } from "./render-partitions.mjs";
 import { createEditSynchronizer } from "./edit-sync.mjs";
-import { draftContext, restoreDraft } from "./draft-state.mjs";
+import { draftContext, draftTileOrigins, restoreDraft } from "./draft-state.mjs";
 
 const PROTOCOL_VERSION = 3;
 const ACTION_SECONDS = 90;
@@ -32,7 +32,7 @@ const E = Object.fromEntries([
   "spectatorPanel", "spectatorCountBadge", "spectatorList", "startGameButton", "nextGameButton",
   "restartMatchButton", "endGameButton", "scoreboard", "toggleLogButton", "logList", "notice", "controlDock",
   "actionTitle", "actionHint", "actionButtons", "timerText", "timerBar", "handZone", "handHint", "hand", "gameNumber",
-  "totalGames", "poolCount", "changeNotice", "table", "newMeldActions", "resultPanel", "resultTitle", "resultScores"
+  "totalGames", "poolCount", "changeNotice", "originLegend", "table", "newMeldActions", "resultPanel", "resultTitle", "resultScores"
 ].map((id) => [id, $(id)]));
 
 let mode = "host";
@@ -307,11 +307,12 @@ function draftStatus() {
   return { changed: draftChanged(), valid: results.every((result) => result.valid), used, score: newScore };
 }
 
-function tileHtml(tile, { source = "table", changed = false, locked = false, assignment = null } = {}) {
+function tileHtml(tile, { source = "table", changed = false, locked = false, assignment = null, origin } = {}) {
   const color = tile.joker ? "joker" : tile.color;
   const label = tile.joker ? "★" : tile.number;
   const assignmentText = tile.joker && assignment ? `${COLOR_LABELS[assignment.color]}${assignment.number}` : "";
-  return `<button type="button" aria-pressed="${selectedTileId === tile.id}" aria-label="${tile.joker ? "百搭牌" : `${COLOR_LABELS[tile.color]}${tile.number}`}" class="tile tile-${color} ${selectedTileId === tile.id ? "selected" : ""} ${changed ? "recently-changed" : ""} ${locked ? "locked" : ""}" draggable="${!locked}" data-tile-id="${escapeHtml(tile.id)}" data-source="${source}">
+  const originLabel = origin === "rack" ? "，本回合从牌架打出" : origin === "meld" ? "，本回合从其他牌组移入" : "";
+  return `<button type="button" aria-pressed="${selectedTileId === tile.id}" aria-label="${tile.joker ? "百搭牌" + assignmentText : `${COLOR_LABELS[tile.color]}${tile.number}`}${originLabel}" class="tile tile-${color} ${selectedTileId === tile.id ? "selected" : ""} ${changed ? "recently-changed" : ""} ${locked ? "locked" : ""}" draggable="${!locked}" data-tile-id="${escapeHtml(tile.id)}" data-source="${source}"${origin ? ` data-draft-origin="${origin}"` : ""}>
     <span>${label}</span>${assignmentText ? `<small>${escapeHtml(assignmentText)}</small>` : ""}
   </button>`;
 }
@@ -360,6 +361,9 @@ function renderHand() {
 function renderTable() {
   const map = tileMap();
   const layout = activeLayout();
+  const origins = draft && view.permissions.canAct
+    ? draftTileOrigins(serverTableLayout(), layout, draft.originalHandIds) : new Map();
+  setHidden(E.originLegend, !origins.size);
   const changedIds = new Set(view.lastChange?.until > serverNow() ? view.lastChange.tileIds : []);
   const self = view.players.find((player) => player.id === view.selfId);
   E.table.innerHTML = layout.map((meld, meldIndex) => {
@@ -369,7 +373,7 @@ function renderTable() {
     return `<article class="meld ${checked.valid ? "valid" : "invalid"} ${locked ? "locked-meld" : ""}" data-meld-index="${meldIndex}">
       <header><b>${meld.kind === "group" ? "数字组" : "顺子"}</b><span>${checked.valid ? `${checked.score}分` : checked.error}</span>${view.permissions.canAct && !locked ? `<button type="button" data-toggle-kind="${meldIndex}">改为${meld.kind === "group" ? "顺子" : "数字组"}</button>` : ""}</header>
       <div class="meld-tiles">
-        ${meld.tileIds.map((id) => tileHtml(map.get(id), { changed: changedIds.has(id), locked, assignment: assignmentMap.get(id) })).join("")}
+        ${meld.tileIds.map((id) => tileHtml(map.get(id), { changed: changedIds.has(id), locked, assignment: assignmentMap.get(id), origin: origins.get(id) })).join("")}
         ${view.permissions.canAct && !locked ? `<button type="button" class="drop-end" data-drop-meld="${meldIndex}">放到末尾</button>` : ""}
       </div>
     </article>`;
