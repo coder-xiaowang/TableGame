@@ -12,6 +12,8 @@ node game19/signal-server.js
 
 端口与数据库路径参见对应游戏的 `signal-server.js`；用 `PORT` 和各游戏的 `GAMEN_DB_PATH` 配置运行环境，运行数据应放在静态发布目录之外。
 
+首页「今日一页」从本站缓存读取每日古诗词，本地预览和生产定时更新配置见[今日一页](ops/今日一页.md)。
+
 ## 新桌游上架大厅
 
 玩家从主站 `/index.html` 按人数和玩法选桌。仓库根目录的 `index.html` 提供页面结构，选桌目录、样式和封面位于 `homepage/lobby/`，对外路径为 `/lobby/`。

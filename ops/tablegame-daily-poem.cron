@@ -1,0 +1,4 @@
+# /etc/cron.d/tablegame-daily-poem
+# The updater checks the Beijing date before making any external request.
+DAILY_POEM_DIR=/var/lib/tablegame-poetry
+3,18,33,48 * * * * tablegame /usr/bin/flock -n /var/lib/tablegame-poetry/update.lock /usr/bin/node /srv/tablegame/homepage/scripts/update-daily-poem.mjs

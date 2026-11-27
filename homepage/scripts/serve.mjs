@@ -2,6 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { cacheName, previewCacheDir } from "./update-daily-poem.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDirectory, "..", "..");
@@ -27,6 +28,17 @@ const server = http.createServer((request, response) => {
     pathname = decodeURIComponent(url.pathname);
   } catch {
     response.writeHead(400).end("Bad request");
+    return;
+  }
+  if (pathname === "/daily-poem.json") {
+    const cache = path.join(process.env.DAILY_POEM_DIR || previewCacheDir, cacheName);
+    fs.readFile(cache, (error, data) => {
+      if (error) {
+        response.writeHead(error.code === "ENOENT" ? 404 : 500, { "Cache-Control": "no-store" }).end();
+        return;
+      }
+      response.writeHead(200, { "Content-Type": types[".json"], "Cache-Control": "no-cache" }).end(data);
+    });
     return;
   }
   // Match the production homepage and lobby aliases. Also accept the old preview URL.
