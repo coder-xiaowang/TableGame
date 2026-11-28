@@ -304,6 +304,10 @@ export function setPresence(state, playerId, connected) {
   return true;
 }
 
+export function getSubmissionGroup(state, actorId, action) {
+  return state.phase === "lobby" && ["sit", "leaveSeat"].includes(action?.type) ? "seats" : null;
+}
+
 export function applyAction(state, actorId, action, {now = Date.now(), random = Math.random} = {}) {
   const actor = requireActor(state,actorId);
   const type = action?.type;

@@ -7,6 +7,7 @@ import { appendPresentationEvent, normalizePresentationState, validatePresentati
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["submitDecoys", "submitVote"]);
 export const ACTION_SECONDS = STORYTELLER_SECONDS;
 const PHASES = new Set(["lobby", "storytellerChoosing", "playersChoosing", "voting", "resolution", "discussion", "ended"]);
 const clone = (value) => structuredClone(value);

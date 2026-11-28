@@ -308,6 +308,12 @@ export function setPresence(state, playerId, connected) {
   return true;
 }
 
+export function getSubmissionGroup(state, actorId, action) {
+  if (action?.type === "submitWord" && state.phase === "collectingWords") return "words";
+  if (action?.type === "answer" && state.currentQuestion) return state.currentQuestion.id;
+  return null;
+}
+
 export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const id = String(actorId);
   const actor = state.players.find((player) => player.id === id);

@@ -8,6 +8,7 @@ import { appendPresentationEvent, normalizePresentationState, validatePresentati
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["acknowledgeSecret", "voteDiscussionExtension", "submitTeamVote", "submitQuestCard"]);
 export const ACTION_SECONDS = normalizeTimers(PACE.STANDARD).teamProposal;
 const PHASES = new Set(["lobby", "secretReveal", "teamProposal", "teamVote", "questAction", "questReveal", "ladyInspect", "assassination", "assassinationReveal", "ended"]);
 const QUEST_SEAL_MS = 1000, QUEST_CARD_MS = 650, QUEST_VERDICT_MS = 1400;

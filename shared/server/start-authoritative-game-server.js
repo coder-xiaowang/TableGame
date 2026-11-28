@@ -81,6 +81,11 @@ module.exports = function startAuthoritativeGameServer({
   const clients = new Map();
   let shuttingDown = false;
 
+  function submissionGroup(state, actor, action) {
+    if (engine.getSubmissionGroup) return engine.getSubmissionGroup(state, actor, action);
+    return engine.SIMULTANEOUS_ACTIONS?.has(action?.type) ? action.type : null;
+  }
+
   function snapshotRoom(room) {
     const serializedState = engine.serializeState
       ? engine.serializeState(room.state)
@@ -908,7 +913,17 @@ module.exports = function startAuthoritativeGameServer({
       if (member.actionIds.includes(actionId)) {
         return sendJson(response, 200, { duplicate: true, version: room.version, protocolVersion });
       }
-      if (Number.isInteger(data.expectedVersion) && data.expectedVersion !== room.version) {
+      // Only consecutive compatible commits can be skipped. A timeout, seat
+      // change or reconnect advances the version outside this window.
+      const group = submissionGroup(room.state, playerId, data.action);
+      const window = room.submissionWindow;
+      const currentWindow = window != null && window.lastVersion === room.version;
+      const continuing = currentWindow && window.group === group;
+      const expected = data.expectedVersion;
+      const compatible = currentWindow && expected >= window.firstVersion && expected < room.version
+        && (window.lastByPlayer.get(playerId) ?? window.firstVersion) <= expected
+        && (continuing || engine.canFollowSubmission?.(room.state, playerId, data.action, window.group));
+      if (Number.isInteger(expected) && expected !== room.version && !compatible) {
         sendView(roomCode, room, playerId);
         const error = new Error("游戏状态已经更新，请根据最新画面重试。");
         error.status = 409;
@@ -947,7 +962,17 @@ module.exports = function startAuthoritativeGameServer({
         updatedAt: now,
         lastPlayerActivityAt: now
       };
+      const keepWindow = group != null && nextState.phase === room.state.phase
+        && submissionGroup(nextState, playerId, data.action) === group;
       persistRoom(roomCode, candidate, "action:" + data.action.type);
+      if (keepWindow) {
+        const batch = continuing ? window : { group, firstVersion: room.version, lastByPlayer: new Map() };
+        batch.lastByPlayer.set(playerId, candidate.version);
+        batch.lastVersion = candidate.version;
+        room.submissionWindow = batch;
+      } else {
+        room.submissionWindow = null;
+      }
       room.state = nextState;
       room.members = nextMembers;
       room.version = candidate.version;

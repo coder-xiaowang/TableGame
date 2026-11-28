@@ -626,6 +626,20 @@ function applyActionInternal(state, actorId, action, { now = Date.now(), random 
   throw new GameRuleError("action_not_allowed", "当前阶段不能执行这个操作。", 409);
 }
 
+export function getSubmissionGroup(state, actorId, action) {
+  if (state.phase === "dying" && state.pending?.id === action?.effectId
+      && ["useBeer", "useSid"].includes(action?.type)) return state.pending.id;
+  if (state.phase === "play" && action?.type === "useSid" && current(state)?.id !== actorId) {
+    return "sid-heal";
+  }
+  return null;
+}
+
+export function canFollowSubmission(state, actorId, action, group) {
+  return group === "sid-heal" && state.phase === "play" && current(state)?.id === actorId
+    && action?.type === "endTurn";
+}
+
 export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   return runPresentationScene(state, () => applyActionInternal(state, actorId, action, { now, random }));
 }

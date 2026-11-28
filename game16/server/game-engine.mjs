@@ -274,7 +274,9 @@ function handlePass(state, actor, action, now, random) {
 
 function startChallenge(state, challenger, action, context, now) {
   requireCurrentReaction(state, action);
-  if (!state.reaction?.eligibleIds.includes(challenger.id)) throw new GameRuleError("challenge_not_allowed", "你不能提出这次质疑。", 409);
+  if (!state.reaction.eligibleIds.includes(challenger.id) || state.reaction.passedIds.includes(challenger.id)) {
+    throw new GameRuleError("challenge_not_allowed", "你不能提出这次质疑。", 409);
+  }
   const claimantId = context === "action" ? state.action.actorId : state.action.blockerId;
   const role = context === "action" ? actionMeta(state.action.type).role : state.action.blockRole;
   const claimant = playerById(state, claimantId);
@@ -346,7 +348,9 @@ function declareAction(state, actor, action, now, random) {
 
 function declareBlock(state, blocker, action, role, now) {
   requireCurrentReaction(state, action);
-  if (state.phase !== "block" || !state.reaction?.eligibleIds.includes(blocker.id)) throw new GameRuleError("block_not_allowed", "你不能阻挡这个行动。", 409);
+  if (state.phase !== "block" || !state.reaction.eligibleIds.includes(blocker.id) || state.reaction.passedIds.includes(blocker.id)) {
+    throw new GameRuleError("block_not_allowed", "你不能阻挡这个行动。", 409);
+  }
   const allowed = actionMeta(state.action.type).blockRoles;
   if (!allowed.includes(role)) throw new GameRuleError("invalid_block_role", "这个角色不能阻挡当前行动。", 409);
   state.action.blockerId = blocker.id; state.action.blockRole = role;
@@ -439,6 +443,12 @@ function applyActionInternal(state, actorId, action, { now = Date.now(), random 
   if (state.phase === "loseInfluence" && type === "loseInfluence") return loseInfluence(state, actor, action.cardId, now, random);
   if (state.phase === "exchange" && type === "submitExchange") return submitExchange(state, actor, action.keepIds, now);
   throw new GameRuleError("action_unavailable", "当前阶段不能执行这个操作。", 409);
+}
+
+export function getSubmissionGroup(state, actorId, action) {
+  if (!state.reaction || !["pass", "challenge", "block"].includes(action?.type)) return null;
+  return state.reaction.id === action.reactionId && state.reaction.kind === action.reactionKind
+    ? state.reaction.id : null;
 }
 
 export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {

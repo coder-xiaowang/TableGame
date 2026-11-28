@@ -148,14 +148,23 @@ function settle(state,now){
   startAuction(state,now,Math.random);
 }
 
+export function getSubmissionGroup(state, actorId, action) {
+  return ["mortgage", "redeem"].includes(action?.type) && typeof action.shareId === "string" ? "shares" : null;
+}
+
+function shareForAction(actor, action) {
+  if (action.shareId != null) return actor.shares.find(share => share.shareId === String(action.shareId));
+  return actor.shares.find(share => share.mortgaged === (action.type === "redeem"));
+}
+
 export function applyAction(state,actorId,action,{now=Date.now(),random=Math.random}={}){
   const actor=requirePlayer(state,actorId);fail(!action||typeof action.type!=="string","invalid_action","操作无效。");
   switch(action.type){
     case"setCapacity":{requireHost(state,actorId);fail(state.phase!=="lobby","wrong_phase","只能在准备阶段修改人数。",409);const capacity=checkedCapacity(action.capacity);fail(capacity<state.players.length,"capacity_too_small","人数不能少于当前玩家数。");state.capacity=capacity;break;}
     case"start":requireHost(state,actorId);fail(state.phase!=="lobby","wrong_phase","游戏已经开始。",409);fail(state.players.length!==state.capacity,"room_not_full",`需要${state.capacity}名玩家才能开始。`,409);dealInitialShares(state,random);state.voyage=0;state.previousMasterId=null;startAuction(state,now,random);break;
     case"end":requireHost(state,actorId);fail(state.phase==="lobby","wrong_phase","当前没有进行中的游戏。",409);resetLobby(state);break;
-    case"mortgage":{fail(state.phase==="lobby"||state.phase==="ended","wrong_phase","当前不能抵押股票。",409);const share=actor.shares.find((item)=>item.shareId===String(action.shareId))||actor.shares.find((item)=>!item.mortgaged);mortgageShare(actor,share);break;}
-    case"redeem":{fail(state.phase==="lobby"||state.phase==="ended","wrong_phase","当前不能赎回股票。",409);const share=actor.shares.find((item)=>item.shareId===String(action.shareId))||actor.shares.find((item)=>item.mortgaged);redeemShare(actor,share);break;}
+    case"mortgage":{fail(state.phase==="lobby"||state.phase==="ended","wrong_phase","当前不能抵押股票。",409);mortgageShare(actor,shareForAction(actor,action));break;}
+    case"redeem":{fail(state.phase==="lobby"||state.phase==="ended","wrong_phase","当前不能赎回股票。",409);redeemShare(actor,shareForAction(actor,action));break;}
     case"auction":{fail(state.phase!=="auction","wrong_phase","当前不是竞拍阶段。",409);fail(state.players[state.auctionTurn]?.id!==actorId,"not_your_turn","现在没有轮到你出价。",409);if(action.action==="pass"){if(!state.passed.includes(actorId))state.passed.push(actorId);}else{const bid=Number(action.bid);fail(!Number.isInteger(bid)||bid<=state.highBid||bid>availableFunds(actor),"invalid_bid","出价必须高于当前价格且不能超过总资产。",409);state.highBid=bid;state.highBidder=actorId;}nextAuction(state,now);break;}
     case"configure":fail(state.phase!=="configure","wrong_phase","当前不能装载货船。",409);fail(actorId!==state.harborMasterId,"harbor_master_required","只有港务长可以装船。",403);configureShips(state,actor,action,now);break;
     case"place":fail(state.phase!=="placing","wrong_phase","当前不能派遣助手。",409);fail(state.players[state.placeTurn]?.id!==actorId,"not_your_turn","现在没有轮到你放置助手。",409);placeWorker(state,actor,action,now);break;

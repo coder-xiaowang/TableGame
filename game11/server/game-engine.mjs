@@ -283,6 +283,15 @@ export function setPresence(state, playerId, connected) {
   return true;
 }
 
+export function getSubmissionGroup(state, actorId, action) {
+  if (state.phase === "lobby" && action?.type === "sit") return "teams";
+  if (state.phase === "tiebreak" && action?.type === "tiebreak") return "tiebreak";
+  if (state.phase === "guess" && ["guessDraft", "guess"].includes(action?.type)) {
+    return `guess:${state.round}:${state.turnTeam}`;
+  }
+  return null;
+}
+
 export function applyAction(state, actorId, action, { now = Date.now(), random = Math.random } = {}) {
   const id = String(actorId);
   const actor = state.players.find((player) => player.id === id);

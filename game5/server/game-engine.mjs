@@ -369,6 +369,14 @@ function applyActionInternal(state,actorId,action,{now=Date.now(),random=Math.ra
   if (type==="play") { playCard(state,actor,String(action.cardId||""),action.color,{now,random}); return; }
   throw new GameRuleError("unknown_action","无法识别该游戏操作。");
 }
+export function getSubmissionGroup(state, actorId, action) {
+  return state.phase === "playing" && action?.type === "catchUno" ? "catchUno" : null;
+}
+
+export function canFollowSubmission(state, actorId, action, group) {
+  return group === "catchUno" && currentPlayer(state)?.id === actorId && action?.type === "draw";
+}
+
 export function applyAction(state,actorId,action,{now=Date.now(),random=Math.random}={}) {
   return runPresentationScene(state,()=>applyActionInternal(state,actorId,action,{now,random}));
 }

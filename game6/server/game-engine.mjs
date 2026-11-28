@@ -10,6 +10,7 @@ import {
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["selectCard"]);
 
 const PRESENTATION_LIMIT = 70;
 const PRESENTATION_PRIORITY = Object.freeze({

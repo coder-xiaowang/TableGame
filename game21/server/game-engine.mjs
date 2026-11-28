@@ -6,6 +6,7 @@ import { appendPresentationEvent, normalizePresentationState, validatePresentati
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["acknowledgeSecret", "voteAccusation", "voteTimeoutNomination"]);
 export const ACTION_SECONDS = ROUND_SECONDS;
 
 const PHASES = new Set(["lobby", "secretReveal", "questioning", "accusationVote", "timeoutNomination", "timeoutVote", "roundEnd"]);

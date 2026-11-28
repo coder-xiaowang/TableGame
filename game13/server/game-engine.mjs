@@ -8,6 +8,7 @@ import { appendPresentationEvent, normalizePresentationState, validatePresentati
 export { ACTION_SECONDS };
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["initialPeek"]);
 
 export class GameRuleError extends Error {
   constructor(code, message, status = 400) {

@@ -6,6 +6,7 @@ import { appendPresentationEvent, normalizePresentationState, validatePresentati
 
 export const STATE_VERSION = 1;
 export const SUPPORTS_SPECTATORS = true;
+export const SIMULTANEOUS_ACTIONS = new Set(["submitTradeCard", "submitPassCard"]);
 export const TURN_SECONDS = 45;
 export const ACTION_SECONDS = TURN_SECONDS;
 export const CHOICE_SECONDS = 30;
