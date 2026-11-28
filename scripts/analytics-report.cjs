@@ -31,19 +31,33 @@ function gameTotals(db, from, until) {
   return {...rooms,...matches};
 }
 
+function visitCounts() {
+  return {total:0, external:0, developer:0, unknown:0};
+}
+
+function addVisits(counts, row) {
+  counts.total += row.n;
+  counts[row.audience] += row.n;
+}
+
 function collect(visitsFile, now=Date.now(), env=process.env) {
   const today = beijingDay(now);
   const until = Date.parse(today+'T00:00:00+08:00') + dayMs;
   const dates = Array.from({length:30}, (_,i)=>beijingDay(until-(30-i)*dayMs));
-  const visits = readStats(visitsFile, 'visits', db=>db.prepare(
-    'SELECT day,page,count(*) n FROM visits WHERE day BETWEEN ? AND ? GROUP BY day,page'
-  ).all(dates[0],today));
-  const daily = dates.map(day=>({day,views:visits ? 0 : null, starts:0}));
-  const periods = [7,30].map(days=>({days,pages:{},games:[]}));
+  const visits = readStats(visitsFile, 'visits', db=>{
+    const classified = db.prepare("SELECT 1 FROM pragma_table_info('visits') WHERE name='audience'").get();
+    const group = classified ? "coalesce(audience,'unknown')" : "'unknown'";
+    return db.prepare(`SELECT day,page,${group} audience,count(*) n FROM visits
+      WHERE day BETWEEN ? AND ? GROUP BY 1,2,3`).all(dates[0],today);
+  });
+  const daily = dates.map(day=>({day,visits:visitCounts(), starts:0}));
+  const periods = [7,30].map(days=>({days,visits:visitCounts(),pages:{},games:[]}));
   for (const v of visits || []) {
-    daily.find(item=>item.day===v.day).views += v.n;
+    addVisits(daily.find(item=>item.day===v.day).visits, v);
     for (const period of periods) if (v.day >= dates[30-period.days]) {
-      period.pages[v.page] = (period.pages[v.page] || 0) + v.n;
+      addVisits(period.visits, v);
+      period.pages[v.page] ??= visitCounts();
+      addVisits(period.pages[v.page], v);
     }
   }
   for (const game of games) {
@@ -55,7 +69,7 @@ function collect(visitsFile, now=Date.now(), env=process.env) {
       for (const row of starts) daily.find(item=>item.day===row.day).starts += row.n;
       return periods.map(p=>gameTotals(db,until-p.days*dayMs,until));
     });
-    periods.forEach((p,i)=>p.games.push({...game, views:visits ? p.pages[game.id] || 0 : null, stats:stats?.[i]}));
+    periods.forEach((p,i)=>p.games.push({...game, visits:p.pages[game.id] || visitCounts(), stats:stats?.[i]}));
   }
   return {today,daily,periods,hasVisits:!!visits,generatedAt:new Date(now).toISOString()};
 }
@@ -65,16 +79,25 @@ function fraction(n,d) {
 }
 function render(data) {
   const connected = data.periods[0].games.filter(g=>g.stats).length;
+  const visitHeaders = '<th>总访问</th><th>外部访问</th><th>开发者</th><th>未分类</th>';
+  function visitCells(counts) {
+    return [counts.total,counts.external,counts.developer,counts.unknown]
+      .map(n=>`<td>${data.hasVisits ? n : '—'}</td>`).join('');
+  }
   function periodPanel(p) {
     const days = data.daily.slice(-p.days);
-    const max = Math.max(1,...days.map(d=>d.views || 0));
-    const rows = [...p.games].sort((a,b)=>(b.stats?.matches ?? -1)-(a.stats?.matches ?? -1) || (b.views || 0)-(a.views || 0));
-    return `<section id="p${p.days}"><h2>近 ${p.days} 天</h2><h3>每日访问与开局</h3><div class="scroll"><table>
-      <thead><tr><th>北京时间</th><th>页面访问</th><th>开局</th></tr></thead><tbody>
-      ${days.map(d=>`<tr><td>${d.day}</td><td>${d.views ?? '—'} <meter min="0" max="${max}" value="${d.views || 0}" aria-label="页面访问"></meter></td><td>${connected ? d.starts : '—'}</td></tr>`).join('')}</tbody></table></div>
-      <h3>主站各入口访问</h3><p>${Object.entries(pageNames).map(([key,name])=>name+' '+(data.hasVisits ? p.pages[key] || 0 : '—')).join('　')}</p>
-      <h3>桌游表现</h3><div class="scroll"><table><thead><tr>${['桌游','入口访问','成功开局桌 / 开桌','开局数','参与人次','正常完局','中断','过期','进行中','同桌再玩 / 已完局桌'].map(h=>'<th>'+h+'</th>').join('')}</tr></thead><tbody>
-      ${rows.map(({name,views,stats:s})=>`<tr><th>${name}</th><td>${views ?? '—'}</td>${s ?
+    const max = Math.max(1,...days.map(d=>d.visits.total));
+    const rows = [...p.games].sort((a,b)=>(b.stats?.matches ?? -1)-(a.stats?.matches ?? -1) || b.visits.external-a.visits.external || b.visits.total-a.visits.total);
+    return `<section id="p${p.days}"><h2>近 ${p.days} 天</h2>
+      <p>${data.hasVisits ? `全站外部访问 <strong>${p.visits.external}</strong> 次　开发者 ${p.visits.developer} 次　未分类 ${p.visits.unknown} 次　合计 ${p.visits.total} 次` : '访问库未接入'}</p>
+      <p>外部访问按未标记浏览器的入口请求次数统计。同一个人可以访问多次。旧日志归入未分类。对局列包含所有已采集的对局。</p>
+      <h3>每日访问与开局</h3><div class="scroll"><table>
+      <thead><tr><th>北京时间</th>${visitHeaders}<th>访问趋势</th><th>开局</th></tr></thead><tbody>
+      ${days.map(d=>`<tr><td>${d.day}</td>${visitCells(d.visits)}<td><meter min="0" max="${max}" value="${d.visits.total}" aria-label="页面访问"></meter></td><td>${connected ? d.starts : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <h3>主站各入口访问</h3><div class="scroll"><table><thead><tr><th>入口</th>${visitHeaders}</tr></thead><tbody>
+      ${Object.entries(pageNames).map(([key,name])=>`<tr><th>${name}</th>${visitCells(p.pages[key] || visitCounts())}</tr>`).join('')}</tbody></table></div>
+      <h3>桌游表现</h3><div class="scroll"><table><thead><tr><th>桌游</th>${visitHeaders}${['成功开局桌 / 开桌','开局数','参与人次','正常完局','中断','过期','进行中','同桌再玩 / 已完局桌'].map(h=>'<th>'+h+'</th>').join('')}</tr></thead><tbody>
+      ${rows.map(({name,visits,stats:s})=>`<tr><th>${name}</th>${visitCells(visits)}${s ?
         [fraction(s.opened,s.rooms)+(s.rooms?'':' (0 桌)'),s.matches,s.seats,s.completed,s.interrupted,s.expired,s.ongoing,fraction(s.replay,s.eligible)].map(x=>'<td>'+x+'</td>').join('')
         : '<td colspan="8">尚未接入对局数据</td>'}</tr>`).join('')}</tbody></table></div></section>`;
   }

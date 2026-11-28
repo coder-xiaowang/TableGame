@@ -35,6 +35,36 @@ test('visit import handles Beijing midnight, main site rewrite, rotated duplicat
   finally { db.close(); }
 });
 
+test('visit reports preserve old counts and classify new requests once across sites and periods', async t => {
+  const dir = temporary(t);
+  const file = path.join(dir, 'visits.db');
+  const log = path.join(dir, 'visits.log');
+  const now = Date.parse('2026-11-28T12:00:00+08:00');
+  const id = n => String(n).padStart(32,'0');
+  const legacy = new DatabaseSync(file);
+  legacy.exec('CREATE TABLE visits (id TEXT PRIMARY KEY, day TEXT NOT NULL, page TEXT NOT NULL)');
+  for (const n of [1,2]) legacy.prepare("INSERT INTO visits VALUES (?, '2026-11-28','yacht')").run(id(n));
+  legacy.close();
+  assert.equal(collect(file, now, {}).periods[0].visits.unknown, 2);
+  function entry(n, host, audience, day='28') {
+    return JSON.stringify({id:id(n), host, audience, entry:'root', at:`2026-11-${day}T10:00:00+08:00`});
+  }
+  const game = 'kttz.zillionx.xyz';
+  const lines = [entry(1,game), entry(2,game,'developer'), entry(3,game,'external'),
+    entry(4,'zillionx.xyz','external'), entry(5,game,'external','08')].join('\n');
+  fs.writeFileSync(log, lines);
+  fs.writeFileSync(log+'.gz', gzipSync(lines));
+  assert.deepEqual(await importVisits(file,[log,log+'.gz']), {added:3,malformed:0});
+  const data = collect(file, now, {});
+  const [week,month] = data.periods;
+  assert.deepEqual(week.visits, {total:4,external:2,developer:1,unknown:1});
+  assert.deepEqual(data.daily.at(-1).visits,week.visits);
+  assert.deepEqual(month.visits, {total:5,external:3,developer:1,unknown:1});
+  assert.deepEqual(week.pages.home, {total:1,external:1,developer:0,unknown:0});
+  assert.deepEqual(week.games.find(g=>g.id==='yacht').visits, {total:3,external:1,developer:1,unknown:1});
+  assert.match(render(data), /快艇骰子<\/th><td>3<\/td><td>1<\/td><td>1<\/td><td>1<\/td>/);
+});
+
 for (const [folder,game] of [['game3','yacht'],['game13','cabo']]) {
   test(game+' counts a real complete game, recovery, replay, manual end and room expiry', async t => {
     const engine = await import('../../'+folder+'/server/game-engine.mjs');

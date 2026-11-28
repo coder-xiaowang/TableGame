@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>访问统计设备标记</title>
+<style>
+  * { box-sizing: border-box }
+  body { max-width: 34rem; margin: 10vh auto; padding: 0 1.25rem; background: #faf9f5; color: #23352e; font: 1rem/1.6 system-ui, sans-serif }
+  input, button { font: inherit; padding: .55rem .8rem }
+  input { width: 100%; margin: .25rem 0 .75rem }
+</style>
+<main>
+  <h1>访问统计设备标记</h1>
+  <p>标记后，用此浏览器访问主站和桌游子域名都会计入开发者访问。</p>
+  <p id="status" role="status">正在检查此浏览器…</p>
+  <form id="enable" hidden>
+    <label for="key">开发者设备标记码</label>
+    <input id="key" type="password" required pattern="[a-f0-9]{64}" autocomplete="off" spellcheck="false">
+    <button type="submit">标记此浏览器</button>
+  </form>
+  <button id="disable" type="button" hidden>移除此浏览器的标记</button>
+</main>
+<script>
+  const form = document.querySelector('#enable');
+  const remove = document.querySelector('#disable');
+  const key = document.querySelector('#key');
+  const status = document.querySelector('#status');
+
+  function setMarker(value, seconds) {
+    document.cookie = 'tg_developer=' + value + '; Domain=zillionx.xyz; Path=/; Secure; SameSite=Lax; Max-Age=' + seconds;
+  }
+
+  async function check(expected) {
+    form.hidden = true;
+    remove.hidden = true;
+    try {
+      const response = await fetch('/analytics-device', {method:'HEAD', cache:'no-store', redirect:'error'});
+      const audience = response.headers.get('X-Tablegame-Audience');
+      if (!response.ok || !['external','developer'].includes(audience)) throw Error();
+      const marked = audience === 'developer';
+      form.hidden = marked;
+      remove.hidden = !marked;
+      if (expected === 'developer' && !marked) {
+        setMarker('', 0);
+        status.textContent = '标记未生效。请核对标记码，并确认浏览器允许本站 Cookie。';
+      } else if (expected === 'external' && marked) {
+        status.textContent = '服务器仍识别为开发者，请检查本站 Cookie 后重试。';
+      } else {
+        status.textContent = marked ? '当前浏览器已标记为开发者。' : '当前浏览器计入外部访问。';
+      }
+    } catch {
+      status.textContent = '无法确认服务器上的标记状态，请检查网络和 Nginx 配置后刷新。';
+    }
+  }
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    setMarker(key.value, 31536000);
+    key.value = '';
+    check('developer');
+  });
+  remove.addEventListener('click', () => {
+    setMarker('', 0);
+    check('external');
+  });
+  check();
+</script>
+</html>

@@ -15,13 +15,19 @@ async function importVisits(file, logs) {
   if (!file || !logs.length) throw new Error('用法：node scripts/import-visits.cjs 私有访问库 日志文件 [更多日志或 .gz]');
   const db = new DatabaseSync(file);
   fs.chmodSync(file, 0o600);
-  db.exec(`PRAGMA busy_timeout=5000;
-    CREATE TABLE IF NOT EXISTS visits (id TEXT PRIMARY KEY, day TEXT NOT NULL, page TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS visits_day_page ON visits(day,page);`);
-  const insert = db.prepare('INSERT OR IGNORE INTO visits VALUES (?, ?, ?)');
   let added = 0;
   let malformed = 0;
   try {
+    db.exec(`PRAGMA busy_timeout=5000; BEGIN IMMEDIATE;
+      CREATE TABLE IF NOT EXISTS visits (id TEXT PRIMARY KEY, day TEXT NOT NULL, page TEXT NOT NULL, audience TEXT);
+      CREATE INDEX IF NOT EXISTS visits_day_page ON visits(day,page);`);
+    if (!db.prepare("SELECT 1 FROM pragma_table_info('visits') WHERE name='audience'").get()) {
+      db.exec('ALTER TABLE visits ADD COLUMN audience TEXT');
+    }
+    db.exec('COMMIT');
+    const insert = db.prepare('INSERT OR IGNORE INTO visits (id,day,page,audience) VALUES (?,?,?,?)');
+    // An older importer may already have processed newly classified log lines.
+    const backfill = db.prepare('UPDATE visits SET audience=? WHERE id=? AND audience IS NULL');
     for (const log of logs) {
       const source = fs.createReadStream(log);
       const input = log.endsWith('.gz') ? source.pipe(createGunzip()) : source;
@@ -39,7 +45,11 @@ async function importVisits(file, logs) {
           const page = row.host === 'zillionx.xyz' && Object.hasOwn(mainPages, row.entry)
             ? mainPages[row.entry] : ['index', 'root'].includes(row.entry) && hosts.get(row.host);
           if (!page) continue;
-          added += insert.run(row.id, beijingDay(ms), page).changes;
+          const audience = row.audience ?? null;
+          if (audience !== null && audience !== 'external' && audience !== 'developer') { malformed++; continue; }
+          const result = insert.run(row.id, beijingDay(ms), page, audience);
+          added += result.changes;
+          if (!result.changes && audience !== null) backfill.run(audience, row.id);
           if (++batch === 2000) { db.exec('COMMIT; BEGIN'); batch = 0; }
         }
         db.exec('COMMIT');
